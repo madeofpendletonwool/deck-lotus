@@ -331,7 +331,7 @@ export async function showCardDetail(cardId) {
 
     const modalBody = document.getElementById('modal-body');
     modalBody.innerHTML = `
-      <div style="display: grid; grid-template-columns: 250px 1fr; gap: 2rem;">
+      <div class="card-detail-grid">
         <div id="card-detail-image-container">
           ${firstPrinting && firstPrinting.uuid ? `
             <img src="${firstPrinting.image_url}"

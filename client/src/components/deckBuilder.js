@@ -628,52 +628,133 @@ async function showCardModal(printingId) {
 }
 
 function renderStats(stats) {
-  // Render mana curve
+  // Render mana curve as single segmented bar
   const manaCurve = document.getElementById('mana-curve');
-  const maxCount = Math.max(...stats.manaCurve.map(c => c.total_cards), 1);
+  const totalCards = stats.manaCurve.reduce((sum, item) => sum + item.total_cards, 0);
 
-  manaCurve.innerHTML = stats.manaCurve.map(item => {
-    const width = (item.total_cards / maxCount) * 100;
-    return `
-      <div class="chart-bar">
-        <div class="chart-label">${item.cmc}</div>
-        <div class="chart-bar-fill" style="width: ${width}%">
-          <span class="chart-value">${item.total_cards}</span>
-        </div>
+  if (totalCards === 0) {
+    manaCurve.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 2rem;">No cards in deck</div>';
+  } else {
+    manaCurve.innerHTML = `
+      <div class="mana-curve-single-bar">
+        ${stats.manaCurve.map(item => {
+          const percentage = (item.total_cards / totalCards) * 100;
+          const cmcColor = getCMCColor(item.cmc);
+          return `
+            <div class="mana-curve-segment"
+                 style="width: ${percentage}%; background: ${cmcColor};"
+                 title="${item.cmc} CMC: ${item.total_cards} cards (${percentage.toFixed(1)}%)">
+              <span class="mana-curve-segment-label">${item.cmc}</span>
+            </div>
+          `;
+        }).join('')}
       </div>
     `;
-  }).join('');
+  }
 
-  // Render type distribution
+  // Render type distribution as simple list
   const typeDistribution = document.getElementById('type-distribution');
-  const maxType = Math.max(...stats.typeDistribution.map(c => c.total_cards), 1);
+  const totalTypeCards = stats.typeDistribution.reduce((sum, item) => sum + item.total_cards, 0);
 
-  typeDistribution.innerHTML = stats.typeDistribution.map(item => {
-    const width = (item.total_cards / maxType) * 100;
-    return `
-      <div class="chart-bar">
-        <div class="chart-label">${item.type}</div>
-        <div class="chart-bar-fill" style="width: ${width}%">
-          <span class="chart-value">${item.total_cards}</span>
-        </div>
-      </div>
-    `;
-  }).join('');
+  typeDistribution.innerHTML = `
+    <div class="type-list">
+      ${stats.typeDistribution.map(item => {
+        const percentage = totalTypeCards > 0 ? ((item.total_cards / totalTypeCards) * 100).toFixed(1) : 0;
+        return `
+          <div class="type-list-item">
+            <span class="type-name">${item.type}</span>
+            <span class="type-stats">${item.total_cards} (${percentage}%)</span>
+          </div>
+        `;
+      }).join('')}
+    </div>
+  `;
 
-  // Render color distribution
+  // Render color distribution with mana icons
   const colorDistribution = document.getElementById('color-distribution');
   const maxColor = Math.max(...stats.colorDistribution.map(c => c.total_cards), 1);
+  const totalColorCards = stats.colorDistribution.reduce((sum, item) => sum + item.total_cards, 0);
 
   colorDistribution.innerHTML = stats.colorDistribution.map(item => {
     const width = (item.total_cards / maxColor) * 100;
-    const colorLabel = item.colors || 'Colorless';
+    const percentage = totalColorCards > 0 ? ((item.total_cards / totalColorCards) * 100).toFixed(1) : 0;
+    const colorIcons = formatColorIcons(item.colors);
+    const colorBg = getColorBackground(item.colors);
     return `
-      <div class="chart-bar">
-        <div class="chart-label">${colorLabel}</div>
-        <div class="chart-bar-fill" style="width: ${width}%">
-          <span class="chart-value">${item.total_cards}</span>
+      <div class="chart-bar" title="${item.total_cards} cards (${percentage}%)">
+        <div class="chart-label color-label">${colorIcons}</div>
+        <div class="chart-bar-container">
+          <div class="chart-bar-fill" style="width: ${width}%; background: ${colorBg};">
+            <span class="chart-value">${item.total_cards}</span>
+          </div>
+          <span class="chart-percentage">${percentage}%</span>
         </div>
       </div>
     `;
   }).join('');
+}
+
+function getCMCColor(cmc) {
+  // Color gradient based on mana value
+  if (cmc === 0) return '#94a3b8'; // Gray for 0
+  if (cmc <= 2) return '#10b981'; // Green for low cost
+  if (cmc <= 4) return '#f59e0b'; // Yellow/Orange for mid cost
+  if (cmc <= 6) return '#ef4444'; // Red for high cost
+  return '#7c3aed'; // Purple for very high cost
+}
+
+function getTypeColor(type) {
+  const colors = {
+    'Creature': '#10b981',
+    'Instant': '#3b82f6',
+    'Sorcery': '#8b5cf6',
+    'Enchantment': '#ec4899',
+    'Artifact': '#64748b',
+    'Planeswalker': '#f59e0b',
+    'Land': '#78716c',
+    'Other': '#6b7280'
+  };
+  return colors[type] || colors['Other'];
+}
+
+function formatColorIcons(colors) {
+  if (!colors) return '<i class="ms ms-c ms-cost"></i>'; // Colorless
+
+  // Split individual color letters and create mana icons
+  return colors.split('').map(color => {
+    const colorLower = color.toLowerCase();
+    return `<i class="ms ms-${colorLower} ms-cost ms-cost-shadow"></i>`;
+  }).join('');
+}
+
+function getColorBackground(colors) {
+  if (!colors) return 'linear-gradient(135deg, #d0c6bb, #a8a8a8)'; // Colorless gradient
+
+  // Map colors to their MTG color values
+  const colorMap = {
+    'W': '#fdfbce',
+    'U': '#bcdaf7',
+    'B': '#a7999e',
+    'R': '#f19b79',
+    'G': '#9fcba6'
+  };
+
+  const colorValues = colors.split('').map(c => colorMap[c] || '#ccc');
+
+  if (colorValues.length === 1) {
+    return `linear-gradient(135deg, ${colorValues[0]}, ${adjustBrightness(colorValues[0], -20)})`;
+  }
+
+  // Multi-color gradient
+  return `linear-gradient(135deg, ${colorValues.join(', ')})`;
+}
+
+function adjustBrightness(color, amount) {
+  // Simple brightness adjustment for gradients
+  const hex = color.replace('#', '');
+  const num = parseInt(hex, 16);
+  const r = Math.max(0, Math.min(255, (num >> 16) + amount));
+  const g = Math.max(0, Math.min(255, ((num >> 8) & 0x00FF) + amount));
+  const b = Math.max(0, Math.min(255, (num & 0x0000FF) + amount));
+  return `#${(1 << 24 | r << 16 | g << 8 | b).toString(16).slice(1)}`;
 }

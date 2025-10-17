@@ -492,22 +492,24 @@ body {
   }
 }
 
-.deck-builder-content {
-  display: grid;
-  grid-template-columns: 1fr 1fr 300px;
-  gap: 1.5rem;
-  min-height: calc(100vh - 300px);
-}
-
-/* Search Panel */
-.search-panel {
+/* Search Panel Row - Full Width */
+.search-panel-row {
   background: var(--bg-secondary);
   border-radius: 1rem;
   padding: 1.5rem;
+  margin-bottom: 1.5rem;
 }
 
 .search-box {
   position: relative;
+  width: 100%;
+}
+
+.deck-builder-content {
+  display: grid;
+  grid-template-columns: 1fr 350px;
+  gap: 1.5rem;
+  min-height: calc(100vh - 400px);
 }
 
 #card-search {
@@ -809,6 +811,112 @@ body {
   color: white;
 }
 
+/* Mana Curve Single Segmented Bar */
+.mana-curve-single-bar {
+  display: flex;
+  width: 100%;
+  height: 50px;
+  border-radius: 0.5rem;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.mana-curve-segment {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  border-right: 1px solid rgba(0, 0, 0, 0.3);
+}
+
+.mana-curve-segment:last-child {
+  border-right: none;
+}
+
+.mana-curve-segment:hover {
+  filter: brightness(1.2);
+}
+
+.mana-curve-segment-label {
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: white;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+}
+
+/* Type Distribution List */
+.type-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.type-list-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0.75rem;
+  background: var(--bg-tertiary);
+  border-radius: 0.5rem;
+  transition: background 0.2s;
+}
+
+.type-list-item:hover {
+  background: var(--border);
+}
+
+.type-name {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.type-stats {
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+/* Enhanced Chart Bars */
+.chart-bar-container {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1;
+}
+
+.chart-bar-fill {
+  height: 28px;
+  border-radius: 0.25rem;
+  position: relative;
+  transition: all 0.3s;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  min-width: 2px;
+}
+
+.chart-bar:hover .chart-bar-fill {
+  transform: scaleX(1.02);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.chart-percentage {
+  min-width: 45px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-align: right;
+}
+
+.color-label {
+  display: flex;
+  align-items: center;
+  gap: 0.125rem;
+  min-width: 80px;
+}
+
+.ms-cost-shadow {
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.3));
+}
+
 /* Cards Browse */
 .cards-search {
   background: var(--bg-secondary);
@@ -926,7 +1034,7 @@ body {
   background: var(--bg-secondary);
   border-radius: 1rem;
   padding: 2rem;
-  max-width: 600px;
+  max-width: 1000px;
   width: 90%;
   max-height: 90vh;
   overflow-y: auto;
@@ -944,6 +1052,13 @@ body {
 
 .modal-close:hover {
   color: var(--text);
+}
+
+/* Card Detail Grid */
+.card-detail-grid {
+  display: grid;
+  grid-template-columns: 250px 1fr;
+  gap: 2rem;
 }
 
 /* Loading */
@@ -976,11 +1091,7 @@ body {
 /* Responsive */
 @media (max-width: 1024px) {
   .deck-builder-content {
-    grid-template-columns: 1fr 1fr;
-  }
-
-  .stats-panel {
-    grid-column: 1 / -1;
+    grid-template-columns: 1fr 300px;
   }
 }
 
@@ -1025,5 +1136,34 @@ body {
 
   .deck-price-display {
     text-align: center;
+  }
+
+  /* Mobile-friendly modal */
+  .modal-content {
+    width: 95%;
+    padding: 1rem;
+    max-height: 95vh;
+  }
+
+  .modal-close {
+    top: 0.5rem;
+    right: 0.5rem;
+    font-size: 1.5rem;
+  }
+
+  /* Card detail grid stacks vertically on mobile */
+  .card-detail-grid {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
+  /* Card image container on mobile - full width */
+  #card-detail-image-container {
+    order: -1;
+  }
+
+  #card-detail-image-container img {
+    max-width: 100%;
+    height: auto;
   }
 }

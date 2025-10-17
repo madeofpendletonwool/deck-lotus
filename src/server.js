@@ -115,10 +115,11 @@ async function start() {
     // Setup daily sync schedule
     setupDailySync();
 
-    app.listen(PORT, () => {
+    app.listen(PORT, '0.0.0.0', () => {
       console.log(`\n🚀 Deck Lotus server running on port ${PORT}`);
-      console.log(`   Health check: http://localhost:${PORT}/health`);
-      console.log(`   API: http://localhost:${PORT}/api`);
+      console.log(`   Accessible at: http://0.0.0.0:${PORT}`);
+      console.log(`   Health check: http://0.0.0.0:${PORT}/health`);
+      console.log(`   API: http://0.0.0.0:${PORT}/api`);
 
       if (process.env.NODE_ENV === 'development') {
         console.log(`\n📝 Development mode enabled`);

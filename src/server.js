@@ -33,17 +33,8 @@ const PORT = process.env.PORT || 3000;
 
 // Middleware
 app.use(helmet({
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      imgSrc: ["'self'", "data:", "https://cards.scryfall.io", "https://api.scryfall.com"],
-      scriptSrc: ["'self'"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
-      fontSrc: ["'self'"],
-      connectSrc: ["'self'"]
-    }
-  }
-})); // Security headers with CSP for Scryfall images
+  contentSecurityPolicy: false  // Disable CSP for self-hosted app to avoid localhost/IP issues
+})); // Security headers
 app.use(cors()); // CORS
 app.use(compression()); // Gzip compression
 app.use(express.json()); // JSON body parser

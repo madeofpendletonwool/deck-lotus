@@ -49,6 +49,13 @@ app.use(compression()); // Gzip compression
 app.use(express.json()); // JSON body parser
 // app.use(limiter); // Rate limiting - REMOVED for self-hosted app
 
+// Serve static files from client build (in production)
+// IMPORTANT: Must come before API routes to serve assets correctly
+if (process.env.NODE_ENV === 'production') {
+  const clientBuildPath = join(__dirname, '../client/dist');
+  app.use(express.static(clientBuildPath));
+}
+
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
@@ -61,12 +68,9 @@ app.use('/api/decks', deckRoutes);
 app.use('/api/sets', setRoutes);
 app.use('/api/admin', adminRoutes);
 
-// Serve static files from client build (in production)
+// SPA catch-all route (MUST be last)
 if (process.env.NODE_ENV === 'production') {
   const clientBuildPath = join(__dirname, '../client/dist');
-  app.use(express.static(clientBuildPath));
-
-  // Serve index.html for all other routes (SPA support)
   app.get('*', (req, res) => {
     res.sendFile(join(clientBuildPath, 'index.html'));
   });

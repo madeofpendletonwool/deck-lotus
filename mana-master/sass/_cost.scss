@@ -1,0 +1,313 @@
+@use "variables";
+
+// costs
+
+.#{variables.$ms-prefix}-cost {
+
+    background-color: variables.$ms-base-colorless;
+    border-radius: 1em;
+    color: #111;
+    font-size: 0.95em;
+    width: 1.3em;
+    height: 1.3em;
+    line-height: 1.35em;
+    text-align: center;
+
+    // single costs
+    &.#{variables.$ms-prefix}-w,
+    &.#{variables.$ms-prefix}-wp {
+        background-color: variables.$ms-base-white;
+    }
+    &.#{variables.$ms-prefix}-u,
+    &.#{variables.$ms-prefix}-up {
+        background-color: variables.$ms-base-blue;
+    }
+    &.#{variables.$ms-prefix}-b,
+    &.#{variables.$ms-prefix}-bp {
+        background-color: variables.$ms-base-black;
+    }
+    &.#{variables.$ms-prefix}-r,
+    &.#{variables.$ms-prefix}-rp {
+        background-color: variables.$ms-base-red;
+    }
+    &.#{variables.$ms-prefix}-g,
+    &.#{variables.$ms-prefix}-gp {
+        background-color: variables.$ms-base-green;
+    }
+
+    // split costs
+    &.#{variables.$ms-prefix}-wu,
+    &.#{variables.$ms-prefix}-wb,
+    &.#{variables.$ms-prefix}-ub,
+    &.#{variables.$ms-prefix}-ur,
+    &.#{variables.$ms-prefix}-br,
+    &.#{variables.$ms-prefix}-bg,
+    &.#{variables.$ms-prefix}-rw,
+    &.#{variables.$ms-prefix}-rg,
+    &.#{variables.$ms-prefix}-gw,
+    &.#{variables.$ms-prefix}-gu,
+    &.#{variables.$ms-prefix}-2w,
+    &.#{variables.$ms-prefix}-2u,
+    &.#{variables.$ms-prefix}-2b,
+    &.#{variables.$ms-prefix}-2r,
+    &.#{variables.$ms-prefix}-2g,
+    &.#{variables.$ms-prefix}-cw,
+    &.#{variables.$ms-prefix}-cu,
+    &.#{variables.$ms-prefix}-cb,
+    &.#{variables.$ms-prefix}-cr,
+    &.#{variables.$ms-prefix}-cg,
+    &.#{variables.$ms-prefix}-wup,
+    &.#{variables.$ms-prefix}-wbp,
+    &.#{variables.$ms-prefix}-ubp,
+    &.#{variables.$ms-prefix}-urp,
+    &.#{variables.$ms-prefix}-brp,
+    &.#{variables.$ms-prefix}-bgp,
+    &.#{variables.$ms-prefix}-rwp,
+    &.#{variables.$ms-prefix}-rgp,
+    &.#{variables.$ms-prefix}-gwp,
+    &.#{variables.$ms-prefix}-gup {
+        --ms-split-top: var(--ms-mana-c);
+        --ms-split-bottom: var(--ms-mana-u);
+        background: var(--ms-split-top); // fallback 
+        background: -moz-linear-gradient(135deg, var(--ms-split-top) 0%, var(--ms-split-top) 50%, var(--ms-split-bottom) 50%, var(--ms-split-bottom) 100%);
+        background: -webkit-linear-gradient(135deg, var(--ms-split-top) 0%, var(--ms-split-top) 50%, var(--ms-split-bottom) 50%, var(--ms-split-bottom) 100%);
+        background: linear-gradient(135deg, var(--ms-split-top) 0%, var(--ms-split-top) 50%, var(--ms-split-bottom) 50%, var(--ms-split-bottom) 100%);
+        position: relative;
+        width: 1.3em;
+        height: 1.3em;
+        &::before,
+        &::after {
+            font-size: 0.55em !important;
+            position: absolute;
+        }
+        &::before {
+            top: -0.38em;
+            left: 0.28em;
+        }
+        &::after {
+            top: 0.5em;
+            left: 1.0em;
+        }
+    }
+    &.#{variables.$ms-prefix}-wu,
+    &.#{variables.$ms-prefix}-wup {
+        --ms-split-top: var(--ms-mana-w);
+    }
+    &.#{variables.$ms-prefix}-wb,
+    &.#{variables.$ms-prefix}-wbp {
+        --ms-split-top: var(--ms-mana-w);
+        --ms-split-bottom: var(--ms-mana-b);
+    }
+    &.#{variables.$ms-prefix}-ub,
+    &.#{variables.$ms-prefix}-ubp {
+        --ms-split-top: var(--ms-mana-u);
+        --ms-split-bottom: var(--ms-mana-b);
+    }
+    &.#{variables.$ms-prefix}-ur,
+    &.#{variables.$ms-prefix}-urp {
+        --ms-split-top: var(--ms-mana-u);
+        --ms-split-bottom: var(--ms-mana-r);
+    }
+    &.#{variables.$ms-prefix}-br,
+    &.#{variables.$ms-prefix}-brp {
+        --ms-split-top: var(--ms-mana-b);
+        --ms-split-bottom: var(--ms-mana-r);
+    }
+    &.#{variables.$ms-prefix}-bg,
+    &.#{variables.$ms-prefix}-bgp {
+        --ms-split-top: var(--ms-mana-b);
+        --ms-split-bottom: var(--ms-mana-g);
+    }
+    &.#{variables.$ms-prefix}-rw,
+    &.#{variables.$ms-prefix}-rwp {
+        --ms-split-top: var(--ms-mana-r);
+        --ms-split-bottom: var(--ms-mana-w);
+    }
+    &.#{variables.$ms-prefix}-rg,
+    &.#{variables.$ms-prefix}-rgp {
+        --ms-split-top: var(--ms-mana-r);
+        --ms-split-bottom: var(--ms-mana-g);
+    }
+    &.#{variables.$ms-prefix}-gw,
+    &.#{variables.$ms-prefix}-gwp {
+        --ms-split-top: var(--ms-mana-g);
+        --ms-split-bottom: var(--ms-mana-w);
+    }
+    &.#{variables.$ms-prefix}-gu,
+    &.#{variables.$ms-prefix}-gup {
+        --ms-split-top: var(--ms-mana-g);
+    }
+    &.#{variables.$ms-prefix}-2w,
+    &.#{variables.$ms-prefix}-cw {
+        --ms-split-bottom: var(--ms-mana-w);
+    }
+    &.#{variables.$ms-prefix}-2u,
+    &.#{variables.$ms-prefix}-cu {
+        // defaults
+    }
+    &.#{variables.$ms-prefix}-2b,
+    &.#{variables.$ms-prefix}-cb {
+        --ms-split-bottom: var(--ms-mana-b);
+    }
+    &.#{variables.$ms-prefix}-2r,
+    &.#{variables.$ms-prefix}-cr {
+        --ms-split-bottom: var(--ms-mana-r);
+    }
+    &.#{variables.$ms-prefix}-2g,
+    &.#{variables.$ms-prefix}-cg {
+        --ms-split-bottom: var(--ms-mana-g);
+    }
+
+    // new tan: #d0c6bb
+
+    // phyrexian and other split mana size increases
+    @if variables.$ms-phyrexian-h {
+      &.#{variables.$ms-prefix}-h::before {
+        display: inline-block;
+        -moz-transform: scale( 1.2, 1.2 );
+        -webkit-transform: scale( 1.2, 1.2 );
+        transform: scale( 1.2, 1.2 );
+      }
+    } @else {
+      &.#{variables.$ms-prefix}-p::before {
+        display: inline-block;
+        -moz-transform: scale( 1.2, 1.2 );
+        -webkit-transform: scale( 1.2, 1.2 );
+        transform: scale( 1.2, 1.2 );
+      }
+    }
+    &.#{variables.$ms-prefix}-wp::before,
+    &.#{variables.$ms-prefix}-up::before,
+    &.#{variables.$ms-prefix}-bp::before,
+    &.#{variables.$ms-prefix}-rp::before,
+    &.#{variables.$ms-prefix}-gp::before,
+    &.#{variables.$ms-prefix}-cw::before,
+    &.#{variables.$ms-prefix}-cu::before,
+    &.#{variables.$ms-prefix}-cb::before,
+    &.#{variables.$ms-prefix}-cr::before,
+    &.#{variables.$ms-prefix}-cg::before,
+    &.#{variables.$ms-prefix}-wup::before,
+    &.#{variables.$ms-prefix}-wbp::before,
+    &.#{variables.$ms-prefix}-ubp::before,
+    &.#{variables.$ms-prefix}-urp::before,
+    &.#{variables.$ms-prefix}-brp::before,
+    &.#{variables.$ms-prefix}-bgp::before,
+    &.#{variables.$ms-prefix}-rwp::before,
+    &.#{variables.$ms-prefix}-rgp::before,
+    &.#{variables.$ms-prefix}-gwp::before,
+    &.#{variables.$ms-prefix}-gup::before,
+    &.#{variables.$ms-prefix}-wup::after,
+    &.#{variables.$ms-prefix}-wbp::after,
+    &.#{variables.$ms-prefix}-ubp::after,
+    &.#{variables.$ms-prefix}-urp::after,
+    &.#{variables.$ms-prefix}-brp::after,
+    &.#{variables.$ms-prefix}-bgp::after,
+    &.#{variables.$ms-prefix}-rwp::after,
+    &.#{variables.$ms-prefix}-rgp::after,
+    &.#{variables.$ms-prefix}-gwp::after,
+    &.#{variables.$ms-prefix}-gup::after {
+        display: inline-block;
+        transform: scale(1.2) translateX(0.01rem) translateY(-0.03rem);
+    }
+
+    // alternate tap
+    &.#{variables.$ms-prefix}-tap-alt::before {
+        display: inline-block;
+        transform: scale(1.2);
+        padding-left: .06em;
+        padding-bottom: 0.10em;
+    }
+
+    // snow mana
+    &.#{variables.$ms-prefix}-s {
+        &::before {
+            color: #fff;
+            -webkit-text-stroke: 2px #fff;
+            font-size: 0.85em;
+            top: -0.05em;
+            position: relative;
+            display: inline-block;
+        }
+        &::after {
+            //text-shadow: -1px 1px 0 #fff, -1px -1px 0 #fff, 1px -1px 0 #fff, 1px 1px 0 #fff;
+            content: "\e619";
+            position: absolute;
+            color: #333;
+            margin-left: -0.9em;
+            font-size: 1.1em;
+        }
+        &-mtga::before {
+            color: #fff;
+        }
+    }
+
+    // tap symbols
+    &.#{variables.$ms-prefix}-untap {
+        background-color: #111;
+        color: #fff;
+    }
+
+    // shadow alternative
+    &.#{variables.$ms-prefix}-shadow {
+        box-shadow: -0.06em 0.07em 0 #111, 0 0.06em 0 #111;
+        &.#{variables.$ms-prefix}-untap {
+            box-shadow: -0.06em 0.07em 0 #fff, 0 0.06em 0 #fff;
+        }
+    }
+}
+
+
+// split cost specifics
+
+.#{variables.$ms-prefix}-split {
+    position: relative;
+    width: 1.3em;
+    height: 1.3em;
+}
+.#{variables.$ms-prefix}-split::before,
+.#{variables.$ms-prefix}-split::after {
+    font-size: 0.55em !important;
+    position: absolute;
+}
+.#{variables.$ms-prefix}-split::before {
+    top: -0.38em;
+    left: 0.28em;
+}
+.#{variables.$ms-prefix}-split::after {
+    top: 0.5em;
+    left: 1.0em;
+}
+
+
+// half costs specifics
+
+span.#{variables.$ms-prefix}-half { // legacy handling with <span> tag
+    width: .675em;
+    overflow: hidden;
+    display: inline-block;
+    margin-left: .675em;
+
+    > .#{variables.$ms-prefix}-cost {
+        margin-left: -.675em;
+    }
+}
+
+.#{variables.$ms-prefix}-half { // new single-element handling!
+    width: .675em;
+    margin-left: .675em;
+    overflow: hidden;
+    border-radius: 0 1em 1em 0;
+    &::before {
+        margin-left: -.65em;
+    }
+}
+
+
+// un-set costs
+
+.#{variables.$ms-prefix}-100 {
+    width: 2.4em;
+}
+.#{variables.$ms-prefix}-1000000 {
+    width: 5.4em;
+}

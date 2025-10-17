@@ -1,0 +1,53 @@
+# Node modules
+node_modules/
+client/node_modules/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Build artifacts
+client/dist/
+dist/
+
+# Database files
+data/*.db
+data/*.db-*
+data/*.sqlite
+data/*.bz2
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Git
+.git/
+.gitignore
+
+# Documentation
+README.md
+docs/
+
+# Test files
+test/
+tests/
+*.test.js
+*.spec.js
+
+# CI/CD
+.github/
+.gitlab-ci.yml

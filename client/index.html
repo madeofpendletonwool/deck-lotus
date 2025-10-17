@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Deck Lotus - MTG Deck Builder</title>
+  <link rel="stylesheet" href="/mana.min.css">
+  <link rel="stylesheet" href="/src/styles/main.css">
+</head>
+<body>
+  <div id="app">
+    <!-- Navigation -->
+    <nav id="navbar" class="navbar hidden">
+      <div class="nav-container">
+        <div class="nav-brand">
+          <img src="/decklotus.png" alt="Deck Lotus" style="height: 40px;">
+        </div>
+        <div class="nav-links">
+          <a href="#" data-page="decks" class="nav-link active">My Decks</a>
+          <a href="#" data-page="cards" class="nav-link">Browse Cards</a>
+          <a href="#" data-page="settings" class="nav-link">Settings</a>
+          <button id="logout-btn" class="btn btn-secondary">Logout</button>
+        </div>
+      </div>
+    </nav>
+
+    <!-- Auth Page -->
+    <div id="auth-page" class="page active">
+      <div class="auth-container">
+        <div class="auth-card">
+          <img src="/decklotus.png" alt="Deck Lotus" style="max-width: 300px; margin: 0 auto 1rem; display: block;">
+          <p class="auth-subtitle">Build your MTG decks with style</p>
+
+          <!-- Login Form -->
+          <div id="login-form" class="auth-form">
+            <h2>Login</h2>
+            <form id="login-form-element">
+              <div class="form-group">
+                <label for="login-username">Username or Email</label>
+                <input type="text" id="login-username" required>
+              </div>
+              <div class="form-group">
+                <label for="login-password">Password</label>
+                <input type="password" id="login-password" required>
+              </div>
+              <button type="submit" class="btn btn-primary btn-block">Login</button>
+              <p class="auth-switch">
+                Don't have an account? <a href="#" id="show-register">Register</a>
+              </p>
+            </form>
+          </div>
+
+          <!-- Register Form -->
+          <div id="register-form" class="auth-form hidden">
+            <h2>Register</h2>
+            <form id="register-form-element">
+              <div class="form-group">
+                <label for="register-username">Username</label>
+                <input type="text" id="register-username" required minlength="3" maxlength="20">
+              </div>
+              <div class="form-group">
+                <label for="register-email">Email</label>
+                <input type="email" id="register-email" required>
+              </div>
+              <div class="form-group">
+                <label for="register-password">Password</label>
+                <input type="password" id="register-password" required minlength="8">
+              </div>
+              <button type="submit" class="btn btn-primary btn-block">Register</button>
+              <p class="auth-switch">
+                Already have an account? <a href="#" id="show-login">Login</a>
+              </p>
+            </form>
+          </div>
+
+          <div id="auth-error" class="error-message hidden"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Decks Page -->
+    <div id="decks-page" class="page hidden">
+      <div class="page-header">
+        <h2>My Decks</h2>
+        <div style="display: flex; gap: 0.5rem;">
+          <button id="import-deck-btn" class="btn btn-secondary">Import Deck</button>
+          <button id="new-deck-btn" class="btn btn-primary">+ New Deck</button>
+        </div>
+      </div>
+      <div id="decks-list" class="decks-grid"></div>
+    </div>
+
+    <!-- Deck Builder Page -->
+    <div id="deck-builder-page" class="page hidden">
+      <div class="deck-builder">
+        <div class="deck-header">
+          <div class="deck-info-row">
+            <input type="text" id="deck-name" class="deck-name-input" placeholder="Deck Name">
+            <select id="deck-format" class="deck-format-select">
+              <option value="">Select Format</option>
+              <option value="standard">Standard</option>
+              <option value="modern">Modern</option>
+              <option value="commander">Commander</option>
+              <option value="legacy">Legacy</option>
+              <option value="vintage">Vintage</option>
+              <option value="pauper">Pauper</option>
+            </select>
+            <div class="deck-actions">
+              <button id="save-deck-btn" class="btn btn-primary">Save</button>
+              <button id="back-to-decks-btn" class="btn btn-secondary">Back</button>
+            </div>
+          </div>
+          <div class="deck-price-row">
+            <div id="deck-total-price" class="deck-price-display"></div>
+            <button id="buy-deck-btn" class="btn btn-success">Buy Deck</button>
+          </div>
+        </div>
+
+        <div class="deck-builder-content">
+          <!-- Card Search -->
+          <div class="search-panel">
+            <div class="search-box">
+              <input type="text" id="card-search" placeholder="Search for cards..." autocomplete="off">
+              <div id="search-results" class="search-results hidden"></div>
+            </div>
+          </div>
+
+          <!-- Deck List -->
+          <div class="deck-panel">
+            <div class="deck-tabs">
+              <button class="tab-btn active" data-tab="mainboard">Mainboard (<span id="mainboard-count">0</span>)</button>
+              <button class="tab-btn" data-tab="sideboard">Sideboard (<span id="sideboard-count">0</span>)</button>
+              <div class="deck-view-controls">
+                <button id="toggle-compact-btn" class="btn-icon" title="Toggle compact view">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="3" y1="6" x2="21" y2="6"></line>
+                    <line x1="3" y1="12" x2="21" y2="12"></line>
+                    <line x1="3" y1="18" x2="21" y2="18"></line>
+                  </svg>
+                </button>
+                <button id="export-deck-btn" class="btn-icon" title="Export deck">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="7 10 12 15 17 10"></polyline>
+                    <line x1="12" y1="15" x2="12" y2="3"></line>
+                  </svg>
+                </button>
+              </div>
+            </div>
+            <div id="mainboard" class="deck-list active"></div>
+            <div id="sideboard" class="deck-list hidden"></div>
+          </div>
+
+          <!-- Stats Panel -->
+          <div class="stats-panel">
+            <h3>Deck Statistics</h3>
+            <div id="deck-stats">
+              <div class="stat-section">
+                <h4>Mana Curve</h4>
+                <div id="mana-curve" class="chart"></div>
+              </div>
+              <div class="stat-section">
+                <h4>Card Types</h4>
+                <div id="type-distribution" class="chart"></div>
+              </div>
+              <div class="stat-section">
+                <h4>Colors</h4>
+                <div id="color-distribution" class="chart"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Cards Browse Page -->
+    <div id="cards-page" class="page hidden">
+      <div class="page-header">
+        <h2>Browse Cards</h2>
+      </div>
+      <div class="cards-search">
+        <input type="text" id="cards-browse-search" placeholder="Search cards..." class="search-input">
+        <div class="filters" style="display: flex; gap: 1rem; margin-top: 1rem; flex-wrap: wrap;">
+          <div>
+            <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Sort By</label>
+            <select id="filter-sort" class="filter-select" style="padding: 0.5rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-secondary);">
+              <option value="random">Random</option>
+              <option value="name">Alphabetical</option>
+              <option value="cmc">Mana Value</option>
+              <option value="color">Color</option>
+            </select>
+          </div>
+          <div>
+            <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Card Type</label>
+            <select id="filter-types" class="filter-select" style="padding: 0.5rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-secondary);">
+              <option value="all">All Types</option>
+              <option value="Creature">Creature</option>
+              <option value="Instant">Instant</option>
+              <option value="Sorcery">Sorcery</option>
+              <option value="Enchantment">Enchantment</option>
+              <option value="Artifact">Artifact</option>
+              <option value="Planeswalker">Planeswalker</option>
+              <option value="Land">Land</option>
+            </select>
+          </div>
+          <div>
+            <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Colors</label>
+            <div id="filter-colors" style="display: flex; gap: 0.5rem;">
+              <label style="cursor: pointer; padding: 0.5rem; border-radius: 6px; border: 2px solid transparent; background: var(--bg-secondary); transition: border-color 0.2s;">
+                <input type="checkbox" value="W" style="margin-right: 0.25rem;"> <i class="ms ms-w ms-cost"></i>
+              </label>
+              <label style="cursor: pointer; padding: 0.5rem; border-radius: 6px; border: 2px solid transparent; background: var(--bg-secondary); transition: border-color 0.2s;">
+                <input type="checkbox" value="U" style="margin-right: 0.25rem;"> <i class="ms ms-u ms-cost"></i>
+              </label>
+              <label style="cursor: pointer; padding: 0.5rem; border-radius: 6px; border: 2px solid transparent; background: var(--bg-secondary); transition: border-color 0.2s;">
+                <input type="checkbox" value="B" style="margin-right: 0.25rem;"> <i class="ms ms-b ms-cost"></i>
+              </label>
+              <label style="cursor: pointer; padding: 0.5rem; border-radius: 6px; border: 2px solid transparent; background: var(--bg-secondary); transition: border-color 0.2s;">
+                <input type="checkbox" value="R" style="margin-right: 0.25rem;"> <i class="ms ms-r ms-cost"></i>
+              </label>
+              <label style="cursor: pointer; padding: 0.5rem; border-radius: 6px; border: 2px solid transparent; background: var(--bg-secondary); transition: border-color 0.2s;">
+                <input type="checkbox" value="G" style="margin-right: 0.25rem;"> <i class="ms ms-g ms-cost"></i>
+              </label>
+            </div>
+          </div>
+          <div>
+            <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Set</label>
+            <select id="filter-sets" class="filter-select" style="padding: 0.5rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-secondary); min-width: 200px;">
+              <option value="">All Sets</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div id="cards-grid" class="cards-grid"></div>
+      <div id="pagination" class="pagination" style="display: flex; justify-content: center; align-items: center; gap: 1rem; margin: 2rem 0; padding: 1rem;">
+        <button id="prev-page" class="btn btn-secondary" disabled>Previous</button>
+        <span id="page-info" style="font-weight: 600;">Page 1 of 1</span>
+        <button id="next-page" class="btn btn-secondary" disabled>Next</button>
+      </div>
+    </div>
+
+    <!-- Settings Page -->
+    <div id="settings-page" class="page hidden">
+      <div class="page-header">
+        <h2>Settings</h2>
+      </div>
+      <div class="settings-content">
+        <section class="settings-section">
+          <h3>Database</h3>
+          <p>Refresh card database, pricing, and sets from MTGJSON (runs daily at 3 AM automatically)</p>
+          <button id="refresh-db-btn" class="btn btn-primary">Refresh Database Now</button>
+          <div id="sync-status" style="margin-top: 1rem; color: var(--text-secondary);"></div>
+        </section>
+
+        <section class="settings-section" style="margin-top: 2rem;">
+          <h3>API Keys</h3>
+          <p>Generate API keys for external integrations</p>
+          <button id="generate-api-key-btn" class="btn btn-primary">Generate New API Key</button>
+          <div id="api-keys-list" class="api-keys-list"></div>
+        </section>
+      </div>
+    </div>
+
+    <!-- Modal -->
+    <div id="modal" class="modal hidden">
+      <div class="modal-content">
+        <span class="modal-close">&times;</span>
+        <div id="modal-body"></div>
+      </div>
+    </div>
+
+    <!-- Buy Deck Modal -->
+    <div id="buy-deck-modal" class="modal hidden">
+      <div class="modal-content">
+        <span class="modal-close" id="buy-modal-close">&times;</span>
+        <h2 style="margin-bottom: 1.5rem;">Buy Deck</h2>
+        <div class="buy-options">
+          <div class="buy-option" id="buy-tcgplayer">
+            <div class="buy-option-header">
+              <h3>TCGplayer Mass Entry</h3>
+              <span class="buy-option-badge">Recommended</span>
+            </div>
+            <p>Import your deck to TCGplayer with set codes for accurate pricing</p>
+            <button class="btn btn-primary btn-block">Open in TCGplayer</button>
+          </div>
+          <div class="buy-option">
+            <div class="buy-option-header">
+              <h3>Copy Deck List</h3>
+            </div>
+            <p>Copy formatted deck list with set codes to paste manually</p>
+            <button class="btn btn-secondary btn-block" id="copy-decklist">Copy to Clipboard</button>
+          </div>
+        </div>
+        <div id="decklist-preview" class="decklist-preview hidden">
+          <h4>Deck List Preview:</h4>
+          <textarea id="decklist-text" readonly style="width: 100%; min-height: 200px; padding: 1rem; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 0.5rem; color: var(--text); font-family: monospace; font-size: 0.875rem; margin-top: 0.5rem;"></textarea>
+        </div>
+      </div>
+    </div>
+
+    <!-- Export Deck Modal -->
+    <div id="export-deck-modal" class="modal hidden">
+      <div class="modal-content">
+        <span class="modal-close" id="export-modal-close">&times;</span>
+        <h2 style="margin-bottom: 1.5rem;">Export Deck</h2>
+        <div class="export-options">
+          <button class="export-format-btn" data-format="moxfield">
+            <h3>Moxfield</h3>
+            <p>Format: 1 Card Name (SET) #</p>
+          </button>
+          <button class="export-format-btn" data-format="arena">
+            <h3>Arena</h3>
+            <p>Format: 1 Card Name</p>
+          </button>
+          <button class="export-format-btn" data-format="mtgo">
+            <h3>MTGO</h3>
+            <p>Format: 1 Card Name</p>
+          </button>
+          <button class="export-format-btn" data-format="text">
+            <h3>Plain Text</h3>
+            <p>Format: 1 Card Name</p>
+          </button>
+        </div>
+        <div id="export-preview" class="export-preview hidden">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+            <h4>Deck List:</h4>
+            <button class="btn btn-primary btn-sm" id="copy-export">Copy to Clipboard</button>
+          </div>
+          <textarea id="export-text" readonly style="width: 100%; min-height: 300px; padding: 1rem; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 0.5rem; color: var(--text); font-family: monospace; font-size: 0.875rem;"></textarea>
+        </div>
+      </div>
+    </div>
+
+    <!-- Card Preview (hover) -->
+    <div id="card-preview" class="card-preview hidden">
+      <img id="card-preview-img" src="" alt="Card preview">
+    </div>
+
+    <!-- Import Deck Modal -->
+    <div id="import-deck-modal" class="modal hidden">
+      <div class="modal-content">
+        <span class="modal-close" id="import-modal-close">&times;</span>
+        <h2 style="margin-bottom: 1.5rem;">Import Deck</h2>
+        <form id="import-deck-form">
+          <div class="form-group">
+            <label for="import-deck-name">Deck Name</label>
+            <input type="text" id="import-deck-name" required>
+          </div>
+          <div class="form-group">
+            <label for="import-deck-format">Format (Optional)</label>
+            <select id="import-deck-format">
+              <option value="">Select Format</option>
+              <option value="standard">Standard</option>
+              <option value="modern">Modern</option>
+              <option value="commander">Commander</option>
+              <option value="legacy">Legacy</option>
+              <option value="vintage">Vintage</option>
+              <option value="pauper">Pauper</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="import-deck-list">Deck List</label>
+            <p style="font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 0.5rem;">
+              Supports Moxfield, Arena, MTGO, and plain text formats
+            </p>
+            <textarea
+              id="import-deck-list"
+              rows="15"
+              placeholder="Paste your deck list here...&#10;&#10;Examples:&#10;1 Lightning Bolt&#10;4 Counterspell [DMR]&#10;1 Black Lotus (LEA) 4 *F*"
+              required
+              style="font-family: monospace; font-size: 0.875rem;"
+            ></textarea>
+          </div>
+          <div style="display: flex; gap: 0.5rem;">
+            <button type="submit" class="btn btn-primary" style="flex: 1;">Import Deck</button>
+            <button type="button" class="btn btn-secondary" id="cancel-import">Cancel</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Loading Spinner -->
+    <div id="loading" class="loading hidden">
+      <div class="spinner"></div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

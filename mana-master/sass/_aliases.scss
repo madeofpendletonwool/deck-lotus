@@ -1,0 +1,350 @@
+@use "variables";
+@use "colors";
+@use "icons";
+
+// color indicator convenience classes
+.#{variables.$ms-prefix}-ci {
+
+    // 4 color
+    &-ubgr,
+    &-ugbr,
+    &-ugrb,
+    &-urbg,
+    &-urgb,
+    &-bgru,
+    &-bgur,
+    &-brgu,
+    &-brug,
+    &-bugr,
+    &-burg,
+    &-gbru,
+    &-gbur,
+    &-grbu,
+    &-grub,
+    &-gubr,
+    &-gurb,
+    &-rbgu,
+    &-rbug,
+    &-rgbu,
+    &-rgub,
+    &-rubg,
+    &-rugb {
+        @extend .#{variables.$ms-prefix}-ci-ubrg;
+    }
+
+    &-bgrw,
+    &-bgwr,
+    &-brwg,
+    &-bwgr,
+    &-bwrg,
+    &-gbrw,
+    &-gbwr,
+    &-grbw,
+    &-grwb,
+    &-gwbr,
+    &-gwrb,
+    &-rbgw,
+    &-rbwg,
+    &-rgbw,
+    &-rgwb,
+    &-rwbg,
+    &-rwgb,
+    &-wbgr,
+    &-wbrg,
+    &-wgbr,
+    &-wgrb,
+    &-wrbg,
+    &-wrgb {
+        @extend .#{variables.$ms-prefix}-ci-brgw;
+    }
+
+    &-gruw,
+    &-grwu,
+    &-gurw,
+    &-guwr,
+    &-gwru,
+    &-gwur,
+    &-rguw,
+    &-rugw,
+    &-ruwg,
+    &-rwgu,
+    &-rwug,
+    &-ugrw,
+    &-ugwr,
+    &-urgw,
+    &-urwg,
+    &-uwgr,
+    &-uwrg,
+    &-wgru,
+    &-wgur,
+    &-wrgu,
+    &-wrug,
+    &-wugr,
+    &-wurg {
+        @extend .#{variables.$ms-prefix}-ci-rgwu;
+    }
+
+    &-bguw,
+    &-bgwu,
+    &-bugw,
+    &-buwg,
+    &-bwgu,
+    &-bwug,
+    &-gbuw,
+    &-gbwu,
+    &-gubw,
+    &-guwb,
+    &-gwbu,
+    &-ubgw,
+    &-ubwg,
+    &-ugbw,
+    &-ugwb,
+    &-uwbg,
+    &-uwgb,
+    &-wbgu,
+    &-wbug,
+    &-wgbu,
+    &-wgub,
+    &-wubg,
+    &-wugb {
+        @extend .#{variables.$ms-prefix}-ci-gwub;
+    }
+
+    &-bruw,
+    &-brwu,
+    &-burw,
+    &-buwr,
+    &-bwru,
+    &-bwur,
+    &-rbuw,
+    &-rbwu,
+    &-rubw,
+    &-ruwb,
+    &-rwbu,
+    &-rwub,
+    &-ubrw,
+    &-ubwr,
+    &-urbw,
+    &-urwb,
+    &-uwbr,
+    &-uwrb,
+    &-wbru,
+    &-wbur,
+    &-wrbu,
+    &-wrub,
+    &-wurb {
+        @extend .#{variables.$ms-prefix}-ci-wubr;
+    }
+
+    // 5 color
+    &-bgruw,
+    &-bgrwu,
+    &-bgurw,
+    &-bguwr,
+    &-bgwru,
+    &-bgwur,
+    &-brguw,
+    &-brgwu,
+    &-brugw,
+    &-bruwg,
+    &-brwgu,
+    &-brwug,
+    &-bugrw,
+    &-bugwr,
+    &-burgw,
+    &-burwg,
+    &-buwgr,
+    &-buwrg,
+    &-bwgru,
+    &-bwgur,
+    &-bwrgu,
+    &-bwrug,
+    &-bwugr,
+    &-bwurg,
+    &-gbruw,
+    &-gbrwu,
+    &-gburw,
+    &-gbuwr,
+    &-gbwru,
+    &-gbwur,
+    &-grbuw,
+    &-grbwu,
+    &-grubw,
+    &-gruwb,
+    &-grwbu,
+    &-grwub,
+    &-gubrw,
+    &-gubwr,
+    &-gurbw,
+    &-gurwb,
+    &-guwbr,
+    &-guwrb,
+    &-gwbru,
+    &-gwbur,
+    &-gwrbu,
+    &-gwrub,
+    &-gwubr,
+    &-gwurb,
+    &-rbguw,
+    &-rbgwu,
+    &-rbugw,
+    &-rbuwg,
+    &-rbwgu,
+    &-rbwug,
+    &-rgbuw,
+    &-rgbwu,
+    &-rgubw,
+    &-rguwb,
+    &-rgwbu,
+    &-rgwub,
+    &-rubgw,
+    &-rubwg {
+        @extend .#{variables.$ms-prefix}-ci-wubrg;
+    }
+    // breaking this up, editor was showing a warning with so many in a row
+    &-rugbw,
+    &-rugwb,
+    &-ruwbg,
+    &-ruwgb,
+    &-rwbgu,
+    &-rwbug,
+    &-rwgbu,
+    &-rwgub,
+    &-rwubg,
+    &-rwugb,
+    &-ubgrw,
+    &-ubgwr,
+    &-ubrgw,
+    &-ubrwg,
+    &-ubwgr,
+    &-ubwrg,
+    &-ugbrw,
+    &-ugbwr,
+    &-ugrbw,
+    &-ugrwb,
+    &-ugwbr,
+    &-ugwrb,
+    &-urbgw,
+    &-urbwg,
+    &-urgbw,
+    &-urgwb,
+    &-urwbg,
+    &-urwgb,
+    &-uwbgr,
+    &-uwbrg,
+    &-uwgbr,
+    &-uwgrb,
+    &-uwrbg,
+    &-uwrgb,
+    &-wbgru,
+    &-wbgur,
+    &-wbrgu,
+    &-wbrug,
+    &-wbugr,
+    &-wburg,
+    &-wgbru,
+    &-wgbur,
+    &-wgrbu,
+    &-wgrub,
+    &-wgubr,
+    &-wgurb,
+    &-wrbgu,
+    &-wrbug,
+    &-wrgbu,
+    &-wrgub,
+    &-wrubg,
+    &-wrugb,
+    &-wubgr,
+    &-wugbr,
+    &-wugrb,
+    &-wurbg,
+    &-wurgb {
+        @extend .#{variables.$ms-prefix}-ci-wubrg;
+    }
+}
+
+// counter/ability aliases
+.#{variables.$ms-prefix}-counter {
+    &-goad { @extend .#{variables.$ms-prefix}-ability-goad; }
+}
+.#{variables.$ms-prefix}-ability {
+    &-finality { @extend .#{variables.$ms-prefix}-counter-finality; }
+}
+
+// duels ability symbols that don't have a new one yet
+.#{variables.$ms-prefix}-ability {
+    &-annihilator { @extend .#{variables.$ms-prefix}-ability-duels-annihilator; }
+    &-battle-cry { @extend .#{variables.$ms-prefix}-ability-duels-battle-cry; }
+    &-unblockable { @extend .#{variables.$ms-prefix}-ability-duels-unblockable; }
+    &-cannot-block { @extend .#{variables.$ms-prefix}-ability-duels-cannot-block; }
+    &-cannot-untap { @extend .#{variables.$ms-prefix}-ability-duels-cannot-untap; }
+    &-cohort { @extend .#{variables.$ms-prefix}-ability-duels-cohort; }
+    &-copy { @extend .#{variables.$ms-prefix}-ability-duels-copy; }
+    &-delirium { @extend .#{variables.$ms-prefix}-ability-duels-delirium; }
+    &-detain { @extend .#{variables.$ms-prefix}-ability-duels-detain; }
+    &-dfc { @extend .#{variables.$ms-prefix}-ability-duels-dfc; }
+    &-evolve { @extend .#{variables.$ms-prefix}-ability-duels-evolve; }
+    &-exile { @extend .#{variables.$ms-prefix}-ability-duels-exile; }
+    &-fading { @extend .#{variables.$ms-prefix}-ability-duels-fading; }
+    &-fear { @extend .#{variables.$ms-prefix}-ability-duels-fear; }
+    &-forestwalk { @extend .#{variables.$ms-prefix}-ability-duels-forestwalk; }
+    &-haunt { @extend .#{variables.$ms-prefix}-ability-duels-haunt; }
+    &-infect { @extend .#{variables.$ms-prefix}-ability-duels-infect; }
+    &-ingest { @extend .#{variables.$ms-prefix}-ability-duels-ingest; }
+    &-intimidate { @extend .#{variables.$ms-prefix}-ability-duels-intimidate; }
+    &-islandwalk { @extend .#{variables.$ms-prefix}-ability-duels-islandwalk; }
+    &-legendary { @extend .#{variables.$ms-prefix}-ability-duels-legendary; }
+    &-monstrous { @extend .#{variables.$ms-prefix}-ability-duels-monstrous; }
+    &-mountainwalk { @extend .#{variables.$ms-prefix}-ability-duels-mountainwalk; }
+    &-must-attack { @extend .#{variables.$ms-prefix}-ability-duels-must-attack; }
+    &-plainswalk { @extend .#{variables.$ms-prefix}-ability-duels-plainswalk; }
+    &-prevent-damage { @extend .#{variables.$ms-prefix}-ability-duels-prevent-damage; }
+    &-protection-black { @extend .#{variables.$ms-prefix}-ability-duels-protection-black; }
+    &-protection-blue { @extend .#{variables.$ms-prefix}-ability-duels-protection-blue; }
+    &-protection-green { @extend .#{variables.$ms-prefix}-ability-duels-protection-green; }
+    &-protection-red { @extend .#{variables.$ms-prefix}-ability-duels-protection-red; }
+    &-protection-white { @extend .#{variables.$ms-prefix}-ability-duels-protection-white; }
+    &-protection { @extend .#{variables.$ms-prefix}-ability-duels-protection; }
+    &-rally { @extend .#{variables.$ms-prefix}-ability-duels-rally; }
+    &-regenerate { @extend .#{variables.$ms-prefix}-ability-duels-regenerate; }
+    &-renowned { @extend .#{variables.$ms-prefix}-ability-duels-renowned; }
+    &-shroud { @extend .#{variables.$ms-prefix}-ability-duels-shroud; }
+    &-skulk { @extend .#{variables.$ms-prefix}-ability-duels-skulk; }
+    &-soulshift { @extend .#{variables.$ms-prefix}-ability-duels-soulshift; }
+    &-swampwalk { @extend .#{variables.$ms-prefix}-ability-duels-swampwalk; }
+    &-temporary-control { @extend .#{variables.$ms-prefix}-ability-duels-temporary-control; }
+    &-totem-armor { @extend .#{variables.$ms-prefix}-ability-duels-totem-armor; }
+    &-undying { @extend .#{variables.$ms-prefix}-ability-duels-undying; }
+}
+
+// watermark aliases
+.#{variables.$ms-prefix}-watermark {
+    &-abzan { @extend .#{variables.$ms-prefix}-clan-abzan; }
+    &-atarka { @extend .#{variables.$ms-prefix}-clan-atarka; }
+    &-azorius { @extend .#{variables.$ms-prefix}-guild-azorius; }
+    &-boros { @extend .#{variables.$ms-prefix}-guild-boros; }
+    &-dimir { @extend .#{variables.$ms-prefix}-guild-dimir; }
+    &-dromoka { @extend .#{variables.$ms-prefix}-clan-dromoka; }
+    &-foretell { @extend .#{variables.$ms-prefix}-ability-foretell; }
+    &-golgari { @extend .#{variables.$ms-prefix}-guild-golgari; }
+    &-gruul { @extend .#{variables.$ms-prefix}-guild-gruul; }
+    &-izzet { @extend .#{variables.$ms-prefix}-guild-izzet; }
+    &-jeskai { @extend .#{variables.$ms-prefix}-clan-jeskai; }
+    &-kolaghan { @extend .#{variables.$ms-prefix}-clan-kolaghan; }
+    &-lorehold { @extend .#{variables.$ms-prefix}-school-lorehold; }
+    &-mardu { @extend .#{variables.$ms-prefix}-clan-mardu; }
+    &-ojutai { @extend .#{variables.$ms-prefix}-clan-ojutai; }
+    &-orzhov { @extend .#{variables.$ms-prefix}-guild-orzhov; }
+    &-phyrexian { @extend .#{variables.$ms-prefix}-h; }
+    &-planeswalker { @extend .#{variables.$ms-prefix}-planeswalker; }
+    &-prismari { @extend .#{variables.$ms-prefix}-school-prismari; }
+    &-quandrix { @extend .#{variables.$ms-prefix}-school-quandrix; }
+    &-rakdos { @extend .#{variables.$ms-prefix}-guild-rakdos; }
+    &-selesnya { @extend .#{variables.$ms-prefix}-guild-selesnya; }
+    &-silumgar { @extend .#{variables.$ms-prefix}-clan-silumgar; }
+    &-silverquill { @extend .#{variables.$ms-prefix}-school-silverquill; }
+    &-simic { @extend .#{variables.$ms-prefix}-guild-simic; }
+    &-sultai { @extend .#{variables.$ms-prefix}-clan-sultai; }
+    &-temur { @extend .#{variables.$ms-prefix}-clan-temur; }
+    &-witherbloom { @extend .#{variables.$ms-prefix}-school-witherbloom; }
+}

@@ -1,0 +1,475 @@
+// symbols
+
+.@{ms-prefix} {
+
+    // resources
+    &-w::before { content: "\e600"; }
+    &-w-original::before { content: "\e997"; }
+    &-w-list::before { content: "\e998"; }
+    &-u::before { content: "\e601"; }
+    &-b::before { content: "\e602"; }
+    &-r::before { content: "\e603"; }
+    &-g::before { content: "\e604"; }
+    &-0::before { content: "\e605"; }
+    &-1::before { content: "\e606"; }
+    &-2::before { content: "\e607"; }
+    &-3::before { content: "\e608"; }
+    &-4::before { content: "\e609"; }
+    &-5::before { content: "\e60a"; }
+    &-6::before { content: "\e60b"; }
+    &-7::before { content: "\e60c"; }
+    &-8::before { content: "\e60d"; }
+    &-9::before { content: "\e60e"; }
+    &-10::before { content: "\e60f"; }
+    &-11::before { content: "\e610"; }
+    &-12::before { content: "\e611"; }
+    &-13::before { content: "\e612"; }
+    &-14::before { content: "\e613"; }
+    &-15::before { content: "\e614"; }
+    &-16::before { content: "\e62a"; }
+    &-17::before { content: "\e62b"; }
+    &-18::before { content: "\e62c"; }
+    &-19::before { content: "\e62d"; }
+    &-20::before { content: "\e62e"; }
+    &-x::before { content: "\e615"; }
+    &-y::before { content: "\e616"; }
+    &-z::before { content: "\e617"; }
+    &-p::before { content: "\e618"; }
+    &-s::before { content: "\e619"; }
+    &-s-mtga::before { content: "\e996"; }
+    &-c::before { content: "\e904"; }
+    &-e::before,
+    &-energy::before{ content: "\e907"; }
+    &-acorn::before { content: "\e929"; }
+    &-ticket::before,
+        &-tk::before { content: "\e9c4"; }
+    &-1-2::before { content: "\e902"; }
+    &-infinity::before { content: "\e903"; }
+
+    // tap/roll
+    &-tap::before { content: "\e61a"; }
+    &-untap::before { content: "\e61b"; }
+    &-tap-alt::before { content: "\e61c"; }
+    &-chaos::before { content: "\e61d"; }
+
+    // card types
+    &-artifact::before { content: "\e61e"; }
+    &-battle::before { content: "\e9d1"; }
+    &-battle-siege::before { content: "\e9d2"; }
+    &-commander::before { content: "\e9c6"; }
+    &-conspiracy::before { content: "\e972"; }
+    &-creature::before { content: "\e61f"; }
+    &-enchantment::before { content: "\e620"; }
+    &-instant::before { content: "\e621"; }
+    &-land::before { content: "\e622"; }
+    &-multicolor::before { content: "\e985"; }
+    &-phenomenon::before { content: "\e96e"; }
+    &-plane::before { content: "\e96f"; }
+    &-planeswalker::before { content: "\e623"; }
+    &-rarity::before { content: "\e96c"; }
+    &-saga::before { content: "\e92a"; }
+    &-scheme::before { content: "\e970"; }
+    &-sorcery::before { content: "\e624"; }
+    &-token::before { content: "\e96d"; }
+    &-tribal::before,
+        &-multiple::before { content: "\e925"; }
+    &-vanguard::before { content: "\e971"; }
+
+    // zones
+    &-hand::before { content: "\e9ca"; }
+    &-library::before { content: "\e9cb"; }
+    &-graveyard::before { content: "\e9cc"; }
+    &-exile::before { content: "\e9cd"; }
+
+    // splits
+    &-wu::before,
+    &-wb::before,
+    &-rw::after,
+    &-gw::after,
+    &-2w::after { content: "\e600"; } // white
+    &-ub::before,
+    &-ur::before,
+    &-wu::after,
+    &-gu::after,
+    &-2u::after { content: "\e601"; } // blue
+    &-br::before,
+    &-bg::before,
+    &-wb::after,
+    &-ub::after,
+    &-2b::after { content: "\e602"; } // black
+    &-rw::before,
+    &-rg::before,
+    &-ur::after,
+    &-br::after,
+    &-2r::after { content: "\e603"; } // red
+    &-gw::before,
+    &-gu::before,
+    &-bg::after,
+    &-rg::after,
+    &-2g::after { content: "\e604"; } // green
+    &-2w::before,
+    &-2u::before,
+    &-2b::before,
+    &-2r::before,
+    &-2g::before { content: "\e607"; } // 2
+
+    // phyrexian splits
+    &-wp::before,
+    &-up::before,
+    &-bp::before,
+    &-rp::before,
+    &-gp::before,
+    &-wup::before,
+    &-wup::after,
+    &-wbp::before,
+    &-wbp::after,
+    &-ubp::before,
+    &-ubp::after,
+    &-urp::before,
+    &-urp::after,
+    &-brp::before,
+    &-brp::after,
+    &-bgp::before,
+    &-bgp::after,
+    &-rwp::before,
+    &-rwp::after,
+    &-rgp::before,
+    &-rgp::after,
+    &-gwp::before,
+    &-gwp::after,
+    &-gup::before,
+    &-gup::after { content: "\e618"; } // p/p
+
+    // un-sets
+    &-100::before { content: "\e900"; }
+    &-1000000::before { content: "\e901"; }
+
+    // loyalty
+    &-loyalty {
+        &-up::before { content: "\e627"; } // Up
+        &-down::before { content: "\e625"; } // Down
+        &-zero::before { content: "\e626"; } // Zero
+        &-start::before { content: "\e628"; } // Start
+    }
+    &-defense {
+        &::before { content: "\e9d7"; }
+        &-border::before { content: "\e9d8"; }
+    }
+
+    // levelers
+    &-level {
+        &::before { content: "\e9c7"; }
+        &::after { content: "\e9c8"; }
+    }
+
+    // double-faced cards
+    &-dfc {
+        &-back::before { content: "\e9d4"; }
+        &-day::before { content: "\e906"; }
+        &-emrakul::before { content: "\e90a"; }
+        &-enchantment::before { content: "\e920"; }
+        &-facedown::before { content: "\e9d6"; }
+        &-front::before { content: "\e9d3"; }
+        &-ignite::before { content: "\e908"; }
+        &-land::before { content: "\e9c5"; }
+        &-lesson::before { content: "\e98f"; }
+        &-meld::before { content: "\e9d5"; }
+        &-modal-back::before { content: "\e984"; }
+        &-modal-face::before { content: "\e983"; }
+        &-moon::before { content: "\e90b"; }
+        &-night::before { content: "\e905"; }
+        &-saga::before { content: "\e9cf"; }
+        &-saga-creature::before { content: "\e9d0"; }
+        &-spark::before { content: "\e909"; }
+    }
+
+    // other card elements
+    &-flashback::before { content: "\e629"; }
+    &-power::before { content: "\e921"; }
+    &-toughness::before { content: "\e922"; }
+    &-artist {
+        &-brush::before { content: "\e923"; }
+        &-nib::before { content: "\e924"; }
+    }
+
+    // guilds/clans/poleis
+    &-guild{
+        &-azorius::before { content: "\e90c"; }
+        &-boros::before { content: "\e90d"; }
+        &-dimir::before { content: "\e90e"; }
+        &-golgari::before { content: "\e90f"; }
+        &-gruul::before { content: "\e910"; }
+        &-izzet::before { content: "\e911"; }
+        &-orzhov::before { content: "\e912"; }
+        &-rakdos::before { content: "\e913"; }
+        &-selesnya::before { content: "\e914"; }
+        &-simic::before { content: "\e915"; }
+    }
+    &-clan {
+        &-abzan::before { content: "\e916"; }
+        &-jeskai::before { content: "\e917"; }
+        &-mardu::before { content: "\e918"; }
+        &-sultai::before { content: "\e919"; }
+        &-temur::before { content: "\e91a"; }
+        &-atarka::before { content: "\e91b"; }
+        &-dromoka::before { content: "\e91c"; }
+        &-kolaghan::before { content: "\e91d"; }
+        &-ojutai::before { content: "\e91e"; }
+        &-silumgar::before { content: "\e91f"; }
+    }
+    &-polis {
+        &-setessa::before { content: "\e926"; }
+        &-akros::before { content: "\e927"; }
+        &-meletis::before { content: "\e928"; }
+    }
+    &-school {
+        &-lorehold::before { content: "\e99a"; }
+        &-prismari::before { content: "\e99c"; }
+        &-quandrix::before { content: "\e99e"; }
+        &-silverquill::before { content: "\e9a0"; }
+        &-witherbloom::before { content: "\e9a2"; }
+    }
+
+    // counters
+    &-counter {
+        &-arrow::before { content: "\e92b"; }
+        &-brick::before { content: "\e92c"; }
+        &-charge::before { content: "\e92d"; }
+        &-damage::before { content: "\e9dd"; } // same as original enrage
+        &-devotion::before { content: "\e92e"; }
+        &-doom::before { content: "\e92f"; }
+        &-echo::before { content: "\e930"; }
+        &-flame::before { content: "\e931"; }
+        &-flood::before { content: "\e932"; }
+        &-fungus::before { content: "\e933"; }
+        &-gold::before { content: "\e934"; }
+        &-ki::before { content: "\e935"; }
+        &-lore::before { content: "\e936"; }
+        &-loyalty::before { content: "\e937"; }
+        &-mining::before { content: "\e938"; }
+        &-minus::before { content: "\e939"; }
+        &-muster::before { content: "\e93a"; }
+        &-paw::before { content: "\e93b"; }
+        &-pin::before { content: "\e93c"; }
+        &-plus::before { content: "\e93d"; }
+        &-scream::before { content: "\e93e"; }
+        &-skeleton::before { content: "\e93f"; }
+        &-skull::before { content: "\e940"; }
+        &-slime::before { content: "\e941"; }
+        &-time::before { content: "\e942"; }
+        &-minus-uneven::before { content: "\e943"; }
+        &-plus-uneven::before { content: "\e944"; }
+        &-verse::before { content: "\e945"; }
+        &-void::before { content: "\e9ec"; }
+        &-vortex::before { content: "\e946"; }
+        // arena
+        &-shield::before { content: "\e9c3"; }
+        &-stun::before { content: "\e9c2"; }
+    }
+
+    // abilities
+    &-ability {
+        &-activated::before,
+            &-crew::before,
+            &-cycling::before { content: "\e947"; }
+        &-adamant::before { content: "\e974"; }
+        &-adapt::before { content: "\e975"; }
+        &-addendum::before { content: "\e976"; }
+        &-adventure::before { content: "\e948"; }
+        &-afflict::before { content: "\e977"; }
+        &-afterlife::before { content: "\e978"; }
+        &-aftermath::before { content: "\e979"; }
+        &-alliance::before { content: "\e9b5"; }
+        &-amass {
+            &-orcs::before { content: "\e9e0"; }
+            &-zombies::before,
+            &::before { content: "\e97a"; }
+        }
+        &-ascend::before { content: "\e94a"; }
+        &-backup::before { content: "\e9d9"; }
+        &-bargain::before { content: "\e9e2"; }
+        &-blitz::before { content: "\e9b4"; }
+        &-boast::before { content: "\e991"; }
+        &-casualty::before { content: "\e9b7"; }
+        &-celebration::before { content: "\e9e3"; }
+        &-changeling::before { content: "\e9a6"; }
+        &-channel::before { content: "\e9b1"; }
+        &-cleave::before { content: "\e9ad"; }
+        &-combat-condition::before { content: "\e9ce"; }
+        &-companion::before { content: "\e97b"; }
+        &-constellation::before { content: "\e97c"; }
+        &-convoke {
+            &-original::before { content: "\e949"; }
+            &::before { content: "\e9da"; }
+        }
+        &-corrupted::before { content: "\e9c0"; }
+        &-coven::before { content: "\e9aa"; }
+        &-d20::before { content: "\e999"; }
+        &-day-night::before { content: "\e9a8"; }
+        &-daybound-nightbound::before { content: "\e9a9"; }
+        &-deathtouch::before { content: "\e94b"; }
+        &-decayed::before { content: "\e9ac"; }
+        &-defender::before { content: "\e94c"; }
+        &-devotion::before { content: "\e97d"; }
+        &-disturb::before { content: "\e9ae"; }
+        &-domain::before { content: "\e9a7"; }
+        &-double-strike::before { content: "\e94d"; }
+        &-dungeon::before { content: "\e995"; }
+        &-embalm::before { content: "\e97e"; }
+        &-enlist::before { content: "\e9ba"; }
+        &-enrage {
+            &::before { content: "\e9dc"; }
+            &-original::before { content: "\e94e"; }
+        }
+        &-escape::before { content: "\e969"; }
+        &-eternalize::before { content: "\e97f"; }
+        &-exploit::before { content: "\e9af"; }
+        &-explore::before { content: "\e94f"; }
+        &-fabricate::before { content: "\e9a5"; }
+        &-first-strike::before { content: "\e950"; }
+        &-flash::before { content: "\e951"; }
+        &-flying::before { content: "\e952"; }
+        &-for-mirrodin::before { content: "\e9c1"; }
+        &-foretell::before { content: "\e990"; }
+        &-goad::before { content: "\e9c9"; }
+        &-haste::before { content: "\e953"; }
+        &-hexproof {
+            &::before { content: "\e954"; }
+            &-black::before { content: "\e955"; }
+            &-blue::before { content: "\e956"; }
+            &-green::before { content: "\e957"; }
+            &-red::before { content: "\e958"; }
+            &-white::before { content: "\e959"; }
+        }
+        &-hideaway::before { content: "\e9b8"; }
+        &-improvise::before { content: "\e9de"; }
+        &-incubate::before { content: "\e9db"; }
+        &-indestructible::before { content: "\e95a"; }
+        &-investigate::before { content: "\e9ab"; }
+        &-jumpstart::before { content: "\e95b"; }
+        &-kicker::before { content: "\e989"; }
+        &-landfall::before { content: "\e988"; }
+        &-learn::before { content: "\e994"; }
+        &-lifelink::before { content: "\e95c"; }
+        &-magecraft::before { content: "\e993"; }
+        &-meld::before { content: "\e9bd"; }
+        &-menace::before { content: "\e95d"; }
+        &-mentor::before { content: "\e95e"; }
+        &-mutate::before { content: "\e980"; }
+        &-ninjutsu::before { content: "\e9b2"; }
+        &-obscura::before { content: "\e9b6"; }
+        &-party::before { content: "\e987"; }
+        &-phyrexian::before { content: "\e618"; }
+        &-proliferate::before { content: "\e981"; }
+        &-prototype::before { content: "\e9be"; }
+        &-prowess::before { content: "\e982"; }
+        &-raid::before { content: "\e95f"; }
+        &-reach::before { content: "\e960"; }
+        &-read-ahead::before { content: "\e9b9"; }
+        &-reconfigure::before { content: "\e9b3"; }
+        &-revolt::before { content: "\e961"; }
+        &-ring-bearer::before { content: "\e9df"; }
+        &-riot::before { content: "\e973"; }
+        &-role {
+            &-cursed::before { content: "\e9e6"; }
+            &-monster::before { content: "\e9e7"; }
+            &-royal::before { content: "\e9e8"; }
+            &-sorceror::before { content: "\e9e9"; }
+            &-wicked::before { content: "\e9ea"; }
+            &-young-hero::before { content: "\e9eb"; }
+        }
+        &-specialize::before { content: "\e9bb"; }
+        &-spectacle::before { content: "\e96b"; }
+        &-static::before,
+            &-enchant::before { content: "\e962"; }
+        &-summoning-sickness::before { content: "\e96a"; }
+        &-surveil::before { content: "\e963"; }
+        &-the-ring-tempts-you::before { content: "\e9e1"; }
+        &-toxic::before { content: "\e9bf"; }
+        &-training::before { content: "\e9b0"; }
+        &-trample::before { content: "\e964"; }
+        &-transform::before { content: "\e965"; }
+        &-triggered::before { content: "\e966"; }
+        &-undergrowth::before { content: "\e967"; }
+        &-unearth::before { content: "\e9bc"; }
+        &-vigilance::before { content: "\e968"; }
+        &-ward::before { content: "\e992"; }
+
+        // arena card-specific ability symbols
+        &-haktos-the-unscarred::before { content: "\e9e4"; }
+        &-robber-of-the-rich::before { content: "\e9e5"; }
+    }
+
+
+    // watermarks
+    &-watermark {
+        &-agentsofsneak::before { content: "\ea08"; }
+        &-arena::before { content: "\ea1e"; }
+        &-brokers::before { content: "\ea0d"; }
+        &-cabaretti::before { content: "\ea0e"; }
+        &-colorpie::before { content: "\e9f0"; }
+        &-conspiracy::before { content: "\ea12"; }
+        &-corocoro::before { content: "\ea15"; }
+        &-crossbreedlabs::before { content: "\ea09"; }
+        &-dci::before { content: "\ea1d"; }
+        &-dengekimaoh::before { content: "\ea14"; }
+        &-desparked::before { content: "\e9f1"; }
+        &-dnd::before { content: "\ea17"; }
+        &-flavor {
+            &-aestheticconsultation::before { content: "\e9f2"; }
+            &-farewelltoarms::before { content: "\e9f3"; }
+            &-monkeymonkeymonkey::before { content: "\e9f4"; }
+            &-moxlotus::before { content: "\e9f5"; }
+            &-myfirsttome::before { content: "\e9f6"; }
+            &-shoetree::before { content: "\e9f7"; }
+            &-whenfluffybunniesattack::before { content: "\e9f8"; }
+        }
+        &-fnm::before { content: "\ea16"; }
+        &-goblinexplosioneers::before { content: "\ea0a"; }
+        &-grandprix::before { content: "\ea1f"; }
+        &-grandprix2::before { content: "\ea20"; }
+        &-herospath {
+            &::before { content: "\ea02"; }
+            &-1::before { content: "\e9f9"; }
+            &-2::before { content: "\e9fa"; }
+            &-3::before { content: "\e9fb"; }
+            &-4::before { content: "\e9fc"; }
+            &-5::before { content: "\e9fd"; }
+            &-6::before { content: "\e9fe"; }
+            &-7::before { content: "\e9ff"; }
+            &-8::before { content: "\ea00"; }
+            &-9::before { content: "\ea01"; }
+        }
+        &-japanjunior::before { content: "\ea24"; }
+        &-judgeacademy::before { content: "\ea13"; }
+        &-junior::before { content: "\ea23"; }
+        &-juniorapac::before { content: "\ea21"; }
+        &-junioreurope::before { content: "\ea22"; }
+        &-leagueofdastardlydoom::before { content: "\ea0b"; }
+        &-maestros::before { content: "\ea0f"; }
+        &-mirran::before { content: "\ea03"; }
+        &-cutiemark {
+            &-apples::before { content: "\ea27"; }
+            &-balloons::before { content: "\ea28"; }
+            &-butterflies::before { content: "\ea29"; }
+            &-gems::before { content: "\ea04"; }
+            &-rainbow::before { content: "\ea2a"; }
+            &-sparkle::before { content: "\ea05"; }
+            &-waningmoon::before { content: "\ea06"; }
+            &-waxingmoon::before { content: "\ea07"; }
+        }
+        &-mps::before { content: "\ea1a"; }
+        &-mtg::before { content: "\e9ed"; }
+        &-mtg10::before { content: "\e9ee"; }
+        &-mtg15::before { content: "\e9ef"; }
+        &-nerf::before { content: "\ea19"; }
+        &-obscura::before { content: "\ea10"; }
+        &-orderofthewidget::before { content: "\ea0c"; }
+        &-protour::before { content: "\ea26"; }
+        &-riveteers::before { content: "\ea11"; }
+        &-scholarship::before { content: "\ea25"; }
+        &-transformers::before { content: "\ea18"; }
+        &-wotc::before { content: "\ea1b"; }
+        &-wpn::before { content: "\ea1c"; }
+    }
+}

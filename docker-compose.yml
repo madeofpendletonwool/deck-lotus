@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  deck-lotus:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: deck-lotus:latest
+    container_name: deck-lotus
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - DATABASE_PATH=/app/data/deck-lotus.db
+      - JWT_SECRET=${JWT_SECRET:-change-this-secret-in-production}
+      - JWT_EXPIRES_IN=7d
+      - JWT_REFRESH_EXPIRES_IN=30d
+    volumes:
+      # Persistent database storage
+      - deck-lotus-data:/app/data
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  deck-lotus-data:
+    driver: local

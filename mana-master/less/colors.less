@@ -1,0 +1,570 @@
+// color indicator circles
+
+.@{ms-prefix}-ci {
+
+    // base styles
+    border-radius: 100%;
+    box-shadow: inset 0 0 1px #fff; // to remove spill over
+    line-height: 0.95em; // shifts the border up a touch
+    width: 1em;
+    height: 1em;
+
+    // set the border color
+    &::before { color: @ms-border-black; }
+
+    // borders based on number of colors in identity
+    &-1::before { content: "\e98a"; }
+    &-2::before { content: "\e98b"; }
+    &-3::before { content: "\e98c"; }
+    &-4::before { content: "\e98d"; }
+    &-5::before { content: "\e98e"; }
+
+    // 1 color backgrounds
+    &-w { background: @ms-white; }
+    &-u { background: @ms-blue; }
+    &-b { background: @ms-black; }
+    &-r { background: @ms-red; }
+    &-g { background: @ms-green; }
+
+    // 2 color backgrounds
+    &-wu,
+    &-uw,
+    &-azorius {
+        background: conic-gradient(
+            @ms-white 45deg,
+            @ms-blue 45deg 225deg,
+            @ms-white 225deg
+        );
+    }
+    &-wb,
+    &-bw,
+    &-orzhov {
+        background: conic-gradient(
+            @ms-white 45deg,
+            @ms-black 45deg 225deg,
+            @ms-white 225deg
+        );
+    }
+    &-ub,
+    &-bu,
+    &-dimir {
+        background: conic-gradient(
+            @ms-blue 45deg,
+            @ms-black 45deg 225deg,
+            @ms-blue 225deg
+        );
+    }
+    &-ur,
+    &-ru,
+    &-izzet {
+        background: conic-gradient(
+            @ms-blue 45deg,
+            @ms-red 45deg 225deg,
+            @ms-blue 225deg
+        );
+    }
+    &-bg,
+    &-gb,
+    &-golgari,
+    &-rock {
+        background: conic-gradient(
+            @ms-black 45deg,
+            @ms-green 45deg 225deg,
+            @ms-black 225deg
+        );
+    }
+    &-br,
+    &-rb,
+    &-rakdos {
+        background: conic-gradient(
+            @ms-black 45deg,
+            @ms-red 45deg 225deg,
+            @ms-black 225deg
+        );
+    }
+    &-rw,
+    &-wr,
+    &-boros {
+        background: conic-gradient(
+            @ms-red 45deg,
+            @ms-white 45deg 225deg,
+            @ms-red 225deg
+        );
+    }
+    &-rg,
+    &-gr,
+    &-gruul {
+        background: conic-gradient(
+            @ms-red 45deg,
+            @ms-green 45deg 225deg,
+            @ms-red 225deg
+        );
+    }
+    &-gu,
+    &-ug,
+    &-simic {
+        background: conic-gradient(
+            @ms-green 45deg,
+            @ms-blue 45deg 225deg,
+            @ms-green 225deg
+        );
+    }
+    &-gw,
+    &-wg,
+    &-selesnya {
+        background: conic-gradient(
+            @ms-green 45deg,
+            @ms-white 45deg 225deg,
+            @ms-green 225deg
+        );
+    }
+
+    // 3-color backgrounds
+    &-wug,
+    &-wgu,
+    &-ugw,
+    &-uwg,
+    &-gwu,
+    &-guw,
+    &-bant {
+        background: conic-gradient(
+            @ms-blue 60deg,
+            @ms-green 60deg 180deg,
+            @ms-white 180deg 300deg,
+            @ms-blue 300deg
+        );
+    }
+    &-ubw,
+    &-uwb,
+    &-buw,
+    &-bwu,
+    &-wub,
+    &-wbu,
+    &-esper {
+        background: conic-gradient(
+            @ms-black 60deg,
+            @ms-white 60deg 180deg,
+            @ms-blue 180deg 300deg,
+            @ms-black 300deg
+        );
+    }
+    &-bru,
+    &-bur,
+    &-rbu,
+    &-rub,
+    &-ubr,
+    &-urb,
+    &-grixis {
+        background: conic-gradient(
+            @ms-red 60deg,
+            @ms-blue 60deg 180deg,
+            @ms-black 180deg 300deg,
+            @ms-red 300deg
+        );
+    }
+    &-rgb,
+    &-rbg,
+    &-grb,
+    &-gbr,
+    &-brg,
+    &-bgr,
+    &-jund {
+        background: conic-gradient(
+            @ms-green 60deg,
+            @ms-black 60deg 180deg,
+            @ms-red 180deg 300deg,
+            @ms-green 300deg
+        );
+    }
+    &-gwr,
+    &-grw,
+    &-wgr,
+    &-wrg,
+    &-rgw,
+    &-rwg,
+    &-naya {
+        background: conic-gradient(
+            @ms-white 60deg,
+            @ms-red 60deg 180deg,
+            @ms-green 180deg 300deg,
+            @ms-white 300deg
+        );
+    }
+    &-wbg,
+    &-wgb,
+    &-bwg,
+    &-bgw,
+    &-gwb,
+    &-gbw,
+    &-abzan,
+    &-junk,
+    &-necra {
+        background: conic-gradient(
+            @ms-black 60deg,
+            @ms-green 60deg 180deg,
+            @ms-white 180deg 300deg,
+            @ms-black 300deg
+        );
+    }
+    &-urw,
+    &-uwr,
+    &-ruw,
+    &-rwu,
+    &-wur,
+    &-wru,
+    &-jeskai,
+    &-raka {
+        background: conic-gradient(
+            @ms-red 60deg,
+            @ms-white 60deg 180deg,
+            @ms-blue 180deg 300deg,
+            @ms-red 300deg
+        );
+    }
+    &-bgu,
+    &-bug,
+    &-gbu,
+    &-gub,
+    &-ubg,
+    &-ugb,
+    &-sultai,
+    &-bug,
+    &-ana {
+        background: conic-gradient(
+            @ms-green 60deg,
+            @ms-blue 60deg 180deg,
+            @ms-black 180deg 300deg,
+            @ms-green 300deg
+        );
+    }
+    &-rwb,
+    &-rbw,
+    &-wrb,
+    &-wbr,
+    &-brw,
+    &-bwr,
+    &-mardu,
+    &-dega {
+        background: conic-gradient(
+            @ms-white 60deg,
+            @ms-black 60deg 180deg,
+            @ms-red 180deg 300deg,
+            @ms-white 300deg
+        );
+    }
+    &-gur,
+    &-gru,
+    &-ugr,
+    &-urg,
+    &-rgu,
+    &-rug,
+    &-temur,
+    &-ceta {
+        background: conic-gradient(
+            @ms-blue 60deg,
+            @ms-red 60deg 180deg,
+            @ms-green 180deg 300deg,
+            @ms-blue 300deg
+        );
+    }
+
+    // 4 color backgrounds
+    // note: not using aliaes like sass because less is so feature limited
+    &-ubrg,
+    &-glint,
+    &-ubgr,
+    &-ugbr,
+    &-ugrb,
+    &-urbg,
+    &-urgb,
+    &-bgru,
+    &-bgur,
+    &-brgu,
+    &-brug,
+    &-bugr,
+    &-burg,
+    &-gbru,
+    &-gbur,
+    &-grbu,
+    &-grub,
+    &-gubr,
+    &-gurb,
+    &-rbgu,
+    &-rbug,
+    &-rgbu,
+    &-rgub,
+    &-rubg,
+    &-rugb {
+        background: conic-gradient(
+            @ms-blue 45deg,
+            @ms-black 45deg 135deg,
+            @ms-red 135deg 225deg,
+            @ms-green 225deg 315deg,
+            @ms-blue 315deg
+        );
+    }
+    &-brgw,
+    &-dune,
+    &-bgrw,
+    &-bgwr,
+    &-brwg,
+    &-bwgr,
+    &-bwrg,
+    &-gbrw,
+    &-gbwr,
+    &-grbw,
+    &-grwb,
+    &-gwbr,
+    &-gwrb,
+    &-rbgw,
+    &-rbwg,
+    &-rgbw,
+    &-rgwb,
+    &-rwbg,
+    &-rwgb,
+    &-wbgr,
+    &-wbrg,
+    &-wgbr,
+    &-wgrb,
+    &-wrbg,
+    &-wrgb {
+        background: conic-gradient(
+            @ms-black 45deg,
+            @ms-red 45deg 135deg,
+            @ms-green 135deg 225deg,
+            @ms-white 225deg 315deg,
+            @ms-black 315deg
+        );
+    }
+    &-rgwu,
+    &-ink,
+    &-gruw,
+    &-grwu,
+    &-gurw,
+    &-guwr,
+    &-gwru,
+    &-gwur,
+    &-rguw,
+    &-rugw,
+    &-ruwg,
+    &-rwgu,
+    &-rwug,
+    &-ugrw,
+    &-ugwr,
+    &-urgw,
+    &-urwg,
+    &-uwgr,
+    &-uwrg,
+    &-wgru,
+    &-wgur,
+    &-wrgu,
+    &-wrug,
+    &-wugr,
+    &-wurg {
+        background: conic-gradient(
+            @ms-red 45deg,
+            @ms-green 45deg 135deg,
+            @ms-white 135deg 225deg,
+            @ms-blue 225deg 315deg,
+            @ms-red 315deg
+        );
+    }
+    &-gwub,
+    &-witch,
+    &-bguw,
+    &-bgwu,
+    &-bugw,
+    &-buwg,
+    &-bwgu,
+    &-bwug,
+    &-gbuw,
+    &-gbwu,
+    &-gubw,
+    &-guwb,
+    &-gwbu,
+    &-ubgw,
+    &-ubwg,
+    &-ugbw,
+    &-ugwb,
+    &-uwbg,
+    &-uwgb,
+    &-wbgu,
+    &-wbug,
+    &-wgbu,
+    &-wgub,
+    &-wubg,
+    &-wugb {
+        background: conic-gradient(
+            @ms-green 45deg,
+            @ms-white 45deg 135deg,
+            @ms-blue 135deg 225deg,
+            @ms-black 225deg 315deg,
+            @ms-green 315deg
+        );
+    }
+    &-wubr,
+    &-yore,
+    &-bruw,
+    &-brwu,
+    &-burw,
+    &-buwr,
+    &-bwru,
+    &-bwur,
+    &-rbuw,
+    &-rbwu,
+    &-rubw,
+    &-ruwb,
+    &-rwbu,
+    &-rwub,
+    &-ubrw,
+    &-ubwr,
+    &-urbw,
+    &-urwb,
+    &-uwbr,
+    &-uwrb,
+    &-wbru,
+    &-wbur,
+    &-wrbu,
+    &-wrub,
+    &-wurb {
+        background: conic-gradient(
+            @ms-white 45deg,
+            @ms-blue 45deg 135deg,
+            @ms-black 135deg 225deg,
+            @ms-red 225deg 315deg,
+            @ms-white 315deg
+        );
+    }
+
+    // 5 color background
+    &-wubrg,
+    &-5,
+    &-bgruw,
+    &-bgrwu,
+    &-bgurw,
+    &-bguwr,
+    &-bgwru,
+    &-bgwur,
+    &-brguw,
+    &-brgwu,
+    &-brugw,
+    &-bruwg,
+    &-brwgu,
+    &-brwug,
+    &-bugrw,
+    &-bugwr,
+    &-burgw,
+    &-burwg,
+    &-buwgr,
+    &-buwrg,
+    &-bwgru,
+    &-bwgur,
+    &-bwrgu,
+    &-bwrug,
+    &-bwugr,
+    &-bwurg,
+    &-gbruw,
+    &-gbrwu,
+    &-gburw,
+    &-gbuwr,
+    &-gbwru,
+    &-gbwur,
+    &-grbuw,
+    &-grbwu,
+    &-grubw,
+    &-gruwb,
+    &-grwbu,
+    &-grwub,
+    &-gubrw,
+    &-gubwr,
+    &-gurbw,
+    &-gurwb,
+    &-guwbr,
+    &-guwrb,
+    &-gwbru,
+    &-gwbur,
+    &-gwrbu,
+    &-gwrub,
+    &-gwubr,
+    &-gwurb,
+    &-rbguw,
+    &-rbgwu,
+    &-rbugw,
+    &-rbuwg,
+    &-rbwgu,
+    &-rbwug,
+    &-rgbuw,
+    &-rgbwu,
+    &-rgubw,
+    &-rguwb,
+    &-rgwbu,
+    &-rgwub,
+    &-rubgw,
+    &-rubwg,
+    &-rugbw,
+    &-rugwb,
+    &-ruwbg,
+    &-ruwgb,
+    &-rwbgu,
+    &-rwbug,
+    &-rwgbu,
+    &-rwgub,
+    &-rwubg,
+    &-rwugb,
+    &-ubgrw,
+    &-ubgwr,
+    &-ubrgw,
+    &-ubrwg,
+    &-ubwgr,
+    &-ubwrg,
+    &-ugbrw,
+    &-ugbwr,
+    &-ugrbw,
+    &-ugrwb,
+    &-ugwbr,
+    &-ugwrb,
+    &-urbgw,
+    &-urbwg,
+    &-urgbw,
+    &-urgwb,
+    &-urwbg,
+    &-urwgb,
+    &-uwbgr,
+    &-uwbrg,
+    &-uwgbr,
+    &-uwgrb,
+    &-uwrbg,
+    &-uwrgb,
+    &-wbgru,
+    &-wbgur,
+    &-wbrgu,
+    &-wbrug,
+    &-wbugr,
+    &-wburg,
+    &-wgbru,
+    &-wgbur,
+    &-wgrbu,
+    &-wgrub,
+    &-wgubr,
+    &-wgurb,
+    &-wrbgu,
+    &-wrbug,
+    &-wrgbu,
+    &-wrgub,
+    &-wrubg,
+    &-wrugb,
+    &-wubgr,
+    &-wugbr,
+    &-wugrb,
+    &-wurbg,
+    &-wurgb {
+        background: conic-gradient(
+            @ms-white 36deg,
+            @ms-blue 36deg 108deg,
+            @ms-black 108deg 180deg,
+            @ms-red 180deg 252deg,
+            @ms-green 252deg 324deg,
+            @ms-white 324deg
+        );
+    }
+}

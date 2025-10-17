@@ -1,0 +1,324 @@
+@use "variables";
+
+/**
+ * planeswalker and other loyalty symbols */
+
+.#{variables.$ms-prefix}-loyalty {
+
+    // all
+    &-up,
+    &-down,
+    &-zero,
+    &-start {
+        color: #111;
+        font-size: 1.5em;
+        position: relative;
+        text-align: center;
+    }
+
+    // variant alterations
+    &-start {
+        font-size: 2.0em; // increase the size a bit by default
+    }
+    &-zero::after {
+        line-height: 2.1em !important; // slight correction
+    }
+
+    // base styles for counters
+    &-0::after,
+    &-1::after,
+    &-2::after,
+    &-3::after,
+    &-4::after,
+    &-5::after,
+    &-6::after,
+    &-7::after,
+    &-8::after,
+    &-9::after,
+    &-10::after,
+    &-11::after,
+    &-12::after,
+    &-13::after,
+    &-14::after,
+    &-15::after,
+    &-16::after,
+    &-17::after,
+    &-18::after,
+    &-19::after,
+    &-20::after,
+    &-25::after,
+    &-x::after {
+        color: #fff;
+        display: inline-block;
+        font-size: 0.5em;
+        font-family: variables.$ms-serif-font;
+        position: absolute;
+        left: 0;
+        line-height: 2.25em;
+        width: 100%;
+        text-align: center;
+    }
+    &-0::after {
+        content: "0";
+    }
+    &-up {
+        &.#{variables.$ms-prefix}-loyalty {
+            &-1::after { content: "+1"; }
+            &-2::after { content: "+2"; }
+            &-3::after { content: "+3"; }
+            &-4::after { content: "+4"; }
+            &-5::after { content: "+5"; }
+            &-6::after { content: "+6"; }
+            &-7::after { content: "+7"; }
+            &-8::after { content: "+8"; }
+            &-9::after { content: "+9"; }
+            &-10::after { content: "+10"; }
+            &-11::after { content: "+10"; }
+            &-12::after { content: "+12"; }
+            &-13::after { content: "+13"; }
+            &-14::after { content: "+14"; }
+            &-15::after { content: "+15"; }
+            &-16::after { content: "+16"; }
+            &-17::after { content: "+17"; }
+            &-18::after { content: "+18"; }
+            &-19::after { content: "+19"; }
+            &-20::after { content: "+20"; }
+            &-25::after { content: "+25"; }
+            &-x::after { content: "+X"; }
+        }
+    }
+    &-start {
+        &.#{variables.$ms-prefix}-loyalty {
+            &-1::after { content: "1"; }
+            &-2::after { content: "2"; }
+            &-3::after { content: "3"; }
+            &-4::after { content: "4"; }
+            &-5::after { content: "5"; }
+            &-6::after { content: "6"; }
+            &-7::after { content: "7"; }
+            &-8::after { content: "8"; }
+            &-9::after { content: "9"; }
+            &-10::after { content: "10"; }
+            &-11::after { content: "11"; }
+            &-12::after { content: "12"; }
+            &-13::after { content: "13"; }
+            &-14::after { content: "14"; }
+            &-15::after { content: "15"; }
+            &-16::after { content: "16"; }
+            &-17::after { content: "17"; }
+            &-18::after { content: "18"; }
+            &-19::after { content: "19"; }
+            &-20::after { content: "20"; }
+            &-25::after { content: "25"; }
+            &-x::after { content: "X"; }
+        }
+    }
+    &-down {
+        &::after {
+            line-height: 2em;
+        }
+        &.#{variables.$ms-prefix}-loyalty {
+            &-1::after { content: "-1"; }
+            &-2::after { content: "-2"; }
+            &-3::after { content: "-3"; }
+            &-4::after { content: "-4"; }
+            &-5::after { content: "-5"; }
+            &-6::after { content: "-6"; }
+            &-7::after { content: "-7"; }
+            &-8::after { content: "-8"; }
+            &-9::after { content: "-9"; }
+            &-10::after { content: "-10"; }
+            &-11::after { content: "-11"; }
+            &-12::after { content: "-12"; }
+            &-13::after { content: "-13"; }
+            &-14::after { content: "-14"; }
+            &-15::after { content: "-15"; }
+            &-16::after { content: "-16"; }
+            &-17::after { content: "-17"; }
+            &-18::after { content: "-18"; }
+            &-19::after { content: "-19"; }
+            &-20::after { content: "-20"; }
+            &-25::after { content: "-25"; }
+            &-x::after { content: "-X"; }
+        }
+    }
+
+    // outline style for card text
+    &-outline {
+        &::before {
+            color: transparent;
+            -webkit-text-stroke: 0.03em #111;
+        }
+        &::after {
+            color: #111;
+        }
+        // correction for starting loyalty size
+        &.#{variables.$ms-prefix}-loyalty-start {
+            font-size: 1.6em;
+        }
+    }
+}
+
+// saga loyalty
+
+.#{variables.$ms-prefix}-saga {
+
+    // all
+    color: #111;
+    
+    // numbers
+    &-1::after,
+    &-2::after,
+    &-3::after,
+    &-4::after,
+    &-5::after,
+    &-6::after {
+        color: #fff;
+        display: inline-block;
+        font-size: 0.6em;
+        font-family: variables.$ms-serif-font;
+        position: absolute;
+        left: 0;
+        line-height: 2.0em;
+        width: 100%;
+        text-align: center;
+    }
+    
+    &-1::after { content: "I"; }
+    &-2::after { content: "II"; }
+    &-3::after { content: "III"; }
+    &-4::after { content: "IV"; }
+    &-5::after { content: "V"; }
+    &-6::after { content: "VI"; }
+
+}
+
+// level card levels
+
+.#{variables.$ms-prefix}-level {
+
+    // level numbers must be in a span for now unfortunately
+    > span {
+        font-size: 0.33em;
+        position: absolute;
+        left: 0;
+        top: 0;
+        color: #000;
+        font-family: variables.$ms-serif-font;
+        width: 76%;
+        text-align: center;
+        line-height: 3.8;
+    }
+
+    // alt border similar to duo handling
+    &::after {
+        color: rgba(0,0,0,0.25);
+        display: block;
+        font-size: 1em;
+        height: 100%;
+        left: 0;
+        position: absolute;
+        top: 0;
+        width: 100%;
+    }
+
+}
+
+// defense loyalty
+
+.#{variables.$ms-prefix}-defense {
+
+    color: #111;
+    font-size: 1.5em;
+    position: relative;
+    text-align: center;
+
+    // base styles for counters
+    &-0::after,
+    &-1::after,
+    &-2::after,
+    &-3::after,
+    &-4::after,
+    &-5::after,
+    &-6::after,
+    &-7::after,
+    &-8::after,
+    &-9::after,
+    &-10::after,
+    &-11::after,
+    &-12::after,
+    &-13::after,
+    &-14::after,
+    &-15::after,
+    &-16::after,
+    &-17::after,
+    &-18::after,
+    &-19::after,
+    &-20::after,
+    &-25::after,
+    &-x::after {
+        color: #fff;
+        display: inline-block;
+        font-size: 0.5em;
+        font-family: variables.$ms-serif-font;
+        position: absolute;
+        left: 0;
+        line-height: 2.25em;
+        width: 100%;
+        text-align: center;
+    }
+
+    // values
+    &-0::after { content: "0"; }
+    &-1::after { content: "1"; }
+    &-2::after { content: "2"; }
+    &-3::after { content: "3"; }
+    &-4::after { content: "4"; }
+    &-5::after { content: "5"; }
+    &-6::after { content: "6"; }
+    &-7::after { content: "7"; }
+    &-8::after { content: "8"; }
+    &-9::after { content: "9"; }
+    &-10::after { content: "10"; }
+    &-11::after { content: "11"; }
+    &-12::after { content: "12"; }
+    &-13::after { content: "13"; }
+    &-14::after { content: "14"; }
+    &-15::after { content: "15"; }
+    &-16::after { content: "16"; }
+    &-17::after { content: "17"; }
+    &-18::after { content: "18"; }
+    &-19::after { content: "19"; }
+    &-20::after { content: "20"; }
+    &-25::after { content: "25"; }
+
+    // outline version
+    &-outline {
+        &::before {
+            content: "\e9d8";
+        }
+        &::after {
+            color: #111;
+        }
+    }
+
+    // experimental third layer for the border
+    &-print {
+        display: list-item;
+        list-style-position: inside;
+        width: 0.9em;
+
+        &::before {
+            color: #fff;
+            content: "\e9d8";
+            position: absolute;
+            left: 0;
+            top: 0;
+            text-shadow: 0 0 5px #333;
+        }
+        &::marker {
+            content: "\e9d7";
+            color: #111;
+        }
+    }
+}

@@ -9,10 +9,14 @@ import {
   updateDeckCard,
   removeCardFromDeck,
   getDeckStats,
+  createDeckShare,
+  getDeckByShareToken,
+  deleteDeckShare,
+  importSharedDeck,
 } from '../services/deckService.js';
 import { getDeckPrice } from '../services/pricingService.js';
 import { parseDeckList, importDeck } from '../services/importService.js';
-import { authenticate } from '../middleware/auth.js';
+import { authenticate, optionalAuthenticate } from '../middleware/auth.js';
 
 const router = express.Router();
 
@@ -232,6 +236,84 @@ router.post('/import', authenticate, (req, res, next) => {
       imported: result.imported,
       notFound: result.notFound,
       message: `Successfully imported ${result.imported} cards${result.notFound > 0 ? ` (${result.notFound} not found)` : ''}`
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /api/decks/:id/share
+ * Create or get share link for deck
+ */
+router.post('/:id/share', authenticate, (req, res, next) => {
+  try {
+    const deckId = parseInt(req.params.id);
+    const shareToken = createDeckShare(deckId, req.user.id);
+
+    res.json({
+      shareToken,
+      shareUrl: `/share/${shareToken}`
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * DELETE /api/decks/:id/share
+ * Delete/deactivate share link for deck
+ */
+router.delete('/:id/share', authenticate, (req, res, next) => {
+  try {
+    const deckId = parseInt(req.params.id);
+    const success = deleteDeckShare(deckId, req.user.id);
+
+    if (!success) {
+      return res.status(404).json({ error: 'Share link not found' });
+    }
+
+    res.json({ message: 'Share link deleted successfully' });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * GET /api/decks/share/:token
+ * Get shared deck by token (public, no auth required)
+ */
+router.get('/share/:token', optionalAuthenticate, (req, res, next) => {
+  try {
+    const { token } = req.params;
+    const deck = getDeckByShareToken(token);
+
+    if (!deck) {
+      return res.status(404).json({ error: 'Shared deck not found or no longer available' });
+    }
+
+    // Include user auth status for frontend to show appropriate buttons
+    res.json({
+      deck,
+      isAuthenticated: !!req.user
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /api/decks/share/:token/import
+ * Import a shared deck to user's collection
+ */
+router.post('/share/:token/import', authenticate, (req, res, next) => {
+  try {
+    const { token } = req.params;
+    const deck = importSharedDeck(token, req.user.id);
+
+    res.status(201).json({
+      deck,
+      message: 'Deck imported successfully'
     });
   } catch (error) {
     next(error);

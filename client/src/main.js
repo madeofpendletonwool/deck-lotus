@@ -4,6 +4,7 @@ import { setupDecks } from './components/decks.js';
 import { setupDeckBuilder } from './components/deckBuilder.js';
 import { setupCards } from './components/cards.js';
 import { setupSettings } from './components/settings.js';
+import { setupSharedDeck, loadSharedDeck } from './components/sharedDeck.js';
 import { showLoading, hideLoading } from './utils/ui.js';
 
 class App {
@@ -17,6 +18,14 @@ class App {
     // This ensures event listeners are registered before any events are dispatched
     this.setupNavigation();
     this.setupComponents();
+
+    // Check if this is a shared deck URL
+    const path = window.location.pathname;
+    if (path.startsWith('/share/')) {
+      const token = path.split('/share/')[1];
+      await loadSharedDeck(token);
+      return;
+    }
 
     // Check if user is already logged in
     if (api.token) {
@@ -115,6 +124,7 @@ class App {
     setupDeckBuilder();
     setupCards();
     setupSettings();
+    setupSharedDeck();
   }
 }
 

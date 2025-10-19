@@ -1,4 +1,5 @@
 import db from '../db/connection.js';
+import crypto from 'crypto';
 
 /**
  * Get all decks for a user
@@ -361,4 +362,161 @@ export function getDeckStats(deckId, userId) {
     colorDistribution,
     typeDistribution,
   };
+}
+
+/**
+ * Create a share link for a deck
+ */
+export function createDeckShare(deckId, userId) {
+  // Verify deck ownership
+  const deck = db.get(
+    `SELECT id FROM decks WHERE id = ? AND user_id = ?`,
+    [deckId, userId]
+  );
+
+  if (!deck) {
+    throw new Error('Deck not found or access denied');
+  }
+
+  // Check if share already exists
+  const existingShare = db.get(
+    `SELECT share_token FROM deck_shares WHERE deck_id = ? AND user_id = ? AND is_active = 1`,
+    [deckId, userId]
+  );
+
+  if (existingShare) {
+    return existingShare.share_token;
+  }
+
+  // Generate unique share token
+  const shareToken = crypto.randomBytes(16).toString('hex');
+
+  db.run(
+    `INSERT INTO deck_shares (deck_id, user_id, share_token)
+     VALUES (?, ?, ?)`,
+    [deckId, userId, shareToken]
+  );
+
+  return shareToken;
+}
+
+/**
+ * Get deck by share token (public access, no authentication required)
+ */
+export function getDeckByShareToken(shareToken) {
+  // Get share info
+  const share = db.get(
+    `SELECT ds.deck_id, ds.is_active, ds.expires_at, d.user_id
+     FROM deck_shares ds
+     JOIN decks d ON ds.deck_id = d.id
+     WHERE ds.share_token = ?`,
+    [shareToken]
+  );
+
+  if (!share) {
+    return null;
+  }
+
+  // Check if share is active
+  if (!share.is_active) {
+    return null;
+  }
+
+  // Check if share is expired
+  if (share.expires_at && new Date(share.expires_at) < new Date()) {
+    return null;
+  }
+
+  // Get deck with cards (similar to getDeckById but without user ownership check)
+  const deck = db.get(
+    `SELECT id, name, format, description, created_at, updated_at FROM decks WHERE id = ?`,
+    [share.deck_id]
+  );
+
+  if (!deck) {
+    return null;
+  }
+
+  // Get all cards in deck with full details
+  const cards = db.all(
+    `SELECT
+      dc.id as deck_card_id,
+      dc.quantity,
+      dc.is_sideboard,
+      dc.is_commander,
+      p.id as printing_id,
+      p.card_id,
+      p.set_code,
+      p.collector_number,
+      p.rarity,
+      p.artist,
+      p.image_url,
+      p.uuid,
+      c.name,
+      c.mana_cost,
+      c.cmc,
+      c.colors,
+      c.color_identity,
+      c.type_line,
+      c.oracle_text,
+      c.power,
+      c.toughness,
+      c.loyalty
+     FROM deck_cards dc
+     JOIN printings p ON dc.printing_id = p.id
+     JOIN cards c ON p.card_id = c.id
+     WHERE dc.deck_id = ?
+     ORDER BY dc.is_sideboard, c.cmc, c.name`,
+    [share.deck_id]
+  );
+
+  return {
+    ...deck,
+    cards,
+    is_shared: true,
+  };
+}
+
+/**
+ * Delete/deactivate a deck share
+ */
+export function deleteDeckShare(deckId, userId) {
+  const result = db.run(
+    `UPDATE deck_shares SET is_active = 0
+     WHERE deck_id = ? AND user_id = ?`,
+    [deckId, userId]
+  );
+
+  return result.changes > 0;
+}
+
+/**
+ * Import a shared deck to user's collection
+ */
+export function importSharedDeck(shareToken, userId) {
+  // Get the shared deck
+  const sharedDeck = getDeckByShareToken(shareToken);
+
+  if (!sharedDeck) {
+    throw new Error('Shared deck not found or no longer available');
+  }
+
+  // Create new deck for the user
+  const newDeck = createDeck(
+    userId,
+    `${sharedDeck.name} (imported)`,
+    sharedDeck.format,
+    sharedDeck.description
+  );
+
+  // Copy all cards to the new deck
+  for (const card of sharedDeck.cards) {
+    db.run(
+      `INSERT INTO deck_cards (deck_id, printing_id, quantity, is_sideboard, is_commander)
+       VALUES (?, ?, ?, ?, ?)`,
+      [newDeck.id, card.printing_id, card.quantity, card.is_sideboard, card.is_commander]
+    );
+  }
+
+  return getDeckById(newDeck.id, userId);
 }

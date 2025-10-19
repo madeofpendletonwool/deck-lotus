@@ -153,12 +153,63 @@ export function setupDeckBuilder() {
     window.dispatchEvent(new CustomEvent('page:decks'));
   });
 
+  // Share deck button
+  document.getElementById('share-deck-btn').addEventListener('click', async () => {
+    if (!currentDeckId) return;
+    await showShareModal();
+  });
+
+  // Share modal close
+  document.getElementById('share-modal-close').addEventListener('click', () => {
+    document.getElementById('share-deck-modal').classList.add('hidden');
+  });
+
+  // Copy share link
+  document.getElementById('copy-share-link').addEventListener('click', () => {
+    const input = document.getElementById('share-link-input');
+    input.select();
+    navigator.clipboard.writeText(input.value).then(() => {
+      showToast('Share link copied to clipboard!', 'success', 2000);
+    }).catch(() => {
+      showToast('Failed to copy', 'error');
+    });
+  });
+
+  // Delete share link
+  document.getElementById('delete-share-link').addEventListener('click', async () => {
+    if (!currentDeckId) return;
+    try {
+      showLoading();
+      await api.deleteDeckShare(currentDeckId);
+      document.getElementById('share-deck-modal').classList.add('hidden');
+      hideLoading();
+      showToast('Share link deleted', 'success');
+    } catch (error) {
+      hideLoading();
+      showToast('Failed to delete share link: ' + error.message, 'error');
+    }
+  });
+
   // Listen for open deck event
   window.addEventListener('open-deck', async (e) => {
     const { deckId } = e.detail;
     await loadDeck(deckId);
     showDeckBuilder();
   });
+}
+
+async function showShareModal() {
+  try {
+    showLoading();
+    const result = await api.createDeckShare(currentDeckId);
+    const shareUrl = `${window.location.origin}/share/${result.shareToken}`;
+    document.getElementById('share-link-input').value = shareUrl;
+    document.getElementById('share-deck-modal').classList.remove('hidden');
+    hideLoading();
+  } catch (error) {
+    hideLoading();
+    showToast('Failed to create share link: ' + error.message, 'error');
+  }
 }
 
 function showDeckBuilder() {
@@ -350,7 +401,7 @@ function renderCardItem(card) {
         <div class="deck-card-controls">
           <div class="quantity-control">
             <button class="quantity-btn btn-decrease" data-deck-card-id="${card.deck_card_id}">-</button>
-            <span class="quantity-display">${card.quantity}</span>
+            <input type="number" class="quantity-input" data-deck-card-id="${card.deck_card_id}" value="${card.quantity}" min="1" max="99">
             <button class="quantity-btn btn-increase" data-deck-card-id="${card.deck_card_id}">+</button>
           </div>
           <button class="remove-btn" data-deck-card-id="${card.deck_card_id}">×</button>
@@ -375,7 +426,7 @@ function renderCardItem(card) {
       <div class="deck-card-controls">
         <div class="quantity-control">
           <button class="quantity-btn btn-decrease" data-deck-card-id="${card.deck_card_id}">-</button>
-          <span class="quantity-display">${card.quantity}</span>
+          <input type="number" class="quantity-input" data-deck-card-id="${card.deck_card_id}" value="${card.quantity}" min="1" max="99">
           <button class="quantity-btn btn-increase" data-deck-card-id="${card.deck_card_id}">+</button>
         </div>
         <button class="remove-btn" data-deck-card-id="${card.deck_card_id}">Remove</button>
@@ -439,6 +490,43 @@ function setupCardControls() {
       e.stopPropagation();
       const deckCardId = btn.dataset.deckCardId;
       await removeCard(deckCardId);
+    });
+  });
+
+  // Direct quantity input
+  document.querySelectorAll('.quantity-input').forEach(input => {
+    // Stop propagation to prevent card detail modal from opening
+    input.addEventListener('click', (e) => {
+      e.stopPropagation();
+    });
+
+    // Select all text on focus for easy editing
+    input.addEventListener('focus', (e) => {
+      e.target.select();
+    });
+
+    // Handle quantity change
+    input.addEventListener('change', async (e) => {
+      e.stopPropagation();
+      const deckCardId = input.dataset.deckCardId;
+      let newQuantity = parseInt(input.value);
+
+      // Validate quantity
+      if (isNaN(newQuantity) || newQuantity < 1) {
+        newQuantity = 1;
+      } else if (newQuantity > 99) {
+        newQuantity = 99;
+      }
+
+      await updateCardQuantity(deckCardId, newQuantity);
+    });
+
+    // Handle Enter key
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        e.target.blur(); // Trigger change event
+      }
     });
   });
 }

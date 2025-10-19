@@ -112,11 +112,20 @@ body {
   transition: color 0.2s;
   padding: 0.5rem 1rem;
   border-radius: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 .nav-link:hover, .nav-link.active {
   color: var(--primary);
   background: rgba(99, 102, 241, 0.1);
+}
+
+.nav-logout-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 /* Pages */
@@ -189,7 +198,8 @@ body {
 
 .form-group input,
 .form-group select,
-.form-group textarea {
+.form-group textarea,
+input[type="number"] {
   width: 100%;
   padding: 0.75rem;
   background: var(--bg-tertiary);
@@ -595,7 +605,8 @@ body {
   gap: 0.5rem;
 }
 
-.btn-icon {
+/* Standalone icon button (not inside a .btn) */
+button.btn-icon {
   background: none;
   border: 1px solid var(--border);
   color: var(--text-secondary);
@@ -608,16 +619,24 @@ body {
   justify-content: center;
 }
 
-.btn-icon:hover {
+button.btn-icon:hover {
   background: var(--bg-tertiary);
   color: var(--text);
   border-color: var(--primary);
 }
 
-.btn-icon.active {
+button.btn-icon.active {
   background: var(--primary);
   color: white;
   border-color: var(--primary);
+}
+
+/* Icon inside a button - no border or hover effects */
+.btn .btn-icon {
+  background: none;
+  border: none;
+  padding: 0;
+  pointer-events: none;
 }
 
 .tab-btn {
@@ -737,6 +756,38 @@ body {
   min-width: 24px;
   text-align: center;
   font-weight: 600;
+}
+
+.quantity-input {
+  width: 45px;
+  height: 28px;
+  text-align: center;
+  font-weight: 600;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 0.25rem;
+  font-size: 0.875rem;
+  padding: 0;
+  -moz-appearance: textfield; /* Firefox */
+}
+
+/* Hide spinner arrows in Chrome, Safari, Edge */
+.quantity-input::-webkit-outer-spin-button,
+.quantity-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.quantity-input:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+}
+
+.quantity-input:hover {
+  background: var(--border);
+  cursor: pointer;
 }
 
 .remove-btn {
@@ -1155,6 +1206,7 @@ body {
   .card-detail-grid {
     grid-template-columns: 1fr;
     gap: 1rem;
+    padding-top: 2rem;
   }
 
   /* Card image container on mobile - full width */
@@ -1165,5 +1217,207 @@ body {
   #card-detail-image-container img {
     max-width: 100%;
     height: auto;
+  }
+
+  /* Mobile navigation - show only icons */
+  .nav-text {
+    display: none;
+  }
+
+  .nav-link, .nav-logout-btn {
+    padding: 0.5rem;
+    min-width: auto;
+  }
+
+  .nav-links {
+    gap: 0.5rem;
+  }
+
+  /* Mobile deck buttons - show only icons */
+  .btn-text {
+    display: none;
+  }
+
+  .btn .btn-icon {
+    margin: 0;
+  }
+
+  #import-deck-btn, #new-deck-btn {
+    padding: 0.625rem;
+    min-width: auto;
+  }
+}
+
+/* Custom Color Checkboxes */
+.color-filter-group {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.color-checkbox {
+  position: relative;
+  cursor: pointer;
+  user-select: none;
+}
+
+.color-checkbox input[type="checkbox"] {
+  position: absolute;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.color-checkbox-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.75rem;
+  background: var(--bg-tertiary);
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  transition: all 0.2s;
+  min-width: 48px;
+  min-height: 48px;
+}
+
+.color-checkbox input[type="checkbox"]:checked + .color-checkbox-box {
+  background: var(--primary);
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+}
+
+.color-checkbox:hover .color-checkbox-box {
+  border-color: var(--primary);
+  transform: translateY(-2px);
+}
+
+.color-checkbox input[type="checkbox"]:checked + .color-checkbox-box i {
+  filter: brightness(1.2) drop-shadow(0 0 4px rgba(255, 255, 255, 0.5));
+}
+
+/* Set Selection Items */
+.set-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  margin-bottom: 0.5rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.set-item:hover {
+  background: var(--border);
+  border-color: var(--primary);
+}
+
+.set-item.selected {
+  background: rgba(99, 102, 241, 0.15);
+  border-color: var(--primary);
+}
+
+.set-checkbox {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  border: 2px solid var(--border);
+  background: var(--bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.set-item.selected .set-checkbox {
+  background: var(--primary);
+  border-color: var(--primary);
+}
+
+.set-checkbox::after {
+  content: '✓';
+  color: white;
+  font-size: 14px;
+  font-weight: bold;
+  display: none;
+}
+
+.set-item.selected .set-checkbox::after {
+  display: block;
+}
+
+.set-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.set-name {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.set-code {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.btn-success {
+  background: var(--success);
+  color: white;
+}
+
+.btn-success:hover {
+  background: #059669;
+}
+
+/* Badge */
+.badge {
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  border-radius: 0.375rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  background: var(--primary);
+  color: white;
+}
+
+/* Button with icon and text */
+.btn .btn-icon {
+  flex-shrink: 0;
+}
+
+.btn .btn-text {
+  white-space: nowrap;
+}
+
+/* Navigation icon styling */
+.nav-link .nav-icon,
+.nav-logout-btn .nav-icon {
+  flex-shrink: 0;
+  font-size: 20px;
+}
+
+/* Button icon sizing */
+.btn .btn-icon {
+  font-size: 20px;
+}
+
+.btn-icon i {
+  font-size: 20px;
+}
+
+/* Responsive button text */
+@media (min-width: 769px) {
+  .nav-text,
+  .btn-text {
+    display: inline;
   }
 }

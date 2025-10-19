@@ -158,13 +158,42 @@ export function browseCards(filters = {}) {
     colors = [],
     type,
     sort = 'random',
+    sets = [],
+    cmcMin = null,
+    cmcMax = null,
     limit = 50,
     offset = 0
   } = filters;
 
+  // Ensure colors and sets are arrays
+  const colorsArray = Array.isArray(colors) ? colors : [];
+  const setsArray = Array.isArray(sets) ? sets : [];
+
+  console.log('Browse cards filters:', { name, colors: colorsArray, type, sort, sets: setsArray, cmcMin, cmcMax, limit, offset });
+
+  // Need LEFT JOIN for price sorting
+  const needsPriceJoin = sort === 'price';
+  const needsSetJoin = setsArray && setsArray.length > 0;
+
   let sql = `SELECT DISTINCT c.id, c.name, c.mana_cost, c.cmc, c.colors, c.type_line, c.oracle_text,
-             (SELECT p.image_url FROM printings p WHERE p.card_id = c.id AND p.image_url IS NOT NULL LIMIT 1) as image_url
-             FROM cards c
+             (SELECT p.image_url FROM printings p WHERE p.card_id = c.id AND p.image_url IS NOT NULL LIMIT 1) as image_url`;
+
+  if (needsPriceJoin) {
+    sql += `,
+             (SELECT pr.price FROM printings p2
+              LEFT JOIN prices pr ON p2.uuid = pr.printing_uuid
+              WHERE p2.card_id = c.id AND pr.provider = 'tcgplayer' AND pr.price_type = 'normal'
+              ORDER BY pr.price DESC LIMIT 1) as max_price`;
+  }
+
+  sql += `
+             FROM cards c`;
+
+  if (needsSetJoin) {
+    sql += ` LEFT JOIN printings p ON p.card_id = c.id`;
+  }
+
+  sql += `
              WHERE 1=1`;
 
   const params = [];
@@ -175,12 +204,32 @@ export function browseCards(filters = {}) {
     params.push(`%${name}%`);
   }
 
-  // Color filter - cards that contain ALL selected colors
-  if (colors && colors.length > 0) {
-    colors.forEach(color => {
-      sql += ` AND (c.colors LIKE ? OR c.color_identity LIKE ?)`;
-      params.push(`%${color}%`, `%${color}%`);
-    });
+  // Color filter - cards that contain ALL selected colors (based on actual colors, not color identity)
+  if (colorsArray && colorsArray.length > 0) {
+    // Check if colorless (C) is in the filter
+    const hasColorless = colorsArray.includes('C');
+    const actualColors = colorsArray.filter(c => c !== 'C');
+
+    if (hasColorless && actualColors.length === 0) {
+      // Only colorless selected - show cards with no colors
+      sql += ` AND (c.colors IS NULL OR c.colors = '' OR c.colors = '[]')`;
+    } else if (hasColorless && actualColors.length > 0) {
+      // Colorless AND other colors - show cards matching colors OR colorless cards
+      sql += ` AND (`;
+      const colorConditions = [];
+      actualColors.forEach(color => {
+        colorConditions.push(`c.colors LIKE ?`);
+        params.push(`%${color}%`);
+      });
+      sql += colorConditions.join(' AND ');
+      sql += ` OR c.colors IS NULL OR c.colors = '' OR c.colors = '[]')`;
+    } else {
+      // Only actual colors selected
+      actualColors.forEach(color => {
+        sql += ` AND c.colors LIKE ?`;
+        params.push(`%${color}%`);
+      });
+    }
   }
 
   // Type filter
@@ -189,8 +238,32 @@ export function browseCards(filters = {}) {
     params.push(`%${type}%`);
   }
 
+  // Set filter - cards that have printings in any of the selected sets
+  if (setsArray && setsArray.length > 0) {
+    const placeholders = setsArray.map(() => '?').join(',');
+    sql += ` AND p.set_code IN (${placeholders})`;
+    params.push(...setsArray);
+  }
+
+  // CMC filter
+  if (cmcMin !== null && cmcMin !== undefined) {
+    sql += ` AND c.cmc >= ?`;
+    params.push(cmcMin);
+  }
+
+  if (cmcMax !== null && cmcMax !== undefined) {
+    sql += ` AND c.cmc <= ?`;
+    params.push(cmcMax);
+  }
+
   // Get total count for pagination - build count query from scratch
-  let countSql = `SELECT COUNT(DISTINCT c.id) as total FROM cards c WHERE 1=1`;
+  let countSql = `SELECT COUNT(DISTINCT c.id) as total FROM cards c`;
+
+  if (needsSetJoin) {
+    countSql += ` LEFT JOIN printings p ON p.card_id = c.id`;
+  }
+
+  countSql += ` WHERE 1=1`;
   const countParams = [];
 
   if (name && name.trim()) {
@@ -198,11 +271,27 @@ export function browseCards(filters = {}) {
     countParams.push(`%${name}%`);
   }
 
-  if (colors && colors.length > 0) {
-    colors.forEach(color => {
-      countSql += ` AND (c.colors LIKE ? OR c.color_identity LIKE ?)`;
-      countParams.push(`%${color}%`, `%${color}%`);
-    });
+  if (colorsArray && colorsArray.length > 0) {
+    const hasColorless = colorsArray.includes('C');
+    const actualColors = colorsArray.filter(c => c !== 'C');
+
+    if (hasColorless && actualColors.length === 0) {
+      countSql += ` AND (c.colors IS NULL OR c.colors = '' OR c.colors = '[]')`;
+    } else if (hasColorless && actualColors.length > 0) {
+      countSql += ` AND (`;
+      const colorConditions = [];
+      actualColors.forEach(color => {
+        colorConditions.push(`c.colors LIKE ?`);
+        countParams.push(`%${color}%`);
+      });
+      countSql += colorConditions.join(' AND ');
+      countSql += ` OR c.colors IS NULL OR c.colors = '' OR c.colors = '[]')`;
+    } else {
+      actualColors.forEach(color => {
+        countSql += ` AND c.colors LIKE ?`;
+        countParams.push(`%${color}%`);
+      });
+    }
   }
 
   if (type && type.trim() && type !== 'all') {
@@ -210,8 +299,28 @@ export function browseCards(filters = {}) {
     countParams.push(`%${type}%`);
   }
 
+  if (setsArray && setsArray.length > 0) {
+    const placeholders = setsArray.map(() => '?').join(',');
+    countSql += ` AND p.set_code IN (${placeholders})`;
+    countParams.push(...setsArray);
+  }
+
+  if (cmcMin !== null && cmcMin !== undefined) {
+    countSql += ` AND c.cmc >= ?`;
+    countParams.push(cmcMin);
+  }
+
+  if (cmcMax !== null && cmcMax !== undefined) {
+    countSql += ` AND c.cmc <= ?`;
+    countParams.push(cmcMax);
+  }
+
   const countResult = db.get(countSql, countParams);
   const total = countResult ? countResult.total : 0;
+
+  console.log('Count SQL:', countSql);
+  console.log('Count Params:', countParams);
+  console.log('Total cards found:', total);
 
   // Sorting
   switch(sort) {
@@ -224,6 +333,9 @@ export function browseCards(filters = {}) {
     case 'color':
       sql += ` ORDER BY c.colors ASC, c.name ASC`;
       break;
+    case 'price':
+      sql += ` ORDER BY max_price DESC, c.name ASC`;
+      break;
     case 'random':
     default:
       sql += ` ORDER BY RANDOM()`;
@@ -234,7 +346,11 @@ export function browseCards(filters = {}) {
   sql += ` LIMIT ? OFFSET ?`;
   params.push(limit, offset);
 
+  console.log('Main SQL:', sql);
+  console.log('Main Params:', params);
+
   const cards = db.all(sql, params);
+  console.log('Cards returned:', cards.length);
 
   // Add image URL variations
   const cardsWithImages = cards.map(card => ({

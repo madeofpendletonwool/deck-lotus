@@ -84,9 +84,12 @@ class ApiClient {
   async browseCards(filters = {}) {
     const params = new URLSearchParams();
     if (filters.name) params.append('name', filters.name);
-    if (filters.colors && filters.colors.length > 0) params.append('colors', filters.colors.join(','));
+    if (filters.colors) params.append('colors', filters.colors); // Already a string from frontend
     if (filters.type) params.append('type', filters.type);
     if (filters.sort) params.append('sort', filters.sort);
+    if (filters.sets) params.append('sets', filters.sets); // Already a string from frontend
+    if (filters.cmcMin !== null && filters.cmcMin !== undefined) params.append('cmcMin', filters.cmcMin);
+    if (filters.cmcMax !== null && filters.cmcMax !== undefined) params.append('cmcMax', filters.cmcMax);
     if (filters.page) params.append('page', filters.page);
     if (filters.limit) params.append('limit', filters.limit);
     return this.request(`/cards/browse?${params}`);
@@ -166,6 +169,29 @@ class ApiClient {
     return this.request('/decks/import', {
       method: 'POST',
       body: JSON.stringify({ name, format, deckList }),
+    });
+  }
+
+  // Deck sharing methods
+  async createDeckShare(deckId) {
+    return this.request(`/decks/${deckId}/share`, {
+      method: 'POST',
+    });
+  }
+
+  async deleteDeckShare(deckId) {
+    return this.request(`/decks/${deckId}/share`, {
+      method: 'DELETE',
+    });
+  }
+
+  async getSharedDeck(token) {
+    return this.request(`/decks/share/${token}`);
+  }
+
+  async importSharedDeck(token) {
+    return this.request(`/decks/share/${token}/import`, {
+      method: 'POST',
     });
   }
 

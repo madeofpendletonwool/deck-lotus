@@ -7,20 +7,28 @@ let currentFilters = {
   colors: [],
   type: 'all',
   sort: 'random',
-  set: ''
+  sets: [],
+  cmcMin: null,
+  cmcMax: null
 };
+let allSets = [];
 
 export function setupCards() {
   const searchInput = document.getElementById('cards-browse-search');
   const sortSelect = document.getElementById('filter-sort');
   const typeSelect = document.getElementById('filter-types');
-  const setSelect = document.getElementById('filter-sets');
+  const setsBtn = document.getElementById('filter-sets-btn');
+  const cmcMinInput = document.getElementById('filter-cmc-min');
+  const cmcMaxInput = document.getElementById('filter-cmc-max');
   const colorCheckboxes = document.querySelectorAll('#filter-colors input[type="checkbox"]');
   const prevBtn = document.getElementById('prev-page');
   const nextBtn = document.getElementById('next-page');
 
-  // Load sets for dropdown
-  loadSetsDropdown();
+  // Load sets for modal
+  loadSets();
+
+  // Setup set filter modal
+  setupSetFilterModal();
 
   // Debounced search on name input
   const debouncedSearch = debounce(async (query) => {
@@ -47,15 +55,20 @@ export function setupCards() {
     await loadCards();
   });
 
-  // Set filter change
-  setSelect.addEventListener('change', async () => {
-    currentFilters.set = setSelect.value;
+  // CMC filters
+  const debouncedCMC = debounce(async () => {
+    currentFilters.cmcMin = cmcMinInput.value ? parseInt(cmcMinInput.value) : null;
+    currentFilters.cmcMax = cmcMaxInput.value ? parseInt(cmcMaxInput.value) : null;
     currentPage = 1;
-    if (currentFilters.set) {
-      await loadSetCards();
-    } else {
-      await loadCards();
-    }
+    await loadCards();
+  }, 500);
+
+  cmcMinInput.addEventListener('input', debouncedCMC);
+  cmcMaxInput.addEventListener('input', debouncedCMC);
+
+  // Set filter button - opens modal
+  setsBtn.addEventListener('click', () => {
+    document.getElementById('set-filter-modal').classList.remove('hidden');
   });
 
   // Color filter changes
@@ -84,52 +97,119 @@ export function setupCards() {
 
   // Load cards when page is shown
   window.addEventListener('page:cards', () => {
-    console.log('page:cards event fired'); // Debug
-    if (currentFilters.set) {
-      loadSetCards();
-    } else {
-      loadCards();
-    }
+    loadCards();
   });
 
   // Also check if we're already on the cards page
   if (!document.getElementById('cards-page').classList.contains('hidden')) {
-    if (currentFilters.set) {
-      loadSetCards();
-    } else {
-      loadCards();
-    }
+    loadCards();
   }
 }
 
-async function loadSetsDropdown() {
+function setupSetFilterModal() {
+  const modal = document.getElementById('set-filter-modal');
+  const closeBtn = document.getElementById('set-filter-modal-close');
+  const applyBtn = document.getElementById('apply-set-filter');
+  const clearBtn = document.getElementById('clear-set-selection');
+  const searchInput = document.getElementById('set-search-input');
+
+  closeBtn.addEventListener('click', () => {
+    modal.classList.add('hidden');
+  });
+
+  applyBtn.addEventListener('click', async () => {
+    modal.classList.add('hidden');
+    currentPage = 1;
+    updateSetButtonText();
+    await loadCards();
+  });
+
+  clearBtn.addEventListener('click', () => {
+    currentFilters.sets = [];
+    renderSetList(allSets);
+    updateSetButtonText();
+  });
+
+  // Search sets
+  const debouncedSetSearch = debounce((query) => {
+    const filtered = allSets.filter(set =>
+      set.name.toLowerCase().includes(query.toLowerCase()) ||
+      set.code.toLowerCase().includes(query.toLowerCase())
+    );
+    renderSetList(filtered);
+  }, 200);
+
+  searchInput.addEventListener('input', (e) => {
+    debouncedSetSearch(e.target.value);
+  });
+
+  // Close modal on outside click
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) {
+      modal.classList.add('hidden');
+    }
+  });
+}
+
+function updateSetButtonText() {
+  const btn = document.getElementById('selected-sets-count');
+  if (currentFilters.sets.length === 0) {
+    btn.textContent = 'All Sets';
+  } else if (currentFilters.sets.length === 1) {
+    const set = allSets.find(s => s.code === currentFilters.sets[0]);
+    btn.textContent = set ? set.code.toUpperCase() : '1 Set';
+  } else {
+    btn.textContent = `${currentFilters.sets.length} Sets`;
+  }
+}
+
+async function loadSets() {
   try {
     const result = await api.getSets();
-    const setSelect = document.getElementById('filter-sets');
-    const sets = result.sets || [];
-
-    sets.forEach(set => {
-      const option = document.createElement('option');
-      option.value = set.code;
-      option.textContent = `${set.name} (${set.code.toUpperCase()})`;
-      setSelect.appendChild(option);
-    });
+    allSets = result.sets || [];
+    renderSetList(allSets);
   } catch (error) {
     console.error('Failed to load sets:', error);
   }
 }
 
-async function loadSetCards() {
-  try {
-    showLoading();
-    const result = await api.getSetCards(currentFilters.set, currentPage);
-    renderCards(result.cards || []);
-    updatePagination(result.page, result.totalPages, result.total);
-    hideLoading();
-  } catch (error) {
-    hideLoading();
-    console.error('Failed to load set cards:', error);
+function renderSetList(sets) {
+  const setList = document.getElementById('set-list');
+  if (sets.length === 0) {
+    setList.innerHTML = '<div style="padding: 1rem; text-align: center; color: var(--text-secondary);">No sets found</div>';
+    return;
   }
+
+  setList.innerHTML = sets.map(set => {
+    const isSelected = currentFilters.sets.includes(set.code);
+    return `
+      <div class="set-item ${isSelected ? 'selected' : ''}" data-set-code="${set.code}">
+        <div class="set-checkbox"></div>
+        <div class="set-info">
+          <div class="set-name">${set.name}</div>
+          <div class="set-code">${set.code}</div>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  // Add click handlers
+  setList.querySelectorAll('.set-item').forEach(item => {
+    item.addEventListener('click', () => {
+      const setCode = item.dataset.setCode;
+      const index = currentFilters.sets.indexOf(setCode);
+
+      if (index > -1) {
+        // Remove from selection
+        currentFilters.sets.splice(index, 1);
+        item.classList.remove('selected');
+      } else {
+        // Add to selection
+        currentFilters.sets.push(setCode);
+        item.classList.add('selected');
+      }
+    });
+  });
 }
 
 async function loadCards() {
@@ -137,18 +217,24 @@ async function loadCards() {
     showLoading();
 
     const filters = {
-      ...currentFilters,
+      name: currentFilters.name && currentFilters.name.trim() ? currentFilters.name : undefined,
+      colors: currentFilters.colors.length > 0 ? currentFilters.colors.join(',') : undefined,
+      type: currentFilters.type !== 'all' ? currentFilters.type : undefined,
+      sort: currentFilters.sort,
+      sets: currentFilters.sets.length > 0 ? currentFilters.sets.join(',') : undefined,
+      cmcMin: currentFilters.cmcMin,
+      cmcMax: currentFilters.cmcMax,
       page: currentPage,
       limit: 50
     };
 
-    // Don't send 'all' as type filter
-    if (filters.type === 'all') {
-      delete filters.type;
-    }
+    // Remove undefined values
+    Object.keys(filters).forEach(key => filters[key] === undefined && delete filters[key]);
+
+    console.log('Frontend sending filters:', currentFilters);
+    console.log('API filters after processing:', filters);
 
     const result = await api.browseCards(filters);
-    console.log('Browse result:', result); // Debug log
     renderCards(result.cards || []);
     updatePagination(result.page, result.totalPages, result.total);
     hideLoading();

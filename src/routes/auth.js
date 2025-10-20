@@ -9,6 +9,7 @@ import {
 } from '../services/authService.js';
 import { authenticate } from '../middleware/auth.js';
 import { verifyToken, generateTokens } from '../utils/jwt.js';
+import db from '../db/connection.js';
 
 const router = express.Router();
 
@@ -89,6 +90,55 @@ router.get('/me', authenticate, (req, res, next) => {
     }
 
     res.json({ user });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * GET /api/auth/stats
+ * Get current user statistics
+ */
+router.get('/stats', authenticate, (req, res, next) => {
+  try {
+    // Get deck count
+    const deckCount = db.get(
+      'SELECT COUNT(*) as count FROM decks WHERE user_id = ?',
+      [req.user.id]
+    );
+
+    // Get total cards across all decks
+    const cardCount = db.get(
+      `SELECT SUM(dc.quantity) as count
+       FROM deck_cards dc
+       JOIN decks d ON dc.deck_id = d.id
+       WHERE d.user_id = ?`,
+      [req.user.id]
+    );
+
+    // Get API key count
+    const apiKeyCount = db.get(
+      'SELECT COUNT(*) as count FROM api_keys WHERE user_id = ?',
+      [req.user.id]
+    );
+
+    // Get shared deck count
+    const sharedDeckCount = db.get(
+      `SELECT COUNT(DISTINCT ds.deck_id) as count
+       FROM deck_shares ds
+       JOIN decks d ON ds.deck_id = d.id
+       WHERE d.user_id = ? AND ds.is_active = 1`,
+      [req.user.id]
+    );
+
+    res.json({
+      stats: {
+        deckCount: deckCount.count || 0,
+        cardCount: cardCount.count || 0,
+        apiKeyCount: apiKeyCount.count || 0,
+        sharedDeckCount: sharedDeckCount.count || 0
+      }
+    });
   } catch (error) {
     next(error);
   }

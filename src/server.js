@@ -78,6 +78,28 @@ async function start() {
     await runMigrations();
     console.log('✓ Database initialized');
 
+    // Check for initial admin user creation from environment variables
+    if (process.env.ADMIN_USERNAME && process.env.ADMIN_EMAIL && process.env.ADMIN_PASSWORD) {
+      const { createAdminUser } = await import('./services/authService.js');
+
+      try {
+        const db = getDb();
+        const existingUser = db.prepare('SELECT id FROM users WHERE username = ?').get(process.env.ADMIN_USERNAME);
+
+        if (!existingUser) {
+          console.log('\n⚠️  Creating initial admin user from environment variables...');
+          await createAdminUser(
+            process.env.ADMIN_USERNAME,
+            process.env.ADMIN_EMAIL,
+            process.env.ADMIN_PASSWORD
+          );
+          console.log(`✓ Admin user created: ${process.env.ADMIN_USERNAME}`);
+        }
+      } catch (error) {
+        console.error('⚠️  Failed to create admin user:', error.message);
+      }
+    }
+
     // Check if we need to import card data
     const db = getDb();
     const cardCount = db.prepare('SELECT COUNT(*) as count FROM cards').get();

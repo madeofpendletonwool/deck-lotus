@@ -83,10 +83,30 @@ export function getCardById(cardId) {
     [printings[0].uuid]
   ) : [];
 
+  // Get related cards
+  const relatedCards = db.all(
+    `SELECT related_name, relation_type
+     FROM related_cards
+     WHERE card_name = ?
+     ORDER BY relation_type, related_name`,
+    [card.name]
+  );
+
+  // Get foreign data
+  const foreignData = db.all(
+    `SELECT language, foreign_name, foreign_text, foreign_type, foreign_flavor_text
+     FROM card_foreign_data
+     WHERE card_name = ?
+     ORDER BY language`,
+    [card.name]
+  );
+
   return {
     ...card,
     printings,
     rulings,
+    relatedCards,
+    foreignData,
   };
 }
 

@@ -65,6 +65,10 @@ class ApiClient {
     return this.request('/auth/me');
   }
 
+  async getUserStats() {
+    return this.request('/auth/stats');
+  }
+
   async getApiKeys() {
     return this.request('/auth/api-keys');
   }
@@ -215,6 +219,36 @@ class ApiClient {
 
   async getSyncStatus() {
     return this.request('/admin/sync-status');
+  }
+
+  async createBackup() {
+    // Returns a backup JSON object
+    return this.request('/admin/backup', { method: 'POST' });
+  }
+
+  async restoreBackup(backup, overwrite = false) {
+    return this.request('/admin/restore', {
+      method: 'POST',
+      body: JSON.stringify({ backup, overwrite }),
+    });
+  }
+
+  // User management methods (admin only)
+  async getAllUsers() {
+    return this.request('/admin/users');
+  }
+
+  async updateUser(userId, updates) {
+    return this.request(`/admin/users/${userId}`, {
+      method: 'PUT',
+      body: JSON.stringify(updates),
+    });
+  }
+
+  async deleteUser(userId) {
+    return this.request(`/admin/users/${userId}`, {
+      method: 'DELETE',
+    });
   }
 }
 

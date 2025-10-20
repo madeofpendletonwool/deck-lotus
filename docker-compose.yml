@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   deck-lotus:
     build:
@@ -17,6 +15,12 @@ services:
       - JWT_SECRET=${JWT_SECRET:-change-this-secret-in-production}
       - JWT_EXPIRES_IN=7d
       - JWT_REFRESH_EXPIRES_IN=30d
+      # Set to 'true' to force reimport of MTGJSON data (preserves user decks)
+      - FORCE_REIMPORT=true
+      # Initial admin user (only used if user doesn't exist)
+      - ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
+      - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@example.com}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-changeme123}
     volumes:
       # Persistent database storage
       - deck-lotus-data:/app/data

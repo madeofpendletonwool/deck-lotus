@@ -5,6 +5,7 @@ import { setupDeckBuilder } from './components/deckBuilder.js';
 import { setupCards } from './components/cards.js';
 import { setupSettings } from './components/settings.js';
 import { setupSharedDeck, loadSharedDeck } from './components/sharedDeck.js';
+import { setupUserMenu } from './components/userMenu.js';
 import { showLoading, hideLoading } from './utils/ui.js';
 
 class App {
@@ -32,7 +33,7 @@ class App {
       try {
         showLoading();
         await api.getProfile();
-        this.showApp();
+        await this.showApp();
       } catch (error) {
         api.logout();
         this.showAuthPage();
@@ -50,9 +51,10 @@ class App {
     this.hideAllPages();
   }
 
-  showApp() {
+  async showApp() {
     document.getElementById('auth-page').classList.add('hidden');
     document.getElementById('navbar').classList.remove('hidden');
+    await setupUserMenu();
     this.showPage('decks');
   }
 
@@ -107,18 +109,11 @@ class App {
         this.showPage(page);
       });
     });
-
-    // Logout button
-    document.getElementById('logout-btn').addEventListener('click', () => {
-      api.logout();
-      this.showAuthPage();
-      window.location.reload();
-    });
   }
 
   setupComponents() {
-    setupAuth((user) => {
-      this.showApp();
+    setupAuth(async (user) => {
+      await this.showApp();
     });
     setupDecks();
     setupDeckBuilder();

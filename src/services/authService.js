@@ -37,19 +37,19 @@ export async function registerUser(username, email, password) {
   // Hash password
   const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
 
-  // Insert user
+  // Insert user (is_admin defaults to 0)
   const result = db.run(
-    'INSERT INTO users (username, email, password_hash) VALUES (?, ?, ?)',
+    'INSERT INTO users (username, email, password_hash, is_admin) VALUES (?, ?, ?, 0)',
     [username, email, passwordHash]
   );
 
   const userId = result.lastInsertRowid;
 
   // Generate tokens
-  const tokens = generateTokens({ userId, username });
+  const tokens = generateTokens({ userId, username, isAdmin: false });
 
   return {
-    user: { id: userId, username, email },
+    user: { id: userId, username, email, is_admin: 0 },
     ...tokens,
   };
 }
@@ -59,7 +59,7 @@ export async function registerUser(username, email, password) {
  */
 export async function loginUser(usernameOrEmail, password) {
   const user = db.get(
-    'SELECT id, username, email, password_hash FROM users WHERE username = ? OR email = ?',
+    'SELECT id, username, email, password_hash, is_admin FROM users WHERE username = ? OR email = ?',
     [usernameOrEmail, usernameOrEmail]
   );
 
@@ -75,10 +75,10 @@ export async function loginUser(usernameOrEmail, password) {
   }
 
   // Generate tokens
-  const tokens = generateTokens({ userId: user.id, username: user.username });
+  const tokens = generateTokens({ userId: user.id, username: user.username, isAdmin: !!user.is_admin });
 
   return {
-    user: { id: user.id, username: user.username, email: user.email },
+    user: { id: user.id, username: user.username, email: user.email, is_admin: user.is_admin },
     ...tokens,
   };
 }
@@ -150,9 +150,95 @@ export function revokeApiKey(userId, keyId) {
  */
 export function getUserById(userId) {
   const user = db.get(
-    'SELECT id, username, email, created_at FROM users WHERE id = ?',
+    'SELECT id, username, email, is_admin, created_at FROM users WHERE id = ?',
     [userId]
   );
 
   return user;
+}
+
+/**
+ * Create admin user (used for initial setup)
+ */
+export async function createAdminUser(username, email, password) {
+  username = sanitizeInput(username);
+  email = sanitizeInput(email);
+
+  // Validate inputs
+  if (!isValidUsername(username)) {
+    throw new Error('Invalid username. Must be 3-20 characters, alphanumeric and underscores only.');
+  }
+  if (!isValidEmail(email)) {
+    throw new Error('Invalid email format.');
+  }
+  if (!isValidPassword(password)) {
+    throw new Error('Password must be at least 8 characters long.');
+  }
+
+  // Check if user already exists
+  const existingUser = db.get(
+    'SELECT id FROM users WHERE username = ? OR email = ?',
+    [username, email]
+  );
+
+  if (existingUser) {
+    throw new Error('Username or email already exists.');
+  }
+
+  // Hash password
+  const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
+
+  // Insert admin user
+  const result = db.run(
+    'INSERT INTO users (username, email, password_hash, is_admin) VALUES (?, ?, ?, 1)',
+    [username, email, passwordHash]
+  );
+
+  return result.lastInsertRowid;
+}
+
+/**
+ * Get all users (admin only)
+ */
+export function getAllUsers() {
+  return db.all(
+    'SELECT id, username, email, is_admin, created_at, updated_at FROM users ORDER BY created_at DESC'
+  );
+}
+
+/**
+ * Update user (admin only)
+ */
+export function updateUser(userId, updates) {
+  const allowedFields = ['username', 'email', 'is_admin'];
+  const fields = [];
+  const values = [];
+
+  for (const [key, value] of Object.entries(updates)) {
+    if (allowedFields.includes(key)) {
+      fields.push(`${key} = ?`);
+      values.push(value);
+    }
+  }
+
+  if (fields.length === 0) {
+    throw new Error('No valid fields to update');
+  }
+
+  values.push(userId);
+
+  const result = db.run(
+    `UPDATE users SET ${fields.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+    values
+  );
+
+  return result.changes > 0;
+}
+
+/**
+ * Delete user (admin only)
+ */
+export function deleteUser(userId) {
+  const result = db.run('DELETE FROM users WHERE id = ?', [userId]);
+  return result.changes > 0;
 }

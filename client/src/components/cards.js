@@ -462,12 +462,17 @@ export async function showCardDetail(cardId) {
               </div>
             </div>
           ` : ''}
-          <div style="margin-bottom: 1rem;">
-            <strong>Type:</strong> ${typeInfo.types || 'Unknown'}
-          </div>
-          ${typeInfo.subtypes ? `
+          ${card.supertypes ? `
             <div style="margin-bottom: 1rem;">
-              <strong>Subtype:</strong> ${typeInfo.subtypes}
+              <strong>Supertypes:</strong> ${card.supertypes.split(',').join(', ')}
+            </div>
+          ` : ''}
+          <div style="margin-bottom: 1rem;">
+            <strong>Type:</strong> ${card.types ? card.types.split(',').join(', ') : (card.type_line || 'Unknown')}
+          </div>
+          ${card.subtypes ? `
+            <div style="margin-bottom: 1rem;">
+              <strong>Subtypes:</strong> ${card.subtypes.split(',').join(', ')}
             </div>
           ` : ''}
           <div style="margin-bottom: 1rem;">
@@ -486,6 +491,147 @@ export async function showCardDetail(cardId) {
           ${card.loyalty ? `
             <div style="margin-bottom: 1rem;">
               <strong>Loyalty:</strong> ${card.loyalty}
+            </div>
+          ` : ''}
+          ${card.leadership_skills ? `
+            <div style="margin-top: 2rem; padding: 1rem; background: linear-gradient(135deg, rgba(139,92,246,0.1), rgba(59,130,246,0.1)); border-radius: 8px; border: 1px solid rgba(139,92,246,0.3);">
+              <h3 style="margin: 0 0 0.75rem 0; color: #a78bfa;">⚔️ Commander Legal</h3>
+              <div style="line-height: 1.6;">
+                This card can be your commander in: <strong>${JSON.parse(card.leadership_skills).brawl ? 'Commander, Brawl' : 'Commander'}</strong>
+                ${JSON.parse(card.leadership_skills).oathbreaker ? ', <strong>Oathbreaker</strong>' : ''}
+              </div>
+            </div>
+          ` : ''}
+          ${card.legalities ? `
+            <div style="margin-top: 2rem;">
+              <h3>Format Legality</h3>
+              <div style="margin-top: 1rem; display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 0.5rem;">
+                ${(() => {
+                  const legalities = JSON.parse(card.legalities);
+                  const formatLabels = {
+                    standard: 'Standard',
+                    pioneer: 'Pioneer',
+                    modern: 'Modern',
+                    legacy: 'Legacy',
+                    vintage: 'Vintage',
+                    commander: 'Commander',
+                    brawl: 'Brawl',
+                    historic: 'Historic',
+                    timeless: 'Timeless',
+                    pauper: 'Pauper',
+                    penny: 'Penny Dreadful',
+                    alchemy: 'Alchemy',
+                    explorer: 'Explorer',
+                    oathbreaker: 'Oathbreaker',
+                    standardbrawl: 'Standard Brawl',
+                    paupercommander: 'Pauper Commander',
+                    duel: 'Duel Commander',
+                    oldschool: 'Old School',
+                    premodern: 'Premodern',
+                    predh: 'Pre-EDH',
+                    gladiator: 'Gladiator',
+                    future: 'Future'
+                  };
+                  const statusConfig = {
+                    Legal: { icon: '✓', color: '#4ade80' },
+                    Banned: { icon: '✗', color: '#f87171' },
+                    Restricted: { icon: '⚠', color: '#fbbf24' }
+                  };
+
+                  return Object.entries(legalities)
+                    .filter(([_, status]) => status && status !== 'null')
+                    .map(([format, status]) => {
+                      const config = statusConfig[status] || { icon: '⊘', color: '#9ca3af' };
+                      const label = formatLabels[format] || format;
+                      return `
+                        <div style="padding: 0.5rem 0.75rem; background: var(--bg-tertiary); border-radius: 6px; display: flex; align-items: center; gap: 0.5rem; font-size: 0.875rem;">
+                          <span style="color: ${config.color}; font-weight: bold; font-size: 1rem;">${config.icon}</span>
+                          <span>${label}</span>
+                        </div>
+                      `;
+                    }).join('');
+                })()}
+              </div>
+            </div>
+          ` : ''}
+          ${card.relatedCards && card.relatedCards.length > 0 ? `
+            <div style="margin-top: 2rem;">
+              <h3>Related Cards</h3>
+              <div style="margin-top: 1rem; display: grid; gap: 0.5rem;">
+                ${card.relatedCards.map(r => `
+                  <div style="padding: 0.75rem; background: var(--bg-tertiary); border-radius: 6px; display: flex; justify-content: space-between; align-items: center;">
+                    <span style="font-weight: 500;">${r.related_name}</span>
+                    <span style="color: var(--text-secondary); font-size: 0.875rem; text-transform: capitalize;">
+                      ${r.relation_type === 'reverseRelated' ? 'Referenced by' : r.relation_type}
+                    </span>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          ` : ''}
+          ${card.edhrec_rank || card.edhrec_saltiness || card.first_printing ? `
+            <div style="margin-top: 2rem; padding: 1rem; background: var(--bg-tertiary); border-radius: 8px;">
+              <h3 style="margin: 0 0 1rem 0;">Card Metadata</h3>
+              <div style="display: grid; gap: 0.75rem;">
+                ${card.edhrec_rank ? `
+                  <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span>EDHRec Rank:</span>
+                    <a href="https://edhrec.com/cards/${encodeURIComponent(card.name.toLowerCase().replace(/\s+/g, '-'))}" target="_blank" style="color: #60a5fa; text-decoration: none; font-weight: 500;">
+                      #${card.edhrec_rank} →
+                    </a>
+                  </div>
+                ` : ''}
+                ${card.edhrec_saltiness ? `
+                  <div style="display: flex; justify-content: space-between;">
+                    <span>EDHRec Saltiness:</span>
+                    <span style="font-weight: 500;">${card.edhrec_saltiness.toFixed(2)}</span>
+                  </div>
+                ` : ''}
+                ${card.first_printing ? `
+                  <div style="display: flex; justify-content: space-between;">
+                    <span>First Printing:</span>
+                    <span style="font-weight: 500;">${card.first_printing}</span>
+                  </div>
+                ` : ''}
+              </div>
+            </div>
+          ` : ''}
+          ${card.foreignData && card.foreignData.length > 0 ? `
+            <div style="margin-top: 2rem;">
+              <details style="cursor: pointer;">
+                <summary style="font-size: 1.1rem; font-weight: 600; padding: 0.5rem; background: var(--bg-tertiary); border-radius: 6px;">
+                  🌍 Foreign Printings (${card.foreignData.length} languages)
+                </summary>
+                <div style="margin-top: 1rem; display: grid; gap: 0.75rem; max-height: 400px; overflow-y: auto;">
+                  ${card.foreignData.map(f => `
+                    <div style="padding: 1rem; background: var(--bg-tertiary); border-radius: 6px; border-left: 3px solid var(--accent-color);">
+                      <div style="font-weight: 600; margin-bottom: 0.5rem; text-transform: uppercase; font-size: 0.875rem; color: var(--text-secondary);">
+                        ${f.language}
+                      </div>
+                      ${f.foreign_name ? `
+                        <div style="font-size: 1.1rem; font-weight: 500; margin-bottom: 0.5rem;">
+                          ${f.foreign_name}
+                        </div>
+                      ` : ''}
+                      ${f.foreign_type ? `
+                        <div style="font-style: italic; color: var(--text-secondary); margin-bottom: 0.5rem;">
+                          ${f.foreign_type}
+                        </div>
+                      ` : ''}
+                      ${f.foreign_text ? `
+                        <div style="line-height: 1.5; margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--border-color);">
+                          ${f.foreign_text}
+                        </div>
+                      ` : ''}
+                      ${f.foreign_flavor_text ? `
+                        <div style="font-style: italic; color: var(--text-secondary); margin-top: 0.5rem; font-size: 0.9rem;">
+                          "${f.foreign_flavor_text}"
+                        </div>
+                      ` : ''}
+                    </div>
+                  `).join('')}
+                </div>
+              </details>
             </div>
           ` : ''}
           ${card.rulings && card.rulings.length > 0 ? `

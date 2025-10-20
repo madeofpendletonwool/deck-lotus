@@ -820,7 +820,17 @@ Final image size: ~150MB (compared to ~800MB without optimization)
 
 ## Admin User Setup
 
-On first startup, you can create an initial admin user via environment variables:
+**Deck Lotus automatically ensures there's always at least one admin user.**
+
+### How it works:
+
+On every startup, the system checks:
+1. **If an admin user exists**: Nothing happens, server starts normally
+2. **If NO admin user exists**:
+   - **With environment variables set**: Creates admin from `ADMIN_USERNAME`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`
+   - **Without environment variables**: Auto-generates random credentials and displays them in the terminal
+
+### Setting up via environment variables:
 
 ```bash
 # Set these in docker-compose.yml or .env
@@ -829,13 +839,41 @@ ADMIN_EMAIL=admin@example.com
 ADMIN_PASSWORD=changeme123
 ```
 
-The admin user is created automatically if it doesn't exist. After logging in as admin:
+### Auto-generated credentials:
+
+If you don't set the environment variables and no admin exists, you'll see:
+
+```
+╔════════════════════════════════════════════════════════════╗
+║  AUTO-GENERATED ADMIN CREDENTIALS                          ║
+╠════════════════════════════════════════════════════════════╣
+║  Username: admin                                           ║
+║  Email:    admin@localhost                                 ║
+║  Password: a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6                ║
+╠════════════════════════════════════════════════════════════╣
+║  ⚠️  SAVE THESE CREDENTIALS NOW!                           ║
+║  They will not be shown again.                             ║
+║  Change the password after first login!                    ║
+╚════════════════════════════════════════════════════════════╝
+```
+
+**Important**: The password is randomly generated and shown ONLY ONCE. Save it immediately!
+
+### Upgrading existing installations:
+
+If you're upgrading from a version before admin functionality:
+- Set `ADMIN_USERNAME` to your existing username in docker-compose.yml
+- The system will automatically promote that user to admin on next startup
+- If the user doesn't exist, it will be created with the specified credentials
+
+### After logging in as admin:
 
 1. Go to **Settings** > **User Management**
 2. View all users, promote/demote admins, delete accounts
 3. Use **Backup & Restore** to export/import all user data
+4. **Change the admin password immediately!**
 
-**Security Note**: Change the default admin password immediately after first login!
+**Security Note**: Always change default or auto-generated passwords on first login!
 
 ## Backup & Restore
 
@@ -884,9 +922,9 @@ Complete list of environment variables you can set in `.env` or `docker-compose.
 | `JWT_REFRESH_EXPIRES_IN` | `30d` | No | How long refresh tokens are valid |
 | `MTGJSON_URL` | (auto-detected) | No | Custom MTGJSON download URL (rarely needed) |
 | `FORCE_REIMPORT` | `false` | No | Force complete database reimport on startup. Set to `true` to clear and reimport all MTGJSON data. **User decks are automatically preserved using UUIDs!** |
-| `ADMIN_USERNAME` | `admin` | No | Username for initial admin account (created on first startup) |
-| `ADMIN_EMAIL` | `admin@example.com` | No | Email for initial admin account |
-| `ADMIN_PASSWORD` | `changeme123` | No | Password for initial admin account (**change this immediately!**) |
+| `ADMIN_USERNAME` | - | No | Username for admin account. If no admin exists, creates or promotes this user to admin. If not set and no admin exists, auto-generates credentials. |
+| `ADMIN_EMAIL` | - | No | Email for admin account (only used when creating new admin) |
+| `ADMIN_PASSWORD` | - | No | Password for admin account (only used when creating new admin). **Change immediately after first login!** |
 
 ### Important Notes
 
@@ -903,11 +941,16 @@ node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
 
 **Important**: User decks, users, and API keys are automatically backed up and restored using stable UUIDs, so you won't lose your data!
 
-**Admin Credentials**: The initial admin user is only created if:
-1. No user with that username exists yet
-2. The environment variables are set
+**Admin Credentials**: The system ensures at least one admin always exists:
+1. **On every startup**, checks if ANY admin user exists
+2. **If no admin exists**:
+   - If `ADMIN_USERNAME`, `ADMIN_EMAIL`, `ADMIN_PASSWORD` are set → Creates/promotes that user
+   - If variables not set → Auto-generates random credentials and displays them in terminal (ONCE only!)
+3. **If admin exists** → Skips admin creation
 
-After first login, **immediately change the admin password** in the user profile!
+This means you'll never be locked out - if you accidentally remove all admins, restart the container to create a new one.
+
+After first login with default/generated credentials, **immediately change the password** via Settings!
 
 ### Example .env File
 

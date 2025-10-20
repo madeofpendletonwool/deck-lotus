@@ -16,6 +16,7 @@ export function authenticate(req, res, next) {
       req.user = {
         id: decoded.userId,
         username: decoded.username,
+        is_admin: decoded.isAdmin || false,
       };
       return next();
     }
@@ -32,6 +33,7 @@ export function authenticate(req, res, next) {
         id: user.user_id,
         username: user.username,
         email: user.email,
+        is_admin: user.is_admin || false,
       };
       return next();
     }
@@ -55,6 +57,7 @@ export function optionalAuthenticate(req, res, next) {
       req.user = {
         id: decoded.userId,
         username: decoded.username,
+        is_admin: decoded.isAdmin || false,
       };
     }
   } else {
@@ -68,6 +71,7 @@ export function optionalAuthenticate(req, res, next) {
           id: user.user_id,
           username: user.username,
           email: user.email,
+          is_admin: user.is_admin || false,
         };
       }
     }

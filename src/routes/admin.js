@@ -41,13 +41,12 @@ router.get('/sync-status', authenticate, requireAdmin, (req, res, next) => {
  * Create a backup of user data (admin only)
  * Optional query param: userId (if not provided, backs up all users)
  */
-router.post('/backup', authenticate, requireAdmin, (req, res, next) => {
+router.post('/backup', authenticate, (req, res, next) => {
   try {
-    const userId = req.query.userId ? parseInt(req.query.userId) : null;
-
-    // Only allow users to backup their own data unless they're admin
-    // For now, we'll allow any authenticated user to backup their own data
-    const backupUserId = userId || req.user.id;
+    // Admins can backup all users or specific user, regular users only their own data
+    const backupUserId = req.user.is_admin && req.query.userId
+      ? parseInt(req.query.userId)
+      : req.user.is_admin ? null : req.user.id;
 
     const backup = createBackup(backupUserId);
 
@@ -66,7 +65,7 @@ router.post('/backup', authenticate, requireAdmin, (req, res, next) => {
  * Restore user data from a backup (admin only)
  * Body: { backup: {...}, overwrite: boolean }
  */
-router.post('/restore', authenticate, requireAdmin, (req, res, next) => {
+router.post('/restore', authenticate, (req, res, next) => {
   try {
     const { backup, overwrite = false } = req.body;
 
@@ -74,10 +73,12 @@ router.post('/restore', authenticate, requireAdmin, (req, res, next) => {
       return res.status(400).json({ error: 'Invalid backup data' });
     }
 
-    // Admins can restore any user's data, or all users
+    // Admins can restore all users, regular users only their own data
+    const restoreUserId = req.user.is_admin ? null : req.user.id;
+
     const results = restoreBackup(backup, {
       overwrite,
-      userId: null // Restore all users in the backup
+      userId: restoreUserId
     });
 
     res.json({

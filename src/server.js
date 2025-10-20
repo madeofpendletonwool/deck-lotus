@@ -78,26 +78,69 @@ async function start() {
     await runMigrations();
     console.log('✓ Database initialized');
 
-    // Check for initial admin user creation from environment variables
-    if (process.env.ADMIN_USERNAME && process.env.ADMIN_EMAIL && process.env.ADMIN_PASSWORD) {
-      const { createAdminUser } = await import('./services/authService.js');
+    // Ensure at least one admin user exists
+    const { createAdminUser } = await import('./services/authService.js');
+    const crypto = await import('crypto');
 
-      try {
-        const db = getDb();
-        const existingUser = db.prepare('SELECT id FROM users WHERE username = ?').get(process.env.ADMIN_USERNAME);
+    try {
+      const db = getDb();
+      // Check if ANY admin user exists
+      const adminExists = db.prepare('SELECT id FROM users WHERE is_admin = 1 LIMIT 1').get();
 
-        if (!existingUser) {
-          console.log('\n⚠️  Creating initial admin user from environment variables...');
-          await createAdminUser(
-            process.env.ADMIN_USERNAME,
-            process.env.ADMIN_EMAIL,
-            process.env.ADMIN_PASSWORD
-          );
-          console.log(`✓ Admin user created: ${process.env.ADMIN_USERNAME}`);
+      if (!adminExists) {
+        console.log('\n⚠️  No admin user found in database!');
+
+        // Check if environment variables are provided
+        if (process.env.ADMIN_USERNAME && process.env.ADMIN_EMAIL && process.env.ADMIN_PASSWORD) {
+          // Check if user with that username exists but is not admin
+          const existingUser = db.prepare('SELECT id, is_admin FROM users WHERE username = ?').get(process.env.ADMIN_USERNAME);
+
+          if (existingUser && !existingUser.is_admin) {
+            // Promote existing user to admin
+            console.log(`   Found existing user '${process.env.ADMIN_USERNAME}', promoting to admin...`);
+            db.prepare('UPDATE users SET is_admin = 1 WHERE id = ?').run(existingUser.id);
+            console.log(`✓ User '${process.env.ADMIN_USERNAME}' promoted to admin`);
+          } else if (!existingUser) {
+            // Create new admin user
+            console.log('   Creating admin user from environment variables...');
+            await createAdminUser(
+              process.env.ADMIN_USERNAME,
+              process.env.ADMIN_EMAIL,
+              process.env.ADMIN_PASSWORD
+            );
+            console.log(`✓ Admin user created: ${process.env.ADMIN_USERNAME}`);
+            console.log(`   Email: ${process.env.ADMIN_EMAIL}`);
+            console.log(`   Password: ${process.env.ADMIN_PASSWORD}`);
+            console.log('\n⚠️  IMPORTANT: Change the admin password immediately after first login!');
+          }
+        } else {
+          // Auto-generate admin credentials
+          console.log('   No admin credentials found in environment variables.');
+          console.log('   Auto-generating admin user...\n');
+
+          const autoUsername = 'admin';
+          const autoEmail = 'admin@localhost';
+          const autoPassword = crypto.randomBytes(16).toString('hex');
+
+          await createAdminUser(autoUsername, autoEmail, autoPassword);
+
+          console.log('╔════════════════════════════════════════════════════════════╗');
+          console.log('║  AUTO-GENERATED ADMIN CREDENTIALS                          ║');
+          console.log('╠════════════════════════════════════════════════════════════╣');
+          console.log(`║  Username: ${autoUsername.padEnd(47)} ║`);
+          console.log(`║  Email:    ${autoEmail.padEnd(47)} ║`);
+          console.log(`║  Password: ${autoPassword.padEnd(47)} ║`);
+          console.log('╠════════════════════════════════════════════════════════════╣');
+          console.log('║  ⚠️  SAVE THESE CREDENTIALS NOW!                           ║');
+          console.log('║  They will not be shown again.                             ║');
+          console.log('║  Change the password after first login!                    ║');
+          console.log('╚════════════════════════════════════════════════════════════╝\n');
         }
-      } catch (error) {
-        console.error('⚠️  Failed to create admin user:', error.message);
+      } else {
+        console.log('✓ Admin user exists');
       }
+    } catch (error) {
+      console.error('⚠️  Failed to check/create admin user:', error.message);
     }
 
     // Check if we need to import card data

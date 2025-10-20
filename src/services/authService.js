@@ -108,7 +108,7 @@ export function validateApiKey(apiKey) {
   const keyHash = crypto.createHash('sha256').update(apiKey).digest('hex');
 
   const result = db.get(
-    `SELECT ak.id as key_id, ak.user_id, u.username, u.email
+    `SELECT ak.id as key_id, ak.user_id, u.username, u.email, u.is_admin
      FROM api_keys ak
      JOIN users u ON ak.user_id = u.id
      WHERE ak.key_hash = ?`,

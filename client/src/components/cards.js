@@ -253,19 +253,19 @@ function renderCards(cards) {
   }
 
   cardsGrid.innerHTML = cards.map(card => `
-    <div class="card-item" data-card-id="${card.id}" style="position: relative;">
+    <div class="card-item" data-card-id="${card.id}" draggable="true" style="position: relative;">
       ${card.image_url ? `
         <img src="${card.large_image_url || card.image_url}"
              alt="${card.name}"
              data-fallback="${card.image_url}"
              class="card-image"
-             style="width: 100%; border-radius: 8px; margin-bottom: 0.5rem;">
+             style="width: 100%; border-radius: 8px; margin-bottom: 0.5rem; pointer-events: none;">
       ` : ''}
       <button class="quick-add-btn" data-card-id="${card.id}" style="position: absolute; top: 8px; right: 8px; background: rgba(0,0,0,0.8); color: white; border: none; border-radius: 50%; width: 32px; height: 32px; cursor: pointer; font-size: 20px; display: flex; align-items: center; justify-content: center; z-index: 10;">+</button>
-      <div class="card-name">${card.name}</div>
-      <div class="card-mana">${formatMana(card.mana_cost)}</div>
-      <div class="card-type">${card.type_line || ''}</div>
-      <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.5rem;">
+      <div class="card-name" style="pointer-events: none;">${card.name}</div>
+      <div class="card-mana" style="pointer-events: none;">${formatMana(card.mana_cost)}</div>
+      <div class="card-type" style="pointer-events: none;">${card.type_line || ''}</div>
+      <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.5rem; pointer-events: none;">
         Mana Value: ${card.cmc || 0}
       </div>
     </div>
@@ -300,6 +300,9 @@ function renderCards(cards) {
       await showQuickAddMenu(cardId, btn);
     });
   });
+
+  // Setup drag and drop
+  setupBrowseDragAndDrop();
 }
 
 function updatePagination(page, totalPages, total) {
@@ -780,5 +783,158 @@ async function showQuickAddMenuModal(cardId) {
     }, 100);
   } catch (error) {
     showToast('Failed to load decks', 'error');
+  }
+}
+
+let browseDraggedCardId = null;
+let browseDragPopupInitialized = false;
+
+async function setupBrowseDragAndDrop() {
+  // Get or create the drag popup
+  let dragPopup = document.getElementById('browse-drag-popup');
+  if (!dragPopup) {
+    dragPopup = document.createElement('div');
+    dragPopup.id = 'browse-drag-popup';
+    dragPopup.className = 'drag-popup browse-drag-popup hidden';
+    dragPopup.innerHTML = `
+      <div class="drag-popup-title">Add to deck...</div>
+      <div class="drag-popup-decks" id="drag-deck-zones"></div>
+    `;
+    document.body.appendChild(dragPopup);
+  }
+
+  // Setup drag events on card items
+  document.querySelectorAll('.card-item[draggable="true"]').forEach(item => {
+    item.addEventListener('dragstart', async (e) => {
+      // Don't allow drag if clicking the quick-add button
+      if (e.target.classList.contains('quick-add-btn')) {
+        e.preventDefault();
+        return;
+      }
+
+      browseDraggedCardId = item.dataset.cardId;
+
+      // Create a semi-transparent drag image
+      const dragImage = item.cloneNode(true);
+      dragImage.style.opacity = '0.4';
+      dragImage.style.position = 'absolute';
+      dragImage.style.top = '-9999px';
+      dragImage.style.left = '-9999px';
+      dragImage.style.pointerEvents = 'none';
+      document.body.appendChild(dragImage);
+
+      // Set the custom drag image
+      e.dataTransfer.setDragImage(dragImage, e.offsetX, e.offsetY);
+
+      // Clean up the temporary element after a brief delay
+      setTimeout(() => {
+        document.body.removeChild(dragImage);
+      }, 0);
+
+      item.classList.add('dragging');
+
+      // Load decks and show popup
+      await loadDecksForDrag();
+      dragPopup.classList.remove('hidden');
+
+      e.dataTransfer.effectAllowed = 'copy';
+      e.dataTransfer.setData('text/plain', browseDraggedCardId);
+    });
+
+    item.addEventListener('dragend', (e) => {
+      item.classList.remove('dragging');
+      dragPopup.classList.add('hidden');
+
+      // Clean up zone states
+      document.querySelectorAll('.deck-drag-zone').forEach(zone => {
+        zone.classList.remove('drag-over');
+      });
+
+      browseDraggedCardId = null;
+    });
+  });
+}
+
+async function loadDecksForDrag() {
+  try {
+    const result = await api.getDecks();
+    const decks = result.decks;
+
+    const deckZonesContainer = document.getElementById('drag-deck-zones');
+
+    if (decks.length === 0) {
+      deckZonesContainer.innerHTML = '<div style="padding: 2rem; text-align: center; color: var(--text-secondary);">Create a deck first</div>';
+      return;
+    }
+
+    deckZonesContainer.innerHTML = decks.map(deck => `
+      <div class="deck-drag-container">
+        <div class="deck-drag-name">${deck.name}</div>
+        <div class="deck-drag-zones-split">
+          <div class="deck-drag-zone" data-deck-id="${deck.id}" data-is-sideboard="true">
+            <div class="deck-drag-zone-label">Sideboard</div>
+          </div>
+          <div class="deck-drag-zone" data-deck-id="${deck.id}" data-is-sideboard="false">
+            <div class="deck-drag-zone-label">Mainboard</div>
+          </div>
+        </div>
+      </div>
+    `).join('');
+
+    // Re-attach handlers for deck zones
+    setupDropZones();
+  } catch (error) {
+    console.error('Failed to load decks for drag:', error);
+  }
+}
+
+function setupDropZones() {
+  document.querySelectorAll('.deck-drag-zone').forEach(zone => {
+    // Remove old listeners by cloning
+    const newZone = zone.cloneNode(true);
+    zone.parentNode.replaceChild(newZone, zone);
+
+    newZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'copy';
+      newZone.classList.add('drag-over');
+    });
+
+    newZone.addEventListener('dragleave', (e) => {
+      newZone.classList.remove('drag-over');
+    });
+
+    newZone.addEventListener('drop', async (e) => {
+      e.preventDefault();
+      newZone.classList.remove('drag-over');
+
+      const deckId = newZone.dataset.deckId;
+      const isSideboard = newZone.dataset.isSideboard === 'true';
+
+      if (browseDraggedCardId) {
+        await addCardToDeckFromBrowse(browseDraggedCardId, deckId, isSideboard);
+      }
+    });
+  });
+}
+
+async function addCardToDeckFromBrowse(cardId, deckId, isSideboard) {
+  try {
+    showLoading();
+    const result = await api.getCardPrintings(cardId);
+    const printings = result.printings;
+
+    if (printings.length === 0) {
+      showToast('No printings found', 'warning');
+      hideLoading();
+      return;
+    }
+
+    await api.addCardToDeck(deckId, printings[0].id, 1, isSideboard);
+    hideLoading();
+    showToast(`Added to ${isSideboard ? 'sideboard' : 'mainboard'}!`, 'success', 2000);
+  } catch (error) {
+    hideLoading();
+    showToast('Failed to add card', 'error');
   }
 }

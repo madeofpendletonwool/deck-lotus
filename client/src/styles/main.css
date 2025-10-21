@@ -481,12 +481,11 @@ input[type="number"] {
 /* Card Preview (hover) */
 .card-preview {
   position: fixed;
-  left: 20px;
   top: 50%;
   transform: translateY(-50%);
   z-index: 999;
   pointer-events: none;
-  transition: opacity 0.2s;
+  transition: all 0.2s;
 }
 
 .card-preview img {
@@ -677,6 +676,7 @@ button.btn-icon.active {
 }
 
 .deck-card-item {
+  position: relative;
   display: flex;
   gap: 0.75rem;
   align-items: center;
@@ -1637,4 +1637,280 @@ button.btn-icon.active {
     width: calc(100vw - 2rem);
     right: 1rem;
   }
+}
+
+/* Drag and Drop Styles */
+.drag-popup {
+  position: fixed;
+  bottom: 2rem;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--bg-secondary);
+  border: 2px solid var(--primary);
+  border-radius: 1rem;
+  padding: 1.5rem;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+  z-index: 1001;
+  min-width: 400px;
+  transition: all 0.2s;
+}
+
+.drag-popup-title {
+  text-align: center;
+  font-weight: 600;
+  font-size: 1rem;
+  color: var(--text-secondary);
+  margin-bottom: 1rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.drag-popup-zones {
+  display: flex;
+  gap: 1rem;
+}
+
+.drag-zone {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1.5rem;
+  background: var(--bg-tertiary);
+  border: 2px dashed var(--border);
+  border-radius: 0.75rem;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.drag-zone-icon {
+  font-size: 2.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.drag-zone-label {
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.drag-zone.can-drop {
+  border-color: var(--success);
+  border-style: dashed;
+  background: rgba(16, 185, 129, 0.1);
+}
+
+.drag-zone.can-drop .drag-zone-label {
+  color: var(--success);
+}
+
+.drag-zone.can-drop:hover,
+.drag-zone.drag-over {
+  border-style: solid;
+  background: rgba(16, 185, 129, 0.2);
+  transform: scale(1.05);
+  box-shadow: 0 4px 16px rgba(16, 185, 129, 0.3);
+}
+
+.drag-zone.current-zone {
+  border-color: var(--text-secondary);
+  background: rgba(100, 116, 139, 0.1);
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.drag-zone.current-zone .drag-zone-label {
+  color: var(--text-secondary);
+}
+
+.deck-card-item.dragging {
+  opacity: 0.4;
+  cursor: grabbing;
+}
+
+.card-item.dragging {
+  opacity: 0.4 !important;
+  cursor: grabbing !important;
+}
+
+.card-item.dragging * {
+  opacity: 1 !important;
+}
+
+.deck-card-item[draggable="true"] {
+  cursor: grab;
+}
+
+.deck-card-item[draggable="true"]:active {
+  cursor: grabbing;
+}
+
+/* Mobile drag popup */
+@media (max-width: 768px) {
+  .drag-popup {
+    min-width: calc(100vw - 4rem);
+    bottom: 1rem;
+  }
+
+  .drag-popup-zones {
+    flex-direction: column;
+  }
+
+  .drag-zone {
+    padding: 1.5rem;
+  }
+}
+
+/* Browse Cards Drag-and-Drop */
+.browse-drag-popup {
+  min-width: 600px;
+  max-width: 90vw;
+}
+
+.drag-popup-decks {
+  display: flex;
+  gap: 1rem;
+  overflow-x: auto;
+  padding-bottom: 0.5rem;
+}
+
+.deck-drag-container {
+  min-width: 150px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.deck-drag-name {
+  text-align: center;
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: var(--text);
+  padding: 0.5rem;
+  background: var(--bg-tertiary);
+  border-radius: 0.5rem;
+}
+
+.deck-drag-zones-split {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  height: 150px;
+}
+
+.deck-drag-zone {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-tertiary);
+  border: 2px dashed var(--border);
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: all 0.3s;
+  padding: 0.5rem;
+}
+
+.deck-drag-zone-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+.deck-drag-zone[data-is-sideboard="true"] {
+  border-color: var(--warning);
+}
+
+.deck-drag-zone[data-is-sideboard="false"] {
+  border-color: var(--success);
+}
+
+.deck-drag-zone.drag-over {
+  border-style: solid;
+  transform: scale(1.05);
+}
+
+.deck-drag-zone[data-is-sideboard="true"].drag-over {
+  background: rgba(245, 158, 11, 0.2);
+  border-color: var(--warning);
+  box-shadow: 0 4px 16px rgba(245, 158, 11, 0.3);
+}
+
+.deck-drag-zone[data-is-sideboard="false"].drag-over {
+  background: rgba(16, 185, 129, 0.2);
+  border-color: var(--success);
+  box-shadow: 0 4px 16px rgba(16, 185, 129, 0.3);
+}
+
+/* Mobile browse drag popup */
+@media (max-width: 768px) {
+  .browse-drag-popup {
+    min-width: calc(100vw - 4rem);
+  }
+
+  .drag-popup-decks {
+    flex-direction: column;
+  }
+
+  .deck-drag-container {
+    min-width: 100%;
+  }
+}
+
+/* Commander Support */
+.commander-toggle-btn {
+  position: absolute;
+  left: 0.5rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 32px;
+  height: 32px;
+  background: var(--bg);
+  border: 2px solid var(--border);
+  border-radius: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  z-index: 2;
+  font-size: 1.125rem;
+}
+
+.commander-toggle-btn:hover {
+  background: var(--bg-tertiary);
+  border-color: var(--warning);
+  transform: translateY(-50%) scale(1.1);
+  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.3);
+}
+
+.commander-toggle-btn.active {
+  background: var(--warning);
+  border-color: var(--warning);
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.2);
+}
+
+.commander-toggle-btn.active:hover {
+  background: #d97706;
+  border-color: #d97706;
+  transform: translateY(-50%) scale(1.15);
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.4);
+}
+
+.deck-card-item.is-commander {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.15), rgba(245, 158, 11, 0.05));
+  border: 2px solid var(--warning);
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.1);
+}
+
+.deck-card-item.is-commander:hover {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.25), rgba(245, 158, 11, 0.1));
+  border-color: #d97706;
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
+}
+
+.deck-card-item.is-commander .deck-card-image {
+  box-shadow: 0 0 8px rgba(245, 158, 11, 0.5);
 }

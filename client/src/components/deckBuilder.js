@@ -345,11 +345,15 @@ function renderCardsList(cards) {
     return '<div style="padding: 2rem; text-align: center; color: var(--text-secondary);">No cards yet</div>';
   }
 
-  // Group cards by type
+  // Separate commanders from other cards
+  const commanders = cards.filter(c => c.is_commander);
+  const nonCommanders = cards.filter(c => !c.is_commander);
+
+  // Group non-commander cards by type
   const grouped = {};
   const typeOrder = ['Creature', 'Planeswalker', 'Instant', 'Sorcery', 'Enchantment', 'Artifact', 'Land', 'Other'];
 
-  cards.forEach(card => {
+  nonCommanders.forEach(card => {
     const typeLine = card.type_line || '';
     let category = 'Other';
 
@@ -369,6 +373,18 @@ function renderCardsList(cards) {
 
   // Render grouped cards
   let html = '';
+
+  // Render commander section first (if any)
+  if (commanders.length > 0) {
+    html += `
+      <div class="card-type-group">
+        <div class="card-type-header">Commander (${commanders.length})</div>
+        ${commanders.map(card => renderCardItem(card)).join('')}
+      </div>
+    `;
+  }
+
+  // Render other card types
   for (const type of typeOrder) {
     if (grouped[type] && grouped[type].length > 0) {
       const count = grouped[type].reduce((sum, c) => sum + c.quantity, 0);
@@ -387,9 +403,22 @@ function renderCardsList(cards) {
 }
 
 function renderCardItem(card) {
+  const isCommanderDeck = currentDeck.format === 'commander';
+  const isLegendaryCreature = card.type_line &&
+    (card.type_line.includes('Legendary') || card.type_line.includes('legendary')) &&
+    (card.type_line.includes('Creature') || card.type_line.includes('creature'));
+  const showCommanderIcon = isCommanderDeck && isLegendaryCreature && !card.is_sideboard;
+
   if (compactView) {
     return `
-      <div class="deck-card-item compact" data-deck-card-id="${card.deck_card_id}" data-printing-id="${card.printing_id}">
+      <div class="deck-card-item compact ${card.is_commander ? 'is-commander' : ''}" data-deck-card-id="${card.deck_card_id}" data-printing-id="${card.printing_id}" data-is-sideboard="${card.is_sideboard}" draggable="true">
+        ${showCommanderIcon ? `
+          <button class="commander-toggle-btn ${card.is_commander ? 'active' : ''}"
+                  data-deck-card-id="${card.deck_card_id}"
+                  title="${card.is_commander ? 'Remove as Commander' : 'Set as Commander'}">
+            ⚔️
+          </button>
+        ` : ''}
         <img src="${card.image_url}"
              class="deck-card-image-compact"
              alt="${card.name}"
@@ -411,7 +440,14 @@ function renderCardItem(card) {
   }
 
   return `
-    <div class="deck-card-item" data-deck-card-id="${card.deck_card_id}" data-printing-id="${card.printing_id}">
+    <div class="deck-card-item ${card.is_commander ? 'is-commander' : ''}" data-deck-card-id="${card.deck_card_id}" data-printing-id="${card.printing_id}" data-is-sideboard="${card.is_sideboard}" draggable="true">
+      ${showCommanderIcon ? `
+        <button class="commander-toggle-btn ${card.is_commander ? 'active' : ''}"
+                data-deck-card-id="${card.deck_card_id}"
+                title="${card.is_commander ? 'Remove as Commander' : 'Set as Commander'}">
+          ⚔️
+        </button>
+      ` : ''}
       <img src="${card.image_url}"
            class="deck-card-image"
            alt="${card.name}"
@@ -436,6 +472,9 @@ function renderCardItem(card) {
 }
 
 function setupCardControls() {
+  // Setup drag and drop
+  setupDragAndDrop();
+
   // Card click to show modal
   document.querySelectorAll('.deck-card-item').forEach(item => {
     // Click on card (not on controls)
@@ -451,6 +490,9 @@ function setupCardControls() {
 
     // Add hover preview
     item.addEventListener('mouseenter', (e) => {
+      // Don't show preview if hovering over commander button
+      if (e.target.closest('.commander-toggle-btn')) return;
+
       const img = item.querySelector('.deck-card-image, .deck-card-image-compact');
       if (img && img.src) {
         showCardPreview(img.src, e);
@@ -460,6 +502,14 @@ function setupCardControls() {
     item.addEventListener('mouseleave', () => {
       hideCardPreview();
     });
+
+    // Prevent preview when hovering over commander button
+    const commanderBtn = item.querySelector('.commander-toggle-btn');
+    if (commanderBtn) {
+      commanderBtn.addEventListener('mouseenter', () => {
+        hideCardPreview();
+      });
+    }
   });
 
   // Increase quantity
@@ -529,6 +579,137 @@ function setupCardControls() {
       }
     });
   });
+
+  // Commander toggle
+  document.querySelectorAll('.commander-toggle-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const deckCardId = btn.dataset.deckCardId;
+      await toggleCommander(deckCardId);
+    });
+  });
+}
+
+let draggedCardId = null;
+let draggedIsSideboard = null;
+let dragPopupInitialized = false;
+
+function setupDragAndDrop() {
+  // Get or create the drag popup
+  let dragPopup = document.getElementById('drag-popup');
+  if (!dragPopup) {
+    dragPopup = document.createElement('div');
+    dragPopup.id = 'drag-popup';
+    dragPopup.className = 'drag-popup hidden';
+    dragPopup.innerHTML = `
+      <div class="drag-popup-title">Move to...</div>
+      <div class="drag-popup-zones">
+        <div class="drag-zone" data-target="mainboard">
+          <div class="drag-zone-icon">📚</div>
+          <div class="drag-zone-label">Mainboard</div>
+        </div>
+        <div class="drag-zone" data-target="sideboard">
+          <div class="drag-zone-icon">📋</div>
+          <div class="drag-zone-label">Sideboard</div>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(dragPopup);
+  }
+
+  const dragZones = dragPopup.querySelectorAll('.drag-zone');
+
+  // Only set up drop zone handlers once
+  if (!dragPopupInitialized) {
+    dragZones.forEach(zone => {
+      zone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        const target = zone.dataset.target;
+        const canDrop = (target === 'mainboard' && draggedIsSideboard) ||
+                        (target === 'sideboard' && !draggedIsSideboard);
+
+        if (canDrop) {
+          e.dataTransfer.dropEffect = 'move';
+          zone.classList.add('drag-over');
+        } else {
+          e.dataTransfer.dropEffect = 'none';
+        }
+      });
+
+      zone.addEventListener('dragleave', (e) => {
+        zone.classList.remove('drag-over');
+      });
+
+      zone.addEventListener('drop', async (e) => {
+        e.preventDefault();
+        zone.classList.remove('drag-over');
+
+        const target = zone.dataset.target;
+        const newIsSideboard = target === 'sideboard';
+
+        // Only move if it's actually changing boards
+        if (draggedCardId && newIsSideboard !== draggedIsSideboard) {
+          await moveCardToBoard(draggedCardId, newIsSideboard);
+        }
+      });
+    });
+    dragPopupInitialized = true;
+  }
+
+  // Setup drag events on card items (these need to be re-attached each render)
+  document.querySelectorAll('.deck-card-item').forEach(item => {
+    item.addEventListener('dragstart', (e) => {
+      draggedCardId = item.dataset.deckCardId;
+      draggedIsSideboard = item.dataset.isSideboard === 'true' || item.dataset.isSideboard === '1';
+
+      item.classList.add('dragging');
+
+      // Show popup
+      dragPopup.classList.remove('hidden');
+
+      // Highlight the zone the card is NOT currently in
+      dragZones.forEach(zone => {
+        const target = zone.dataset.target;
+        if ((target === 'mainboard' && draggedIsSideboard) ||
+            (target === 'sideboard' && !draggedIsSideboard)) {
+          zone.classList.add('can-drop');
+        } else {
+          zone.classList.add('current-zone');
+        }
+      });
+
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', draggedCardId);
+    });
+
+    item.addEventListener('dragend', (e) => {
+      item.classList.remove('dragging');
+      dragPopup.classList.add('hidden');
+
+      // Clean up zone states
+      dragZones.forEach(zone => {
+        zone.classList.remove('can-drop', 'current-zone', 'drag-over');
+      });
+
+      draggedCardId = null;
+      draggedIsSideboard = null;
+    });
+  });
+}
+
+async function moveCardToBoard(deckCardId, isSideboard) {
+  try {
+    showLoading();
+    const updatedDeck = await api.updateDeckCard(currentDeckId, deckCardId, { isSideboard });
+    currentDeck = updatedDeck.deck;
+    renderDeckCards();
+    await loadDeckStats();
+    hideLoading();
+    showToast(`Card moved to ${isSideboard ? 'sideboard' : 'mainboard'}`, 'success', 2000);
+  } catch (error) {
+    hideLoading();
+    showToast('Failed to move card: ' + error.message, 'error');
+  }
 }
 
 async function updateCardQuantity(deckCardId, newQuantity) {
@@ -558,6 +739,41 @@ async function removeCard(deckCardId) {
   } catch (error) {
     hideLoading();
     showToast('Failed to remove card: ' + error.message, 'error');
+  }
+}
+
+async function toggleCommander(deckCardId) {
+  try {
+    showLoading();
+
+    // Find the card being toggled
+    const card = currentDeck.cards.find(c => c.deck_card_id == deckCardId);
+    const newCommanderStatus = !card.is_commander;
+
+    // If setting as commander, first unmark any existing commander
+    if (newCommanderStatus) {
+      const currentCommander = currentDeck.cards.find(c => c.is_commander);
+      if (currentCommander && currentCommander.deck_card_id != deckCardId) {
+        // Unmark the current commander
+        await api.updateDeckCard(currentDeckId, currentCommander.deck_card_id, { isCommander: false });
+      }
+    }
+
+    // Toggle the commander status on the target card
+    const updatedDeck = await api.updateDeckCard(currentDeckId, deckCardId, { isCommander: newCommanderStatus });
+    currentDeck = updatedDeck.deck;
+    renderDeckCards();
+    await loadDeckStats();
+    hideLoading();
+
+    showToast(
+      newCommanderStatus ? '⚔️ Commander set!' : 'Commander removed',
+      'success',
+      2000
+    );
+  } catch (error) {
+    hideLoading();
+    showToast('Failed to update commander: ' + error.message, 'error');
   }
 }
 
@@ -685,6 +901,15 @@ function generateExport(format) {
   return text;
 }
 
+let lastMouseX = 0;
+let lastMouseY = 0;
+
+// Track mouse position globally
+document.addEventListener('mousemove', (e) => {
+  lastMouseX = e.clientX;
+  lastMouseY = e.clientY;
+});
+
 function showCardPreview(imageSrc, event) {
   const preview = document.getElementById('card-preview');
   const img = document.getElementById('card-preview-img');
@@ -692,6 +917,22 @@ function showCardPreview(imageSrc, event) {
   // Use large image if available
   const largeImageSrc = imageSrc.replace('/normal/', '/large/') || imageSrc;
   img.src = largeImageSrc;
+
+  // Position preview away from mouse
+  // If mouse is on left half of screen, show preview on right
+  // If mouse is on right half, show preview on left
+  const screenWidth = window.innerWidth;
+  const screenHeight = window.innerHeight;
+
+  if (lastMouseX < screenWidth / 2) {
+    // Mouse on left, show preview on right
+    preview.style.left = 'auto';
+    preview.style.right = '20px';
+  } else {
+    // Mouse on right, show preview on left
+    preview.style.left = '20px';
+    preview.style.right = 'auto';
+  }
 
   preview.classList.remove('hidden');
 }

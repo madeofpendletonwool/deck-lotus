@@ -814,24 +814,45 @@ async function setupBrowseDragAndDrop() {
 
       browseDraggedCardId = item.dataset.cardId;
 
-      // Create a semi-transparent drag image
-      const dragImage = item.cloneNode(true);
-      dragImage.style.opacity = '0.4';
-      dragImage.style.position = 'absolute';
-      dragImage.style.top = '-9999px';
-      dragImage.style.left = '-9999px';
-      dragImage.style.pointerEvents = 'none';
-      document.body.appendChild(dragImage);
+      // Get the actual card image
+      const cardImage = item.querySelector('.card-image');
+      if (cardImage) {
+        const isFirefox = navigator.userAgent.toLowerCase().includes('firefox');
 
-      // Set the custom drag image
-      e.dataTransfer.setDragImage(dragImage, e.offsetX, e.offsetY);
+        if (isFirefox) {
+          // Firefox: Use canvas
+          const canvas = document.createElement('canvas');
+          canvas.width = 100;
+          canvas.height = 140;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(cardImage, 0, 0, 100, 140);
+          e.dataTransfer.setDragImage(canvas, 50, 70);
+        } else {
+          // Chrome: Use cloned image in DOM
+          const dragImage = cardImage.cloneNode(false);
+          dragImage.style.position = 'fixed';
+          dragImage.style.top = '-500px';
+          dragImage.style.left = '0';
+          dragImage.style.width = '100px';
+          dragImage.style.height = '140px';
+          dragImage.style.objectFit = 'cover';
+          dragImage.style.border = 'none';
+          dragImage.style.borderRadius = '8px';
+          dragImage.style.pointerEvents = 'none';
+          dragImage.style.zIndex = '-1';
+          document.body.appendChild(dragImage);
 
-      // Clean up the temporary element after a brief delay
-      setTimeout(() => {
-        document.body.removeChild(dragImage);
-      }, 0);
+          e.dataTransfer.setDragImage(dragImage, 50, 70);
 
-      item.classList.add('dragging');
+          // Clean up after drag ends
+          item.addEventListener('dragend', function cleanup() {
+            if (dragImage && dragImage.parentNode) {
+              document.body.removeChild(dragImage);
+            }
+            item.removeEventListener('dragend', cleanup);
+          }, { once: true });
+        }
+      }
 
       // Load decks and show popup
       await loadDecksForDrag();
@@ -842,7 +863,6 @@ async function setupBrowseDragAndDrop() {
     });
 
     item.addEventListener('dragend', (e) => {
-      item.classList.remove('dragging');
       dragPopup.classList.add('hidden');
 
       // Clean up zone states

@@ -662,7 +662,45 @@ function setupDragAndDrop() {
       draggedCardId = item.dataset.deckCardId;
       draggedIsSideboard = item.dataset.isSideboard === 'true' || item.dataset.isSideboard === '1';
 
-      item.classList.add('dragging');
+      // Get the actual card image
+      const cardImage = item.querySelector('.deck-card-image, .deck-card-image-compact');
+      if (cardImage) {
+        const isFirefox = navigator.userAgent.toLowerCase().includes('firefox');
+
+        if (isFirefox) {
+          // Firefox: Use canvas
+          const canvas = document.createElement('canvas');
+          canvas.width = 80;
+          canvas.height = 112;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(cardImage, 0, 0, 80, 112);
+          e.dataTransfer.setDragImage(canvas, 40, 56);
+        } else {
+          // Chrome: Use cloned image in DOM
+          const dragImage = cardImage.cloneNode(false);
+          dragImage.style.position = 'fixed';
+          dragImage.style.top = '-500px';
+          dragImage.style.left = '0';
+          dragImage.style.width = '80px';
+          dragImage.style.height = '112px';
+          dragImage.style.objectFit = 'cover';
+          dragImage.style.border = 'none';
+          dragImage.style.borderRadius = '4px';
+          dragImage.style.pointerEvents = 'none';
+          dragImage.style.zIndex = '-1';
+          document.body.appendChild(dragImage);
+
+          e.dataTransfer.setDragImage(dragImage, 40, 56);
+
+          // Clean up after drag ends
+          item.addEventListener('dragend', function cleanup() {
+            if (dragImage && dragImage.parentNode) {
+              document.body.removeChild(dragImage);
+            }
+            item.removeEventListener('dragend', cleanup);
+          }, { once: true });
+        }
+      }
 
       // Show popup
       dragPopup.classList.remove('hidden');
@@ -683,7 +721,6 @@ function setupDragAndDrop() {
     });
 
     item.addEventListener('dragend', (e) => {
-      item.classList.remove('dragging');
       dragPopup.classList.add('hidden');
 
       // Clean up zone states

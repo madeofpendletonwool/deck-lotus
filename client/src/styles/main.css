@@ -1246,6 +1246,35 @@ button.btn-icon.active {
     padding: 0.625rem;
     min-width: auto;
   }
+
+  /* Mobile-friendly auth page */
+  .auth-container {
+    padding: 1rem;
+  }
+
+  .auth-card {
+    padding: 1.5rem;
+    max-width: 100%;
+  }
+
+  .auth-card img {
+    max-width: 200px !important;
+  }
+}
+
+@media (max-width: 480px) {
+  /* Extra small screens */
+  .auth-card {
+    padding: 1rem;
+  }
+
+  .auth-card img {
+    max-width: 150px !important;
+  }
+
+  .auth-form h2 {
+    font-size: 1.25rem;
+  }
 }
 
 /* Custom Color Checkboxes */
@@ -1724,19 +1753,7 @@ button.btn-icon.active {
   color: var(--text-secondary);
 }
 
-.deck-card-item.dragging {
-  opacity: 0.4;
-  cursor: grabbing;
-}
-
-.card-item.dragging {
-  opacity: 0.4 !important;
-  cursor: grabbing !important;
-}
-
-.card-item.dragging * {
-  opacity: 1 !important;
-}
+/* Dragging styles removed - using custom small drag image instead */
 
 .deck-card-item[draggable="true"] {
   cursor: grab;

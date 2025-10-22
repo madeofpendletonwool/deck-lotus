@@ -47,6 +47,14 @@ COPY package*.json ./
 # Copy built frontend from frontend-builder
 COPY --from=frontend-builder /app/client/dist ./client/dist
 
+# Copy favicon assets
+COPY assets/favicon.ico ./client/dist/favicon.ico
+COPY assets/favicon-16x16.png ./client/dist/favicon-16x16.png
+COPY assets/favicon-32x32.png ./client/dist/favicon-32x32.png
+COPY assets/apple-touch-icon.png ./client/dist/apple-touch-icon.png
+COPY assets/android-chrome-192x192.png ./client/dist/android-chrome-192x192.png
+COPY assets/android-chrome-512x512.png ./client/dist/android-chrome-512x512.png
+
 # Create data directory
 RUN mkdir -p /app/data
 

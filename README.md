@@ -98,7 +98,7 @@ cat > docker-compose.yml << 'EOF'
 version: '3.8'
 services:
   deck-lotus:
-    image: ghcr.io/your-username/deck-lotus:latest
+    image: ghcr.io/madeofpendletonwool/deck-lotus:latest
     ports:
       - "3000:3000"
     environment:
@@ -117,9 +117,6 @@ nano docker-compose.yml
 
 # Start Deck Lotus
 docker-compose up -d
-
-# Import MTG card data (first time only)
-docker-compose exec deck-lotus node scripts/import-mtgjson.js
 ```
 
 The app will be available at `http://localhost:3000`
@@ -146,9 +143,6 @@ nano .env
 
 # Build and run with Docker Compose
 docker-compose up -d
-
-# Import MTG card data (first time only)
-docker-compose exec deck-lotus node scripts/import-mtgjson.js
 ```
 
 The app will be available at `http://localhost:3000`

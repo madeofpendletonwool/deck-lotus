@@ -1,6 +1,8 @@
-# Deck Lotus 🌸
-
-A modern, self-hosted Magic: The Gathering deck builder with multi-user support, API key authentication, and a beautiful web interface.
+<div align="center">
+  <img src="assets/decklotus-icon.png" alt="Deck Lotus" width="200">
+  <h1>Deck Lotus</h1>
+  <p>A modern, self-hosted Magic: The Gathering deck builder with multi-user support, API key authentication, and a beautiful web interface.</p>
+</div>
 
 ## Features
 
@@ -1145,6 +1147,8 @@ Planned features for future releases:
 
 ---
 
-**Deck Lotus** - Build decks with style! 🌸
-
-Made with ❤️ for the Magic: The Gathering community.
+<div align="center">
+  <strong>Deck Lotus</strong> - Build decks with style!
+  <br><br>
+  Made with love for the Magic: The Gathering community.
+</div>

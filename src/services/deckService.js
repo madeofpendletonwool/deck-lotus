@@ -7,8 +7,8 @@ import crypto from 'crypto';
 export function getUserDecks(userId) {
   const decks = db.all(
     `SELECT d.*,
-      (SELECT COUNT(*) FROM deck_cards WHERE deck_id = d.id AND is_sideboard = 0) as mainboard_count,
-      (SELECT COUNT(*) FROM deck_cards WHERE deck_id = d.id AND is_sideboard = 1) as sideboard_count
+      (SELECT COALESCE(SUM(quantity), 0) FROM deck_cards WHERE deck_id = d.id AND is_sideboard = 0) as mainboard_count,
+      (SELECT COALESCE(SUM(quantity), 0) FROM deck_cards WHERE deck_id = d.id AND is_sideboard = 1) as sideboard_count
      FROM decks d
      WHERE user_id = ?
      ORDER BY updated_at DESC`,

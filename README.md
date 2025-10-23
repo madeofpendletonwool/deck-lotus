@@ -87,11 +87,55 @@
 
 ## Quick Start with Docker
 
-The easiest way to run Deck Lotus:
+The fastest way to get Deck Lotus running is to use our pre-built Docker image:
+
+```bash
+# Create a directory for your data
+mkdir -p deck-lotus-data
+
+# Create a docker-compose.yml file
+cat > docker-compose.yml << 'EOF'
+version: '3.8'
+services:
+  deck-lotus:
+    image: ghcr.io/your-username/deck-lotus:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - JWT_SECRET=your-super-secret-random-string-here-at-least-64-characters-long
+      - ADMIN_USERNAME=admin
+      - ADMIN_EMAIL=admin@example.com
+      - ADMIN_PASSWORD=changeme123
+    volumes:
+      - ./deck-lotus-data:/app/data
+    restart: unless-stopped
+EOF
+
+# Edit docker-compose.yml and set a secure JWT_SECRET
+nano docker-compose.yml
+
+# Start Deck Lotus
+docker-compose up -d
+
+# Import MTG card data (first time only)
+docker-compose exec deck-lotus node scripts/import-mtgjson.js
+```
+
+The app will be available at `http://localhost:3000`
+
+**Important**: Change the `JWT_SECRET` to a secure random string before starting! Generate one with:
+```bash
+node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
+```
+
+## Build from Source
+
+If you prefer to build the Docker image yourself from source:
 
 ```bash
 # Clone the repository
-git clone <your-repo-url>
+git clone https://github.com/your-username/deck-lotus.git
 cd deck-lotus
 
 # Copy environment file
@@ -108,84 +152,6 @@ docker-compose exec deck-lotus node scripts/import-mtgjson.js
 ```
 
 The app will be available at `http://localhost:3000`
-
-## Manual Setup (Without Docker)
-
-### Prerequisites
-
-- Node.js 18+
-- npm or yarn
-- bzip2 (for decompressing MTGJSON data)
-
-### Installation
-
-```bash
-# Install backend dependencies
-npm install
-
-# Install frontend dependencies
-cd client
-npm install
-cd ..
-
-# Copy environment file
-cp .env.example .env
-
-# Edit .env and configure as needed
-nano .env
-```
-
-### Configuration
-
-Edit `.env`:
-
-```env
-PORT=3000
-NODE_ENV=development
-DATABASE_PATH=./data/deck-lotus.db
-JWT_SECRET=your-super-secret-key-change-this
-JWT_EXPIRES_IN=7d
-JWT_REFRESH_EXPIRES_IN=30d
-```
-
-### Import Card Data
-
-Download and import all Magic: The Gathering cards from MTGJSON:
-
-```bash
-# Initialize database
-npm run init-db
-
-# Import cards (this will download ~500MB and may take a few minutes)
-npm run import-cards
-```
-
-This creates a local SQLite database with all Magic cards and printings.
-
-### Running in Development
-
-```bash
-# Terminal 1: Run backend server
-npm run dev
-
-# Terminal 2: Run frontend dev server
-npm run client:dev
-```
-
-- Backend API: `http://localhost:3000`
-- Frontend: `http://localhost:5173`
-
-### Building for Production
-
-```bash
-# Build frontend
-npm run client:build
-
-# Start production server
-npm start
-```
-
-The production server serves both API and frontend on port 3000.
 
 ## Usage
 
@@ -1000,56 +966,6 @@ services:
     restart: unless-stopped
 ```
 
-## Troubleshooting
-
-### Database Issues
-
-```bash
-# Reset database
-rm data/deck-lotus.db
-npm run init-db
-npm run import-cards
-```
-
-### User Decks Disappeared After Reimport
-
-If you lost your decks after running FORCE_REIMPORT:
-
-**This has been fixed!** The import script now preserves user decks using UUIDs.
-
-To prevent data loss:
-1. Always create backups before reimporting (Settings > Backup & Restore)
-2. The new FORCE_REIMPORT feature automatically backs up and restores deck data
-3. Existing deployments should update to the latest version
-
-To recover (if you have a backup):
-1. Log in as admin
-2. Go to Settings > Backup & Restore
-3. Upload your backup file
-4. Choose "Overwrite" if you want to replace everything
-5. Your decks will be restored with correct card references
-
-### Card Import Fails
-
-Ensure bzip2 is installed:
-```bash
-# macOS
-brew install bzip2
-
-# Ubuntu/Debian
-sudo apt-get install bzip2
-
-# Alpine (Docker)
-apk add bzip2
-```
-
-### Port Already in Use
-
-Change the port in `.env`:
-```env
-PORT=3001
-```
-
 ## Contributing
 
 Contributions are welcome! Please:
@@ -1067,8 +983,6 @@ MIT License - see LICENSE file for details
 
 - Card data provided by [MTGJSON](https://mtgjson.com/)
 - Built with Node.js, Express, and Vite
-
-## Recent Updates & Changelog
 
 ### Latest Features
 
@@ -1104,7 +1018,6 @@ MIT License - see LICENSE file for details
 - 👥 User management (view, promote/demote, delete)
 - 💾 Backup & restore all user data
 - 🔄 Manual database sync trigger
-- 🛡️ Role-based access control
 - 🔐 Protected admin endpoints
 
 **Technical Improvements**:
@@ -1114,35 +1027,19 @@ MIT License - see LICENSE file for details
 - 📦 Improved error handling
 - ⚡ Performance optimizations
 
-### Migration Guide
-
-If you're upgrading from an older version:
-
-1. **Backup your data** before upgrading
-2. Pull the latest code: `git pull origin main`
-3. Rebuild Docker image: `docker-compose build`
-4. Start container: `docker-compose up -d`
-5. Database migrations run automatically on startup
-
-**Important**: User decks are now preserved during reimports using UUIDs. If you lost decks in a previous version, restore from a backup via the admin panel.
-
 ## Support
 
 For issues and questions:
 - Open an issue on GitHub
 - Check existing issues for solutions
-- Read the troubleshooting section above
 
 ## Roadmap
 
 Planned features for future releases:
-- 📱 Mobile app (React Native)
 - 🎯 Deck recommendations and suggestions
 - 📈 Price history tracking and alerts
-- 🤝 Deck collaboration and comments
 - 🏆 Tournament tracking
 - 📊 Advanced deck analytics
-- 🔄 Archidekt integration
 - 🎲 Goldfish playtesting
 
 ---

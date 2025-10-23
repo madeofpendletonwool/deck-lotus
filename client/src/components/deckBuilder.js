@@ -5,6 +5,7 @@ import { showCardDetail } from './cards.js';
 let currentDeck = null;
 let currentDeckId = null;
 let searchTimeout = null;
+let currentFilter = { cmc: null, color: null }; // Filter state for deck cards
 
 export function setupDeckBuilder() {
   const cardSearch = document.getElementById('card-search');
@@ -323,8 +324,21 @@ function renderDeckCards() {
   const mainboard = document.getElementById('mainboard');
   const sideboard = document.getElementById('sideboard');
 
-  const mainboardCards = currentDeck.cards.filter(c => !c.is_sideboard);
-  const sideboardCards = currentDeck.cards.filter(c => c.is_sideboard);
+  let mainboardCards = currentDeck.cards.filter(c => !c.is_sideboard);
+  let sideboardCards = currentDeck.cards.filter(c => c.is_sideboard);
+
+  // Apply filters
+  const hasFilter = currentFilter.cmc !== null || currentFilter.color !== null;
+
+  if (currentFilter.cmc !== null) {
+    mainboardCards = mainboardCards.filter(c => calculateActualCMC(c) === currentFilter.cmc);
+    sideboardCards = sideboardCards.filter(c => calculateActualCMC(c) === currentFilter.cmc);
+  }
+
+  if (currentFilter.color !== null) {
+    mainboardCards = mainboardCards.filter(c => c.colors === currentFilter.color);
+    sideboardCards = sideboardCards.filter(c => c.colors === currentFilter.color);
+  }
 
   // Update counts
   const mainboardTotal = mainboardCards.reduce((sum, c) => sum + c.quantity, 0);
@@ -332,6 +346,31 @@ function renderDeckCards() {
 
   document.getElementById('mainboard-count').textContent = mainboardTotal;
   document.getElementById('sideboard-count').textContent = sideboardTotal;
+
+  // Add/update clear filter button
+  let clearFilterBtn = document.getElementById('clear-filter-btn');
+  if (!clearFilterBtn) {
+    clearFilterBtn = document.createElement('button');
+    clearFilterBtn.id = 'clear-filter-btn';
+    clearFilterBtn.className = 'btn btn-secondary btn-sm';
+    clearFilterBtn.innerHTML = '<i class="ph ph-x"></i> Clear Filter';
+    clearFilterBtn.style.marginLeft = 'auto';
+
+    clearFilterBtn.addEventListener('click', () => {
+      currentFilter.cmc = null;
+      currentFilter.color = null;
+      renderDeckCards();
+      // Re-render stats to clear highlighted segments
+      loadDeckStats();
+    });
+
+    // Insert into tabs container
+    const tabsContainer = document.querySelector('.deck-tabs');
+    tabsContainer.insertBefore(clearFilterBtn, tabsContainer.querySelector('.deck-view-controls'));
+  }
+
+  // Show/hide clear filter button
+  clearFilterBtn.style.display = hasFilter ? 'inline-flex' : 'none';
 
   mainboard.innerHTML = renderCardsList(mainboardCards);
   sideboard.innerHTML = renderCardsList(sideboardCards);
@@ -993,29 +1032,148 @@ async function showCardModal(printingId) {
   }
 }
 
-function renderStats(stats) {
-  // Render mana curve as single segmented bar
-  const manaCurve = document.getElementById('mana-curve');
-  const totalCards = stats.manaCurve.reduce((sum, item) => sum + item.total_cards, 0);
+// Helper function to calculate actual CMC from mana cost string
+// Handles DFC/split cards where stored CMC might be combined
+function calculateActualCMC(card) {
+  // If card has // in name (DFC or split card), calculate from mana_cost
+  if (card.name && card.name.includes(' // ') && card.mana_cost) {
+    // Parse mana cost like {3}{U}{U} -> 3 + 1 + 1 = 5
+    const cost = card.mana_cost;
+    let cmc = 0;
 
-  if (totalCards === 0) {
+    // Match all mana symbols
+    const symbols = cost.match(/\{[^}]+\}/g) || [];
+    for (const symbol of symbols) {
+      const inner = symbol.slice(1, -1); // Remove { }
+
+      // Check if it's a number
+      if (/^\d+$/.test(inner)) {
+        cmc += parseInt(inner);
+      } else if (inner === 'X') {
+        // X counts as 0 for CMC purposes
+        cmc += 0;
+      } else {
+        // Any other symbol (W, U, B, R, G, C, hybrid, phyrexian, etc.) counts as 1
+        cmc += 1;
+      }
+    }
+
+    return cmc;
+  }
+
+  // For normal cards, use stored CMC
+  return card.cmc || 0;
+}
+
+function renderStats(stats) {
+  // Calculate statistics for mana values
+  const mainboardCards = currentDeck.cards.filter(c => !c.is_sideboard);
+  const totalCards = mainboardCards.reduce((sum, c) => sum + c.quantity, 0);
+
+  // Use calculated CMC for accurate totals
+  const totalManaValue = mainboardCards.reduce((sum, c) => {
+    const actualCMC = calculateActualCMC(c);
+    return sum + (actualCMC * c.quantity);
+  }, 0);
+
+  // Calculate with lands
+  const avgWithLands = totalCards > 0 ? (totalManaValue / totalCards).toFixed(2) : 0;
+
+  // Calculate without lands
+  const nonLandCards = mainboardCards.filter(c => !c.type_line || !c.type_line.includes('Land'));
+  const nonLandTotal = nonLandCards.reduce((sum, c) => sum + c.quantity, 0);
+  const nonLandManaValue = nonLandCards.reduce((sum, c) => {
+    const actualCMC = calculateActualCMC(c);
+    return sum + (actualCMC * c.quantity);
+  }, 0);
+  const avgWithoutLands = nonLandTotal > 0 ? (nonLandManaValue / nonLandTotal).toFixed(2) : 0;
+
+  // Calculate median with lands
+  const allCmcValues = [];
+  mainboardCards.forEach(c => {
+    const actualCMC = calculateActualCMC(c);
+    for (let i = 0; i < c.quantity; i++) {
+      allCmcValues.push(actualCMC);
+    }
+  });
+  allCmcValues.sort((a, b) => a - b);
+  const medianWithLands = allCmcValues.length > 0
+    ? allCmcValues.length % 2 === 0
+      ? ((allCmcValues[allCmcValues.length / 2 - 1] + allCmcValues[allCmcValues.length / 2]) / 2)
+      : allCmcValues[Math.floor(allCmcValues.length / 2)]
+    : 0;
+
+  // Calculate median without lands
+  const nonLandCmcValues = [];
+  nonLandCards.forEach(c => {
+    const actualCMC = calculateActualCMC(c);
+    for (let i = 0; i < c.quantity; i++) {
+      nonLandCmcValues.push(actualCMC);
+    }
+  });
+  nonLandCmcValues.sort((a, b) => a - b);
+  const medianWithoutLands = nonLandCmcValues.length > 0
+    ? nonLandCmcValues.length % 2 === 0
+      ? ((nonLandCmcValues[nonLandCmcValues.length / 2 - 1] + nonLandCmcValues[nonLandCmcValues.length / 2]) / 2)
+      : nonLandCmcValues[Math.floor(nonLandCmcValues.length / 2)]
+    : 0;
+
+  // Render mana curve chart
+  const manaCurve = document.getElementById('mana-curve');
+  const totalCurveCards = stats.manaCurve.reduce((sum, item) => sum + item.total_cards, 0);
+
+  if (totalCurveCards === 0) {
     manaCurve.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 2rem;">No cards in deck</div>';
   } else {
+    // Determine which values need overflow labels (less than 5% of total)
+    const overflowThreshold = 0.05;
+
     manaCurve.innerHTML = `
-      <div class="mana-curve-single-bar">
-        ${stats.manaCurve.map(item => {
-          const percentage = (item.total_cards / totalCards) * 100;
-          const cmcColor = getCMCColor(item.cmc);
-          return `
-            <div class="mana-curve-segment"
-                 style="width: ${percentage}%; background: ${cmcColor};"
-                 title="${item.cmc} CMC: ${item.total_cards} cards (${percentage.toFixed(1)}%)">
-              <span class="mana-curve-segment-label">${item.cmc}</span>
-            </div>
-          `;
-        }).join('')}
+      <div class="mana-curve-container" style="padding-top: 2rem; position: relative;">
+        <div class="mana-curve-single-bar" style="overflow: visible;">
+          ${stats.manaCurve.map(item => {
+            const percentage = (item.total_cards / totalCurveCards) * 100;
+            const cmcColor = getCMCColor(item.cmc);
+            const needsOverflow = percentage < (overflowThreshold * 100);
+            const isFiltered = currentFilter.cmc === item.cmc;
+
+            return `
+              <div class="mana-curve-segment ${isFiltered ? 'filtered' : ''}"
+                   data-cmc="${item.cmc}"
+                   style="width: ${percentage}%; background: ${cmcColor}; cursor: pointer; position: relative; ${needsOverflow ? 'overflow: visible;' : ''}"
+                   title="${item.cmc} CMC: ${item.total_cards} cards (${percentage.toFixed(1)}%)">
+                ${needsOverflow ? `
+                  <span class="mana-curve-overflow-label" style="position: absolute; bottom: calc(100% + 0.25rem); left: 50%; transform: translateX(-50%); font-size: 0.75rem; font-weight: 600; white-space: nowrap; padding: 0.25rem 0.5rem; background: ${cmcColor}; border-radius: 4px; color: white; text-shadow: 0 1px 2px rgba(0,0,0,0.5); z-index: 10;">${item.cmc}</span>
+                ` : `
+                  <span class="mana-curve-segment-label">${item.cmc}</span>
+                `}
+              </div>
+            `;
+          }).join('')}
+        </div>
+        <div class="mana-stats" style="margin-top: 1rem; padding: 1rem; background: var(--bg-tertiary); border-radius: 8px; font-size: 0.875rem; line-height: 1.6;">
+          <div>The average mana value of your main deck is <strong>${avgWithLands}</strong> with lands and <strong>${avgWithoutLands}</strong> without lands.</div>
+          <div style="margin-top: 0.25rem;">The median mana value of your main deck is <strong>${medianWithLands}</strong> with lands and <strong>${medianWithoutLands}</strong> without lands.</div>
+          <div style="margin-top: 0.25rem;">This deck's total mana value is <strong>${totalManaValue}</strong>.</div>
+        </div>
       </div>
     `;
+
+    // Add click handlers for filtering
+    manaCurve.querySelectorAll('.mana-curve-segment').forEach(segment => {
+      segment.addEventListener('click', () => {
+        const cmc = parseInt(segment.dataset.cmc);
+        if (currentFilter.cmc === cmc) {
+          // Clear filter if clicking the same CMC
+          currentFilter.cmc = null;
+        } else {
+          currentFilter.cmc = cmc;
+          currentFilter.color = null; // Clear color filter when CMC is selected
+        }
+        renderDeckCards();
+        renderStats(stats); // Re-render to update highlighted segment
+      });
+    });
   }
 
   // Render type distribution as simple list
@@ -1046,11 +1204,13 @@ function renderStats(stats) {
     const percentage = totalColorCards > 0 ? ((item.total_cards / totalColorCards) * 100).toFixed(1) : 0;
     const colorIcons = formatColorIcons(item.colors);
     const colorBg = getColorBackground(item.colors);
+    const isFiltered = currentFilter.color === item.colors;
+
     return `
-      <div class="chart-bar" title="${item.total_cards} cards (${percentage}%)">
+      <div class="chart-bar ${isFiltered ? 'filtered' : ''}" title="${item.total_cards} cards (${percentage}%)" data-colors="${item.colors || ''}" style="cursor: pointer;">
         <div class="chart-label color-label">${colorIcons}</div>
         <div class="chart-bar-container">
-          <div class="chart-bar-fill" style="width: ${width}%; background: ${colorBg};">
+          <div class="chart-bar-fill" style="width: ${width}%; background: ${colorBg}; ${isFiltered ? 'box-shadow: 0 0 0 3px var(--primary);' : ''}">
             <span class="chart-value">${item.total_cards}</span>
           </div>
           <span class="chart-percentage">${percentage}%</span>
@@ -1058,6 +1218,22 @@ function renderStats(stats) {
       </div>
     `;
   }).join('');
+
+  // Add click handlers for color filtering
+  colorDistribution.querySelectorAll('.chart-bar').forEach(bar => {
+    bar.addEventListener('click', () => {
+      const colors = bar.dataset.colors;
+      if (currentFilter.color === colors) {
+        // Clear filter if clicking the same color
+        currentFilter.color = null;
+      } else {
+        currentFilter.color = colors;
+        currentFilter.cmc = null; // Clear CMC filter when color is selected
+      }
+      renderDeckCards();
+      renderStats(stats); // Re-render to update highlighted bar
+    });
+  });
 }
 
 function getCMCColor(cmc) {
@@ -1086,8 +1262,13 @@ function getTypeColor(type) {
 function formatColorIcons(colors) {
   if (!colors) return '<i class="ms ms-c ms-cost"></i>'; // Colorless
 
-  // Split individual color letters and create mana icons
-  return colors.split('').map(color => {
+  // Parse colors - handle both single string (e.g., "WU") and comma-separated (e.g., "W,U")
+  const colorArray = colors.includes(',')
+    ? colors.split(',').map(c => c.trim()).filter(c => c.length > 0)
+    : colors.split('').filter(c => c.trim().length > 0);
+
+  // Create mana icons for each valid color
+  return colorArray.map(color => {
     const colorLower = color.toLowerCase();
     return `<i class="ms ms-${colorLower} ms-cost ms-cost-shadow"></i>`;
   }).join('');

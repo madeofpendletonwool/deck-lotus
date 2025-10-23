@@ -65,8 +65,8 @@ function parseCardLine(line) {
   let collectorNumber = null;
   let cardName = remainder;
 
-  // Moxfield format: "Card Name (SET) 123"
-  const moxfieldMatch = remainder.match(/^(.+?)\s*\(([A-Z0-9]+)\)\s*(\d+)?$/i);
+  // Moxfield format: "Card Name (SET) 123" or "Card Name (SET) ABC-123"
+  const moxfieldMatch = remainder.match(/^(.+?)\s*\(([A-Z0-9]+)\)\s*([A-Z0-9\-]+)?$/i);
   if (moxfieldMatch) {
     cardName = moxfieldMatch[1].trim();
     setCode = moxfieldMatch[2].toUpperCase();
@@ -90,9 +90,22 @@ function parseCardLine(line) {
 }
 
 /**
+ * Normalize card name for database lookup
+ * Handles DFC (double-faced card) separator differences between sources
+ */
+function normalizeCardName(name) {
+  // Convert single slash with spaces to double slash (Moxfield -> MTGJSON format)
+  // Example: "Kefka, Court Mage / Kefka, Ruler of Ruin" -> "Kefka, Court Mage // Kefka, Ruler of Ruin"
+  return name.replace(/\s\/\s/g, ' // ');
+}
+
+/**
  * Find card in database by name and optional set/collector number
  */
 export function findCard(name, setCode = null, collectorNumber = null) {
+  // Normalize the card name for consistent matching
+  const normalizedName = normalizeCardName(name);
+
   // Try exact match with set and collector number
   if (setCode && collectorNumber) {
     const card = db.get(
@@ -101,9 +114,20 @@ export function findCard(name, setCode = null, collectorNumber = null) {
        JOIN printings p ON c.id = p.card_id
        WHERE c.name = ? AND p.set_code = ? AND p.collector_number = ?
        LIMIT 1`,
-      [name, setCode, collectorNumber]
+      [normalizedName, setCode, collectorNumber]
     );
     if (card) return card;
+
+    // Fallback: Try matching as front face of DFC with set and collector number
+    const dfcCard = db.get(
+      `SELECT c.id, c.name, p.id as printing_id, p.set_code, p.collector_number
+       FROM cards c
+       JOIN printings p ON c.id = p.card_id
+       WHERE c.name LIKE ? AND p.set_code = ? AND p.collector_number = ?
+       LIMIT 1`,
+      [normalizedName + ' //%', setCode, collectorNumber]
+    );
+    if (dfcCard) return dfcCard;
   }
 
   // Try match with set only
@@ -114,9 +138,20 @@ export function findCard(name, setCode = null, collectorNumber = null) {
        JOIN printings p ON c.id = p.card_id
        WHERE c.name = ? AND p.set_code = ?
        LIMIT 1`,
-      [name, setCode]
+      [normalizedName, setCode]
     );
     if (card) return card;
+
+    // Fallback: Try matching as front face of DFC with set only
+    const dfcCard = db.get(
+      `SELECT c.id, c.name, p.id as printing_id, p.set_code, p.collector_number
+       FROM cards c
+       JOIN printings p ON c.id = p.card_id
+       WHERE c.name LIKE ? AND p.set_code = ?
+       LIMIT 1`,
+      [normalizedName + ' //%', setCode]
+    );
+    if (dfcCard) return dfcCard;
   }
 
   // Fall back to name-only search
@@ -126,10 +161,21 @@ export function findCard(name, setCode = null, collectorNumber = null) {
      JOIN printings p ON c.id = p.card_id
      WHERE c.name = ?
      LIMIT 1`,
-    [name]
+    [normalizedName]
+  );
+  if (card) return card;
+
+  // Final fallback: Try matching as front face of DFC (name only)
+  const dfcCard = db.get(
+    `SELECT c.id, c.name, p.id as printing_id, p.set_code, p.collector_number
+     FROM cards c
+     JOIN printings p ON c.id = p.card_id
+     WHERE c.name LIKE ?
+     LIMIT 1`,
+    [normalizedName + ' //%']
   );
 
-  return card;
+  return dfcCard;
 }
 
 /**

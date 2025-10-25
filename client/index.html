@@ -222,7 +222,10 @@
 
           <!-- Stats Panel -->
           <div class="stats-panel">
-            <h3>Deck Statistics</h3>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+              <h3 style="margin: 0;">Deck Statistics</h3>
+              <button id="check-legality-btn" class="btn btn-primary btn-sm">Check Legality</button>
+            </div>
             <div id="deck-stats">
               <div class="stat-section">
                 <h4>Mana Curve</h4>
@@ -238,6 +241,21 @@
               </div>
             </div>
           </div>
+        </div>
+
+        <!-- Example Hand Section -->
+        <div class="example-hand-section" style="background: var(--bg-secondary); border-radius: 1rem; padding: 1.5rem; margin-top: 1.5rem;">
+          <h3 style="margin-bottom: 1rem;">Example Hand</h3>
+          <div id="example-hand" class="example-hand-grid"></div>
+          <div class="example-hand-controls" style="display: flex; gap: 0.5rem; margin-top: 1rem;">
+            <button id="draw-card-btn" class="btn btn-secondary" style="flex: 1;">
+              <i class="ph ph-plus"></i> Draw
+            </button>
+            <button id="deal-hand-btn" class="btn btn-primary" style="flex: 1;">
+              <i class="ph ph-shuffle"></i> Deal New Hand
+            </button>
+          </div>
+          <div id="hand-stats" style="margin-top: 1rem; padding: 0.75rem; background: var(--bg-tertiary); border-radius: 0.5rem; text-align: center; font-size: 0.875rem; color: var(--text-secondary);"></div>
         </div>
       </div>
     </div>
@@ -566,6 +584,20 @@
         <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
           <button id="clear-set-selection" class="btn btn-secondary">Clear All</button>
           <button id="apply-set-filter" class="btn btn-primary" style="flex: 1;">Apply Filters</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Legality Check Modal -->
+    <div id="legality-check-modal" class="modal hidden">
+      <div class="modal-content" style="max-width: 700px;">
+        <span class="modal-close" id="legality-modal-close">&times;</span>
+        <h2 style="margin-bottom: 1.5rem;">Check Deck Legality</h2>
+        <div id="format-selection" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 0.75rem;">
+          <!-- Format buttons will be populated here -->
+        </div>
+        <div id="legality-results" class="hidden" style="margin-top: 2rem;">
+          <!-- Results will be displayed here -->
         </div>
       </div>
     </div>

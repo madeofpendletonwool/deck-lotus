@@ -520,3 +520,71 @@ export function importSharedDeck(shareToken, userId) {
 
   return getDeckById(newDeck.id, userId);
 }
+
+/**
+ * Check deck legality for a specific format
+ */
+export function checkDeckLegality(deckId, userId, format) {
+  // Verify deck ownership
+  const deck = db.get(
+    `SELECT id FROM decks WHERE id = ? AND user_id = ?`,
+    [deckId, userId]
+  );
+
+  if (!deck) {
+    throw new Error('Deck not found or access denied');
+  }
+
+  // Get all unique cards in the mainboard with their legalities
+  const cards = db.all(
+    `SELECT DISTINCT
+      c.id,
+      c.name,
+      c.legalities,
+      c.type_line,
+      p.image_url,
+      SUM(dc.quantity) as total_quantity
+     FROM deck_cards dc
+     JOIN printings p ON dc.printing_id = p.id
+     JOIN cards c ON p.card_id = c.id
+     WHERE dc.deck_id = ? AND dc.is_sideboard = 0
+     GROUP BY c.id
+     ORDER BY c.name`,
+    [deckId]
+  );
+
+  const illegalCards = [];
+
+  for (const card of cards) {
+    if (!card.legalities) continue;
+
+    try {
+      const legalities = JSON.parse(card.legalities);
+      const status = legalities[format];
+
+      // Card is illegal if: not in format (null/undefined), banned, or restricted
+      if (!status || status === 'null' || status === 'Banned' || status === 'Restricted') {
+        illegalCards.push({
+          id: card.id,
+          name: card.name,
+          type_line: card.type_line,
+          image_url: card.image_url,
+          quantity: card.total_quantity,
+          status: status || 'Not Legal',
+          reason: status === 'Banned' ? 'Banned' :
+                  status === 'Restricted' ? 'Restricted' :
+                  'Not legal in this format'
+        });
+      }
+    } catch (e) {
+      console.error(`Error parsing legalities for card ${card.name}:`, e);
+    }
+  }
+
+  return {
+    format,
+    isLegal: illegalCards.length === 0,
+    illegalCardCount: illegalCards.length,
+    illegalCards
+  };
+}

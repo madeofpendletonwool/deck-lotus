@@ -503,12 +503,6 @@ input[type="number"] {
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
 }
 
-@media (max-width: 1200px) {
-  .card-preview {
-    display: none;
-  }
-}
-
 /* Search Panel Row - Full Width */
 .search-panel-row {
   background: var(--bg-secondary);
@@ -1011,7 +1005,7 @@ button.btn-icon.active {
 
 .cards-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(max(150px, calc(50% - 0.5rem)), 1fr));
   gap: 1rem;
 }
 
@@ -1958,4 +1952,66 @@ button.btn-icon.active {
 .btn-sm {
   padding: 0.5rem 1rem;
   font-size: 0.813rem;
+}
+
+/* Example Hand */
+.example-hand-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 0.75rem;
+  min-height: 120px;
+  padding: 1rem;
+  background: var(--bg-tertiary);
+  border-radius: 0.5rem;
+  justify-items: center;
+}
+
+.example-hand-card {
+  position: relative;
+  cursor: pointer;
+  transition: all 0.2s;
+  border-radius: 6px;
+  overflow: hidden;
+  aspect-ratio: 5/7;
+  width: 100%;
+  max-width: 150px;
+}
+
+.example-hand-card img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+.example-hand-card:hover {
+  transform: translateY(-4px) scale(1.05);
+  z-index: 10;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+}
+
+.example-hand-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  text-align: center;
+  padding: 2rem;
+}
+
+@media (max-width: 768px) {
+  .example-hand-grid {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.5rem;
+  }
+
+  .example-hand-card {
+    max-width: 100px;
+  }
+
+  .example-hand-section {
+    margin-top: 1rem !important;
+  }
 }

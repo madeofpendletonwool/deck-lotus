@@ -6,6 +6,7 @@ let currentDeck = null;
 let currentDeckId = null;
 let searchTimeout = null;
 let currentFilter = { cmc: null, color: null }; // Filter state for deck cards
+let exampleHand = []; // Current example hand
 
 export function setupDeckBuilder() {
   const cardSearch = document.getElementById('card-search');
@@ -191,11 +192,34 @@ export function setupDeckBuilder() {
     }
   });
 
+  // Check Legality button
+  document.getElementById('check-legality-btn').addEventListener('click', () => {
+    if (!currentDeck || !currentDeck.cards || currentDeck.cards.length === 0) {
+      showToast('Add some cards first', 'warning');
+      return;
+    }
+    showLegalityModal();
+  });
+
+  // Legality modal close
+  document.getElementById('legality-modal-close').addEventListener('click', () => {
+    document.getElementById('legality-check-modal').classList.add('hidden');
+  });
+
   // Listen for open deck event
   window.addEventListener('open-deck', async (e) => {
     const { deckId } = e.detail;
     await loadDeck(deckId);
     showDeckBuilder();
+  });
+
+  // Example Hand buttons
+  document.getElementById('deal-hand-btn').addEventListener('click', () => {
+    dealExampleHand();
+  });
+
+  document.getElementById('draw-card-btn').addEventListener('click', () => {
+    drawCard();
   });
 }
 
@@ -225,6 +249,9 @@ async function loadDeck(deckId) {
     currentDeck = result.deck;
     currentDeckId = deckId;
 
+    // Clear previous example hand
+    exampleHand = [];
+
     // Populate deck info
     document.getElementById('deck-name').value = currentDeck.name;
     document.getElementById('deck-format').value = currentDeck.format || '';
@@ -234,6 +261,9 @@ async function loadDeck(deckId) {
 
     // Load and render stats
     await loadDeckStats();
+
+    // Auto-deal example hand
+    dealExampleHand();
 
     hideLoading();
   } catch (error) {
@@ -1304,4 +1334,255 @@ function adjustBrightness(color, amount) {
   const g = Math.max(0, Math.min(255, ((num >> 8) & 0x00FF) + amount));
   const b = Math.max(0, Math.min(255, (num & 0x0000FF) + amount));
   return `#${(1 << 24 | r << 16 | g << 8 | b).toString(16).slice(1)}`;
+}
+
+function showLegalityModal() {
+  const modal = document.getElementById('legality-check-modal');
+  const formatSelection = document.getElementById('format-selection');
+  const resultsDiv = document.getElementById('legality-results');
+
+  // Reset modal
+  resultsDiv.classList.add('hidden');
+  resultsDiv.innerHTML = '';
+
+  // Define all formats with their labels
+  const formats = {
+    standard: 'Standard',
+    pioneer: 'Pioneer',
+    modern: 'Modern',
+    legacy: 'Legacy',
+    vintage: 'Vintage',
+    commander: 'Commander',
+    brawl: 'Brawl',
+    historic: 'Historic',
+    timeless: 'Timeless',
+    pauper: 'Pauper',
+    penny: 'Penny Dreadful',
+    alchemy: 'Alchemy',
+    explorer: 'Explorer',
+    oathbreaker: 'Oathbreaker',
+    standardbrawl: 'Standard Brawl',
+    paupercommander: 'Pauper Commander',
+    duel: 'Duel Commander',
+    oldschool: 'Old School',
+    premodern: 'Premodern',
+    predh: 'Pre-EDH',
+    gladiator: 'Gladiator',
+    future: 'Future'
+  };
+
+  // Render format buttons
+  formatSelection.innerHTML = Object.entries(formats).map(([key, label]) => `
+    <button class="btn btn-secondary format-check-btn" data-format="${key}">
+      ${label}
+    </button>
+  `).join('');
+
+  // Add click handlers for format buttons
+  formatSelection.querySelectorAll('.format-check-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const format = btn.dataset.format;
+      await checkFormatLegality(format, formats[format]);
+    });
+  });
+
+  modal.classList.remove('hidden');
+}
+
+async function checkFormatLegality(format, formatLabel) {
+  const resultsDiv = document.getElementById('legality-results');
+
+  try {
+    showLoading();
+    const result = await api.checkDeckLegality(currentDeckId, format);
+    hideLoading();
+
+    // Display results
+    resultsDiv.innerHTML = `
+      <h3>${formatLabel} Legality</h3>
+      <div style="padding: 1rem; background: ${result.isLegal ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)'}; border-radius: 8px; margin: 1rem 0;">
+        <div style="font-size: 1.1rem; font-weight: 600; color: ${result.isLegal ? '#10b981' : '#ef4444'};">
+          ${result.isLegal ? '✓' : '✗'} ${result.isLegal ? 'This deck is legal for ' + formatLabel : 'This deck is not legal for ' + formatLabel}
+        </div>
+        ${!result.isLegal ? `
+          <div style="margin-top: 0.5rem; color: var(--text-secondary);">
+            There ${result.illegalCardCount === 1 ? 'is' : 'are'} ${result.illegalCardCount} card${result.illegalCardCount === 1 ? '' : 's'} that ${result.illegalCardCount === 1 ? 'isn\'t' : 'aren\'t'} legal.
+          </div>
+        ` : ''}
+      </div>
+
+      ${result.illegalCards && result.illegalCards.length > 0 ? `
+        <h4 style="margin-top: 1.5rem; margin-bottom: 0.75rem;">Illegal Cards:</h4>
+        <div style="display: grid; gap: 0.75rem;">
+          ${result.illegalCards.map(card => `
+            <div style="padding: 0.75rem; background: var(--bg-tertiary); border-radius: 6px; display: flex; gap: 1rem; align-items: center; border-left: 3px solid #ef4444;">
+              ${card.image_url ? `
+                <img src="${card.image_url}" alt="${card.name}" style="width: 50px; height: 70px; border-radius: 4px; object-fit: cover;">
+              ` : ''}
+              <div style="flex: 1;">
+                <div style="font-weight: 600;">${card.name}</div>
+                <div style="font-size: 0.875rem; color: var(--text-secondary); margin-top: 0.25rem;">${card.type_line || ''}</div>
+                <div style="font-size: 0.875rem; color: #ef4444; margin-top: 0.25rem; font-weight: 500;">
+                  ${card.reason}
+                </div>
+              </div>
+              <div style="text-align: right; color: var(--text-secondary);">
+                Qty: ${card.quantity}
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      ` : ''}
+    `;
+
+    resultsDiv.classList.remove('hidden');
+  } catch (error) {
+    hideLoading();
+    showToast('Failed to check legality: ' + error.message, 'error');
+  }
+}
+
+// Example Hand Functions
+function dealExampleHand() {
+  if (!currentDeck || !currentDeck.cards || currentDeck.cards.length === 0) {
+    showToast('Add cards to your deck first', 'warning');
+    return;
+  }
+
+  // Get mainboard cards only
+  const mainboardCards = currentDeck.cards.filter(c => !c.is_sideboard);
+  if (mainboardCards.length === 0) {
+    showToast('Add cards to your mainboard first', 'warning');
+    return;
+  }
+
+  // Create a pool of cards based on quantities
+  const cardPool = [];
+  mainboardCards.forEach(card => {
+    for (let i = 0; i < card.quantity; i++) {
+      cardPool.push(card);
+    }
+  });
+
+  // Shuffle and draw 7 cards
+  const shuffled = cardPool.sort(() => Math.random() - 0.5);
+  exampleHand = shuffled.slice(0, Math.min(7, shuffled.length));
+
+  renderExampleHand();
+  updateHandStats();
+}
+
+function drawCard() {
+  if (!currentDeck || !currentDeck.cards || currentDeck.cards.length === 0) {
+    showToast('Add cards to your deck first', 'warning');
+    return;
+  }
+
+  // Get mainboard cards only
+  const mainboardCards = currentDeck.cards.filter(c => !c.is_sideboard);
+  if (mainboardCards.length === 0) {
+    showToast('Add cards to your mainboard first', 'warning');
+    return;
+  }
+
+  // Create a pool of cards based on quantities, excluding cards already in hand
+  const cardPool = [];
+  mainboardCards.forEach(card => {
+    const inHandCount = exampleHand.filter(c => c.deck_card_id === card.deck_card_id).length;
+    const remaining = card.quantity - inHandCount;
+    for (let i = 0; i < remaining; i++) {
+      cardPool.push(card);
+    }
+  });
+
+  if (cardPool.length === 0) {
+    showToast('No more cards to draw!', 'warning');
+    return;
+  }
+
+  // Draw a random card from the pool
+  const randomCard = cardPool[Math.floor(Math.random() * cardPool.length)];
+  exampleHand.push(randomCard);
+
+  renderExampleHand();
+  showToast('Card drawn!', 'success', 1500);
+}
+
+function renderExampleHand() {
+  const handContainer = document.getElementById('example-hand');
+
+  if (exampleHand.length === 0) {
+    handContainer.innerHTML = '<div class="example-hand-empty">Click "Deal New Hand" to draw 7 random cards from your deck</div>';
+    return;
+  }
+
+  handContainer.innerHTML = exampleHand.map((card, index) => `
+    <div class="example-hand-card" data-card-index="${index}" data-printing-id="${card.printing_id}" data-card-id="${card.card_id}">
+      <img src="${card.image_url}" alt="${card.name}" onerror="this.style.display='none'">
+    </div>
+  `).join('');
+
+  // Add click handlers for card modal and hover preview
+  handContainer.querySelectorAll('.example-hand-card').forEach(cardEl => {
+    // Click to show modal
+    cardEl.addEventListener('click', async () => {
+      const cardId = cardEl.dataset.cardId;
+      if (cardId) {
+        await showCardDetail(cardId);
+      }
+    });
+
+    // Hover preview
+    cardEl.addEventListener('mouseenter', (e) => {
+      const img = cardEl.querySelector('img');
+      if (img && img.src) {
+        showCardPreview(img.src, e);
+      }
+    });
+
+    cardEl.addEventListener('mouseleave', () => {
+      hideCardPreview();
+    });
+  });
+}
+
+function updateHandStats() {
+  const statsContainer = document.getElementById('hand-stats');
+
+  if (!currentDeck || !currentDeck.cards || currentDeck.cards.length === 0) {
+    statsContainer.innerHTML = '';
+    return;
+  }
+
+  // Get mainboard cards only
+  const mainboardCards = currentDeck.cards.filter(c => !c.is_sideboard);
+  if (mainboardCards.length === 0) {
+    statsContainer.innerHTML = '';
+    return;
+  }
+
+  // Count total lands and total cards in deck
+  let totalLands = 0;
+  let totalCards = 0;
+
+  mainboardCards.forEach(card => {
+    const isLand = card.type_line && card.type_line.includes('Land');
+    totalCards += card.quantity;
+    if (isLand) {
+      totalLands += card.quantity;
+    }
+  });
+
+  if (totalCards === 0) {
+    statsContainer.innerHTML = '';
+    return;
+  }
+
+  // Calculate expected lands in a 7-card opening hand using hypergeometric distribution
+  // Expected value = n * K / N
+  // where n = hand size (7), K = lands in deck, N = total cards
+  const handSize = 7;
+  const expectedLands = (handSize * totalLands / totalCards).toFixed(2);
+
+  statsContainer.innerHTML = `Average number of lands in opening hand: <strong>${expectedLands}</strong>`;
 }

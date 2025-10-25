@@ -199,6 +199,10 @@ class ApiClient {
     });
   }
 
+  async checkDeckLegality(deckId, format) {
+    return this.request(`/decks/${deckId}/legality/${format}`);
+  }
+
   // Set methods
   async getSets() {
     return this.request('/sets');

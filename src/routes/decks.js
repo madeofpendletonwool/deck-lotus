@@ -13,6 +13,7 @@ import {
   getDeckByShareToken,
   deleteDeckShare,
   importSharedDeck,
+  checkDeckLegality,
 } from '../services/deckService.js';
 import { getDeckPrice } from '../services/pricingService.js';
 import { parseDeckList, importDeck } from '../services/importService.js';
@@ -315,6 +316,22 @@ router.post('/share/:token/import', authenticate, (req, res, next) => {
       deck,
       message: 'Deck imported successfully'
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * GET /api/decks/:id/legality/:format
+ * Check deck legality for a specific format
+ */
+router.get('/:id/legality/:format', authenticate, (req, res, next) => {
+  try {
+    const deckId = parseInt(req.params.id);
+    const { format } = req.params;
+
+    const result = checkDeckLegality(deckId, req.user.id, format);
+    res.json(result);
   } catch (error) {
     next(error);
   }

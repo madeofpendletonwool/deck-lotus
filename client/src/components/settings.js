@@ -67,6 +67,7 @@ export function setupSettings() {
             <p>Successfully restored backup!</p>
             <ul style="text-align: left; margin: 1rem 0;">
               <li>Users: ${result.results.users}</li>
+              <li>Owned Cards: ${result.results.owned_cards || 0}</li>
               <li>Decks: ${result.results.decks}</li>
               <li>Deck Cards: ${result.results.deck_cards}</li>
               <li>API Keys: ${result.results.api_keys}</li>
@@ -165,16 +166,17 @@ async function checkAdminAndLoadUsers() {
     const backupSection = document.getElementById('backup-section');
     const databaseSection = document.getElementById('database-section');
 
+    // Backup section is available to all users (they can backup their own data)
+    if (backupSection) backupSection.style.display = 'block';
+
     if (profile.user.is_admin) {
       // User is an admin, show admin-only sections
       if (userManagementSection) userManagementSection.style.display = 'block';
-      if (backupSection) backupSection.style.display = 'block';
       if (databaseSection) databaseSection.style.display = 'block';
       await loadUsers();
     } else {
       // Hide admin-only sections for non-admins
       if (userManagementSection) userManagementSection.style.display = 'none';
-      if (backupSection) backupSection.style.display = 'none';
       if (databaseSection) databaseSection.style.display = 'none';
     }
   } catch (error) {

@@ -69,8 +69,12 @@ router.post('/refresh', (req, res, next) => {
       return res.status(401).json({ error: 'Invalid refresh token' });
     }
 
-    // Generate new tokens
-    const tokens = generateTokens({ userId: decoded.userId, username: decoded.username });
+    // Generate new tokens with isAdmin flag preserved
+    const tokens = generateTokens({
+      userId: decoded.userId,
+      username: decoded.username,
+      isAdmin: decoded.isAdmin || false
+    });
     res.json(tokens);
   } catch (error) {
     next(error);

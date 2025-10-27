@@ -632,7 +632,7 @@ async function main() {
 
     if (cardCount.count > 0 && forceReimport) {
       console.log(`\n⚠️  FORCE_REIMPORT=true detected`);
-      console.log(`Clearing existing MTGJSON data (preserving user decks)...`);
+      console.log(`Clearing existing MTGJSON data (preserving user data)...`);
 
       // STEP 1: Save user deck data using UUIDs (stable across imports)
       console.log('  📦 Backing up user deck data...');
@@ -642,6 +642,15 @@ async function main() {
         JOIN printings p ON dc.printing_id = p.id
       `).all();
       console.log(`  ✓ Backed up ${deckCardsBackup.length} deck card entries`);
+
+      // STEP 1b: Save owned cards data using card names (stable across imports)
+      console.log('  📦 Backing up owned cards data...');
+      const ownedCardsBackup = targetDb.prepare(`
+        SELECT oc.user_id, oc.quantity, c.name as card_name
+        FROM owned_cards oc
+        JOIN cards c ON oc.card_id = c.id
+      `).all();
+      console.log(`  ✓ Backed up ${ownedCardsBackup.length} owned card entries`);
 
       // STEP 2: Delete MTGJSON-sourced data in correct order (preserve user data)
       targetDb.prepare('DELETE FROM prices').run();
@@ -671,6 +680,7 @@ async function main() {
       // STEP 3: After import, restore deck data
       // We'll do this after importCards() completes
       targetDb._deckCardsBackup = deckCardsBackup;
+      targetDb._ownedCardsBackup = ownedCardsBackup;
     }
 
     // Import cards and sets
@@ -726,6 +736,54 @@ async function main() {
       console.log(`✓ Restored ${result.restored} deck card entries`);
       if (result.notFound > 0) {
         console.log(`  ⚠️  ${result.notFound} cards not found in new import (may have been removed from MTGJSON)`);
+      }
+    }
+
+    // STEP 5: Restore owned cards data if we backed it up
+    if (targetDb._ownedCardsBackup && targetDb._ownedCardsBackup.length > 0) {
+      console.log('\n🔄 Restoring owned cards data...');
+      const backup = targetDb._ownedCardsBackup;
+
+      const insertOwnedCard = targetDb.prepare(`
+        INSERT OR IGNORE INTO owned_cards (user_id, card_id, quantity)
+        VALUES (?, ?, ?)
+      `);
+
+      const getCardId = targetDb.prepare(`
+        SELECT id FROM cards WHERE name = ? LIMIT 1
+      `);
+
+      const restoreOwnedMany = targetDb.transaction((entries) => {
+        let restored = 0;
+        let notFound = 0;
+
+        for (const entry of entries) {
+          const card = getCardId.get(entry.card_name);
+          if (card) {
+            try {
+              insertOwnedCard.run(
+                entry.user_id,
+                card.id,
+                entry.quantity
+              );
+              restored++;
+            } catch (e) {
+              // Might fail if user was deleted, that's ok
+              notFound++;
+            }
+          } else {
+            // Card doesn't exist in new import (rare but possible)
+            notFound++;
+          }
+        }
+
+        return { restored, notFound };
+      });
+
+      const ownedResult = restoreOwnedMany(backup);
+      console.log(`✓ Restored ${ownedResult.restored} owned card entries`);
+      if (ownedResult.notFound > 0) {
+        console.log(`  ⚠️  ${ownedResult.notFound} cards not found in new import (may have been removed from MTGJSON)`);
       }
     }
 

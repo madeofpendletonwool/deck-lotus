@@ -9,7 +9,8 @@ let currentFilters = {
   sort: 'random',
   sets: [],
   cmcMin: null,
-  cmcMax: null
+  cmcMax: null,
+  onlyOwned: false
 };
 let allSets = [];
 
@@ -21,6 +22,7 @@ export function setupCards() {
   const cmcMinInput = document.getElementById('filter-cmc-min');
   const cmcMaxInput = document.getElementById('filter-cmc-max');
   const colorCheckboxes = document.querySelectorAll('#filter-colors input[type="checkbox"]');
+  const ownedCheckbox = document.getElementById('filter-owned');
   const prevBtn = document.getElementById('prev-page');
   const nextBtn = document.getElementById('next-page');
 
@@ -80,6 +82,13 @@ export function setupCards() {
       currentPage = 1;
       await loadCards();
     });
+  });
+
+  // Owned filter change
+  ownedCheckbox.addEventListener('change', async () => {
+    currentFilters.onlyOwned = ownedCheckbox.checked;
+    currentPage = 1;
+    await loadCards();
   });
 
   // Pagination
@@ -224,6 +233,7 @@ async function loadCards() {
       sets: currentFilters.sets.length > 0 ? currentFilters.sets.join(',') : undefined,
       cmcMin: currentFilters.cmcMin,
       cmcMax: currentFilters.cmcMax,
+      onlyOwned: currentFilters.onlyOwned,
       page: currentPage,
       limit: 50
     };
@@ -262,6 +272,9 @@ function renderCards(cards) {
              style="width: 100%; border-radius: 8px; margin-bottom: 0.5rem; pointer-events: none;">
       ` : ''}
       <button class="quick-add-btn" data-card-id="${card.id}" style="position: absolute; top: 8px; right: 8px; background: rgba(0,0,0,0.8); color: white; border: none; border-radius: 50%; width: 32px; height: 32px; cursor: pointer; font-size: 20px; display: flex; align-items: center; justify-content: center; z-index: 10;">+</button>
+      <button class="ownership-toggle-btn ${card.is_owned ? 'owned' : ''}" data-card-id="${card.id}" style="position: absolute; top: 8px; left: 8px; background: ${card.is_owned ? 'rgba(16, 185, 129, 0.9)' : 'rgba(0,0,0,0.8)'}; color: white; border: none; border-radius: 50%; width: 32px; height: 32px; cursor: pointer; font-size: 18px; display: flex; align-items: center; justify-content: center; z-index: 10;">
+        <i class="ph ${card.is_owned ? 'ph-check-circle' : 'ph-circle'}"></i>
+      </button>
       <div class="card-name" style="pointer-events: none;">${card.name}</div>
       <div class="card-mana" style="pointer-events: none;">${formatMana(card.mana_cost)}</div>
       <div class="card-type" style="pointer-events: none;">${card.type_line || ''}</div>
@@ -301,8 +314,39 @@ function renderCards(cards) {
     });
   });
 
+  // Ownership toggle handlers
+  cardsGrid.querySelectorAll('.ownership-toggle-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const cardId = btn.dataset.cardId;
+      await toggleCardOwnership(cardId, btn);
+    });
+  });
+
   // Setup drag and drop
   setupBrowseDragAndDrop();
+}
+
+async function toggleCardOwnership(cardId, buttonEl) {
+  try {
+    const result = await api.toggleCardOwnership(cardId);
+
+    // Update button appearance
+    if (result.owned) {
+      buttonEl.classList.add('owned');
+      buttonEl.style.background = 'rgba(16, 185, 129, 0.9)';
+      buttonEl.innerHTML = '<i class="ph ph-check-circle"></i>';
+      showToast('Added to collection', 'success', 1500);
+    } else {
+      buttonEl.classList.remove('owned');
+      buttonEl.style.background = 'rgba(0,0,0,0.8)';
+      buttonEl.innerHTML = '<i class="ph ph-circle"></i>';
+      showToast('Removed from collection', 'success', 1500);
+    }
+  } catch (error) {
+    showToast('Failed to update collection', 'error');
+    console.error('Toggle ownership error:', error);
+  }
 }
 
 function updatePagination(page, totalPages, total) {

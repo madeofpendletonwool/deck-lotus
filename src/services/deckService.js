@@ -74,13 +74,14 @@ export function getDeckById(deckId, userId) {
       c.oracle_text,
       c.power,
       c.toughness,
-      c.loyalty
+      c.loyalty,
+      (SELECT CASE WHEN oc.id IS NOT NULL THEN 1 ELSE 0 END FROM owned_cards oc WHERE oc.user_id = ? AND oc.card_id = c.id LIMIT 1) as is_owned
      FROM deck_cards dc
      JOIN printings p ON dc.printing_id = p.id
      JOIN cards c ON p.card_id = c.id
      WHERE dc.deck_id = ?
      ORDER BY dc.is_sideboard, c.cmc, c.name`,
-    [deckId]
+    [userId, deckId]
   );
 
   return {

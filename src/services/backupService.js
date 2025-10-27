@@ -43,6 +43,15 @@ export function createBackup(userId = null) {
     WHERE user_id IN (${userIdsStr})
   `).all();
 
+  // Backup owned cards (with card names for stability across imports)
+  backup.data.owned_cards = db.prepare(`
+    SELECT oc.id, oc.user_id, oc.quantity, oc.created_at, oc.updated_at,
+           c.name as card_name
+    FROM owned_cards oc
+    JOIN cards c ON oc.card_id = c.id
+    WHERE oc.user_id IN (${userIdsStr})
+  `).all();
+
   // Backup decks
   backup.data.decks = db.prepare(`
     SELECT id, user_id, name, format, description, created_at, updated_at
@@ -92,6 +101,7 @@ export function restoreBackup(backupData, options = {}) {
   const results = {
     users: 0,
     api_keys: 0,
+    owned_cards: 0,
     decks: 0,
     deck_cards: 0,
     deck_shares: 0,
@@ -117,6 +127,7 @@ export function restoreBackup(backupData, options = {}) {
     // If overwrite is enabled, delete existing data
     if (overwrite && userId) {
       db.prepare('DELETE FROM api_keys WHERE user_id = ?').run(userId);
+      db.prepare('DELETE FROM owned_cards WHERE user_id = ?').run(userId);
       db.prepare('DELETE FROM deck_cards WHERE deck_id IN (SELECT id FROM decks WHERE user_id = ?)').run(userId);
       db.prepare('DELETE FROM deck_shares WHERE deck_id IN (SELECT id FROM decks WHERE user_id = ?)').run(userId);
       db.prepare('DELETE FROM decks WHERE user_id = ?').run(userId);
@@ -126,6 +137,7 @@ export function restoreBackup(backupData, options = {}) {
       db.prepare('DELETE FROM deck_shares').run();
       db.prepare('DELETE FROM decks').run();
       db.prepare('DELETE FROM api_keys').run();
+      db.prepare('DELETE FROM owned_cards').run();
       db.prepare('DELETE FROM users').run();
     }
 
@@ -177,6 +189,40 @@ export function restoreBackup(backupData, options = {}) {
         results.api_keys++;
       } catch (e) {
         results.errors.push(`API key ${key.name}: ${e.message}`);
+      }
+    }
+
+    // Restore owned cards (using card names to find current card_ids)
+    const ownedCards = (backupData.data.owned_cards || []).filter(oc =>
+      restoredUserIds.includes(oc.user_id)
+    );
+
+    const getCardId = db.prepare(`
+      SELECT id FROM cards WHERE name = ? LIMIT 1
+    `);
+
+    const insertOwnedCard = db.prepare(`
+      INSERT OR REPLACE INTO owned_cards (user_id, card_id, quantity, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?)
+    `);
+
+    for (const ownedCard of ownedCards) {
+      try {
+        const card = getCardId.get(ownedCard.card_name);
+        if (card) {
+          insertOwnedCard.run(
+            ownedCard.user_id,
+            card.id,
+            ownedCard.quantity,
+            ownedCard.created_at,
+            ownedCard.updated_at
+          );
+          results.owned_cards++;
+        } else {
+          results.errors.push(`Card "${ownedCard.card_name}" not found in database`);
+        }
+      } catch (e) {
+        results.errors.push(`Owned card ${ownedCard.card_name}: ${e.message}`);
       }
     }
 

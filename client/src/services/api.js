@@ -94,6 +94,7 @@ class ApiClient {
     if (filters.sets) params.append('sets', filters.sets); // Already a string from frontend
     if (filters.cmcMin !== null && filters.cmcMin !== undefined) params.append('cmcMin', filters.cmcMin);
     if (filters.cmcMax !== null && filters.cmcMax !== undefined) params.append('cmcMax', filters.cmcMax);
+    if (filters.onlyOwned) params.append('onlyOwned', filters.onlyOwned);
     if (filters.page) params.append('page', filters.page);
     if (filters.limit) params.append('limit', filters.limit);
     return this.request(`/cards/browse?${params}`);
@@ -110,6 +111,20 @@ class ApiClient {
   async advancedSearch(filters) {
     const params = new URLSearchParams(filters);
     return this.request(`/cards/advanced?${params}`);
+  }
+
+  async toggleCardOwnership(cardId) {
+    return this.request(`/cards/${cardId}/owned`, {
+      method: 'POST',
+    });
+  }
+
+  async getUserOwnedCards() {
+    return this.request('/cards/owned/all');
+  }
+
+  async getCardOwnershipStatus(cardId) {
+    return this.request(`/cards/${cardId}/owned`);
   }
 
   // Deck methods

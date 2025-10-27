@@ -22,7 +22,12 @@ export async function runSync() {
     console.log('\n🔄 Starting MTGJSON sync...');
 
     const scriptPath = join(__dirname, '../../scripts/import-mtgjson.js');
-    execSync(`node "${scriptPath}"`, { stdio: 'inherit' });
+
+    // Always use FORCE_REIMPORT=true for syncs to preserve user data while updating MTGJSON data
+    execSync(`node "${scriptPath}"`, {
+      stdio: 'inherit',
+      env: { ...process.env, FORCE_REIMPORT: 'true' }
+    });
 
     lastRun = new Date();
     console.log('✓ Sync completed successfully');
@@ -47,12 +52,12 @@ export function getSyncStatus() {
 }
 
 /**
- * Setup daily sync schedule (runs at 3 AM daily)
+ * Setup weekly sync schedule (runs at 3 AM every Sunday)
  */
 export function setupDailySync() {
-  // Run every day at 3 AM
-  cron.schedule('0 3 * * *', async () => {
-    console.log('\n⏰ Running scheduled daily sync...');
+  // Run every Sunday at 3 AM (0 = Sunday in cron)
+  cron.schedule('0 3 * * 0', async () => {
+    console.log('\n⏰ Running scheduled weekly sync...');
     try {
       await runSync();
     } catch (error) {
@@ -60,5 +65,5 @@ export function setupDailySync() {
     }
   });
 
-  console.log('✓ Daily sync scheduled for 3:00 AM');
+  console.log('✓ Weekly sync scheduled for Sundays at 3:00 AM');
 }

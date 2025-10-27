@@ -181,6 +181,8 @@ export function browseCards(filters = {}) {
     sets = [],
     cmcMin = null,
     cmcMax = null,
+    onlyOwned = false,
+    userId = null,
     limit = 50,
     offset = 0
   } = filters;
@@ -194,9 +196,16 @@ export function browseCards(filters = {}) {
   // Need LEFT JOIN for price sorting
   const needsPriceJoin = sort === 'price';
   const needsSetJoin = setsArray && setsArray.length > 0;
+  const needsOwnedJoin = onlyOwned && userId;
 
   let sql = `SELECT DISTINCT c.id, c.name, c.mana_cost, c.cmc, c.colors, c.type_line, c.oracle_text,
              (SELECT p.image_url FROM printings p WHERE p.card_id = c.id AND p.image_url IS NOT NULL LIMIT 1) as image_url`;
+
+  // Add owned status to query
+  if (userId) {
+    sql += `,
+             (SELECT CASE WHEN oc.id IS NOT NULL THEN 1 ELSE 0 END FROM owned_cards oc WHERE oc.user_id = ? AND oc.card_id = c.id LIMIT 1) as is_owned`;
+  }
 
   if (needsPriceJoin) {
     sql += `,
@@ -213,10 +222,24 @@ export function browseCards(filters = {}) {
     sql += ` LEFT JOIN printings p ON p.card_id = c.id`;
   }
 
+  if (needsOwnedJoin) {
+    sql += ` INNER JOIN owned_cards oc ON oc.card_id = c.id AND oc.user_id = ?`;
+  }
+
   sql += `
              WHERE 1=1`;
 
   const params = [];
+
+  // Add userId param if needed
+  if (userId) {
+    params.push(userId);
+  }
+
+  // Add it again for the owned join if needed
+  if (needsOwnedJoin) {
+    params.push(userId);
+  }
 
   // Name filter
   if (name && name.trim()) {
@@ -283,8 +306,17 @@ export function browseCards(filters = {}) {
     countSql += ` LEFT JOIN printings p ON p.card_id = c.id`;
   }
 
+  if (needsOwnedJoin) {
+    countSql += ` INNER JOIN owned_cards oc ON oc.card_id = c.id AND oc.user_id = ?`;
+  }
+
   countSql += ` WHERE 1=1`;
   const countParams = [];
+
+  // Add userId for owned join if needed
+  if (needsOwnedJoin) {
+    countParams.push(userId);
+  }
 
   if (name && name.trim()) {
     countSql += ` AND c.name LIKE ?`;
@@ -414,4 +446,61 @@ export function getCardStats() {
   `);
 
   return stats;
+}
+
+/**
+ * Toggle card ownership for a user
+ */
+export function toggleCardOwnership(userId, cardId) {
+  // Check if card is already owned
+  const existing = db.get(
+    `SELECT id, quantity FROM owned_cards WHERE user_id = ? AND card_id = ?`,
+    [userId, cardId]
+  );
+
+  if (existing) {
+    // Remove ownership
+    db.run(
+      `DELETE FROM owned_cards WHERE id = ?`,
+      [existing.id]
+    );
+    return { owned: false, message: 'Card removed from collection' };
+  } else {
+    // Add ownership
+    db.run(
+      `INSERT INTO owned_cards (user_id, card_id, quantity) VALUES (?, ?, 1)`,
+      [userId, cardId]
+    );
+    return { owned: true, message: 'Card added to collection' };
+  }
+}
+
+/**
+ * Get all owned cards for a user
+ */
+export function getUserOwnedCards(userId) {
+  return db.all(
+    `SELECT oc.*, c.name, c.mana_cost, c.type_line,
+            (SELECT p.image_url FROM printings p WHERE p.card_id = c.id LIMIT 1) as image_url
+     FROM owned_cards oc
+     JOIN cards c ON oc.card_id = c.id
+     WHERE oc.user_id = ?
+     ORDER BY c.name ASC`,
+    [userId]
+  );
+}
+
+/**
+ * Check if a card is owned by a user
+ */
+export function getCardOwnershipStatus(userId, cardId) {
+  const owned = db.get(
+    `SELECT id, quantity FROM owned_cards WHERE user_id = ? AND card_id = ?`,
+    [userId, cardId]
+  );
+
+  return {
+    owned: !!owned,
+    quantity: owned ? owned.quantity : 0
+  };
 }

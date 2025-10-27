@@ -166,8 +166,11 @@ async function start() {
         const __dirname = dirname(__filename);
         const scriptPath = join(__dirname, '../scripts/import-mtgjson.js');
 
-        // Run import script
-        execSync(`node "${scriptPath}"`, { stdio: 'inherit' });
+        // Run import script with environment variables
+        execSync(`node "${scriptPath}"`, {
+          stdio: 'inherit',
+          env: { ...process.env }
+        });
         console.log('✓ Data imported successfully');
       } catch (error) {
         console.error('⚠️  Failed to auto-import data:', error.message);

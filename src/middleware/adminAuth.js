@@ -8,8 +8,8 @@ export function requireAdmin(req, res, next) {
     return res.status(401).json({ error: 'Authentication required' });
   }
 
-  // Check if user is an admin
-  if (!req.user.is_admin) {
+  // Check if user is an admin (handle both boolean and integer values)
+  if (!req.user.is_admin && req.user.is_admin !== 1) {
     return res.status(403).json({ error: 'Admin access required' });
   }
 

@@ -8,6 +8,9 @@ import {
   getRandomCards,
   getCardStats,
   browseCards,
+  toggleCardOwnership,
+  getUserOwnedCards,
+  getCardOwnershipStatus,
 } from '../services/cardService.js';
 import { authenticate } from '../middleware/auth.js';
 
@@ -19,7 +22,7 @@ const router = express.Router();
  */
 router.get('/browse', authenticate, (req, res, next) => {
   try {
-    const { name, colors, type, sort, sets, cmcMin, cmcMax, page = 1, limit = 50 } = req.query;
+    const { name, colors, type, sort, sets, cmcMin, cmcMax, page = 1, limit = 50, onlyOwned } = req.query;
     const offset = (parseInt(page) - 1) * parseInt(limit);
 
     const result = browseCards({
@@ -30,6 +33,8 @@ router.get('/browse', authenticate, (req, res, next) => {
       sets: sets ? sets.split(',') : [],
       cmcMin: cmcMin ? parseInt(cmcMin) : null,
       cmcMax: cmcMax ? parseInt(cmcMax) : null,
+      onlyOwned: onlyOwned === 'true',
+      userId: req.user.id,
       limit: parseInt(limit),
       offset
     });
@@ -151,6 +156,52 @@ router.get('/printing/:uuid', authenticate, (req, res, next) => {
     }
 
     res.json({ printing });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /api/cards/:id/owned
+ * Toggle card ownership for the authenticated user
+ */
+router.post('/:id/owned', authenticate, (req, res, next) => {
+  try {
+    const cardId = parseInt(req.params.id);
+    const userId = req.user.id;
+
+    const result = toggleCardOwnership(userId, cardId);
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * GET /api/cards/owned
+ * Get all owned cards for the authenticated user
+ */
+router.get('/owned/all', authenticate, (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const ownedCards = getUserOwnedCards(userId);
+    res.json({ ownedCards });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * GET /api/cards/:id/owned
+ * Check if a specific card is owned by the authenticated user
+ */
+router.get('/:id/owned', authenticate, (req, res, next) => {
+  try {
+    const cardId = parseInt(req.params.id);
+    const userId = req.user.id;
+
+    const status = getCardOwnershipStatus(userId, cardId);
+    res.json(status);
   } catch (error) {
     next(error);
   }

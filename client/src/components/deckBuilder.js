@@ -5,7 +5,7 @@ import { showCardDetail } from './cards.js';
 let currentDeck = null;
 let currentDeckId = null;
 let searchTimeout = null;
-let currentFilter = { cmc: null, color: null }; // Filter state for deck cards
+let currentFilter = { cmc: null, color: null, ownership: null }; // Filter state for deck cards (null, 'owned', 'not-owned')
 let exampleHand = []; // Current example hand
 
 export function setupDeckBuilder() {
@@ -358,7 +358,7 @@ function renderDeckCards() {
   let sideboardCards = currentDeck.cards.filter(c => c.is_sideboard);
 
   // Apply filters
-  const hasFilter = currentFilter.cmc !== null || currentFilter.color !== null;
+  const hasFilter = currentFilter.cmc !== null || currentFilter.color !== null || currentFilter.ownership !== null;
 
   if (currentFilter.cmc !== null) {
     mainboardCards = mainboardCards.filter(c => calculateActualCMC(c) === currentFilter.cmc);
@@ -368,6 +368,14 @@ function renderDeckCards() {
   if (currentFilter.color !== null) {
     mainboardCards = mainboardCards.filter(c => c.colors === currentFilter.color);
     sideboardCards = sideboardCards.filter(c => c.colors === currentFilter.color);
+  }
+
+  if (currentFilter.ownership === 'owned') {
+    mainboardCards = mainboardCards.filter(c => c.is_owned);
+    sideboardCards = sideboardCards.filter(c => c.is_owned);
+  } else if (currentFilter.ownership === 'not-owned') {
+    mainboardCards = mainboardCards.filter(c => !c.is_owned);
+    sideboardCards = sideboardCards.filter(c => !c.is_owned);
   }
 
   // Update counts
@@ -389,6 +397,7 @@ function renderDeckCards() {
     clearFilterBtn.addEventListener('click', () => {
       currentFilter.cmc = null;
       currentFilter.color = null;
+      currentFilter.ownership = null;
       renderDeckCards();
       // Re-render stats to clear highlighted segments
       loadDeckStats();
@@ -480,7 +489,12 @@ function renderCardItem(card) {
 
   if (compactView) {
     return `
-      <div class="deck-card-item compact ${card.is_commander ? 'is-commander' : ''}" data-deck-card-id="${card.deck_card_id}" data-printing-id="${card.printing_id}" data-is-sideboard="${card.is_sideboard}" draggable="true">
+      <div class="deck-card-item compact ${card.is_commander ? 'is-commander' : ''}" data-deck-card-id="${card.deck_card_id}" data-printing-id="${card.printing_id}" data-is-sideboard="${card.is_sideboard}" draggable="true" style="position: relative;">
+        ${card.is_owned ? `
+          <span style="position: absolute; top: 4px; left: 4px; background: rgba(16, 185, 129, 0.9); color: white; border-radius: 50%; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; font-size: 12px; z-index: 5;">
+            <i class="ph-fill ph-check-circle"></i>
+          </span>
+        ` : ''}
         ${showCommanderIcon ? `
           <button class="commander-toggle-btn ${card.is_commander ? 'active' : ''}"
                   data-deck-card-id="${card.deck_card_id}"
@@ -509,7 +523,12 @@ function renderCardItem(card) {
   }
 
   return `
-    <div class="deck-card-item ${card.is_commander ? 'is-commander' : ''}" data-deck-card-id="${card.deck_card_id}" data-printing-id="${card.printing_id}" data-is-sideboard="${card.is_sideboard}" draggable="true">
+    <div class="deck-card-item ${card.is_commander ? 'is-commander' : ''}" data-deck-card-id="${card.deck_card_id}" data-printing-id="${card.printing_id}" data-is-sideboard="${card.is_sideboard}" draggable="true" style="position: relative;">
+      ${card.is_owned ? `
+        <span style="position: absolute; top: 8px; left: 8px; background: rgba(16, 185, 129, 0.9); color: white; border-radius: 50%; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; font-size: 16px; z-index: 5;">
+          <i class="ph-fill ph-check-circle"></i>
+        </span>
+      ` : ''}
       ${showCommanderIcon ? `
         <button class="commander-toggle-btn ${card.is_commander ? 'active' : ''}"
                 data-deck-card-id="${card.deck_card_id}"
@@ -1100,6 +1119,10 @@ function renderStats(stats) {
   const mainboardCards = currentDeck.cards.filter(c => !c.is_sideboard);
   const totalCards = mainboardCards.reduce((sum, c) => sum + c.quantity, 0);
 
+  // Calculate owned percentage
+  const ownedCards = mainboardCards.filter(c => c.is_owned).reduce((sum, c) => sum + c.quantity, 0);
+  const ownedPercentage = totalCards > 0 ? ((ownedCards / totalCards) * 100).toFixed(0) : 0;
+
   // Use calculated CMC for accurate totals
   const totalManaValue = mainboardCards.reduce((sum, c) => {
     const actualCMC = calculateActualCMC(c);
@@ -1148,6 +1171,53 @@ function renderStats(stats) {
       : nonLandCmcValues[Math.floor(nonLandCmcValues.length / 2)]
     : 0;
 
+  // Render owned stat at the top
+  const statsPanel = document.getElementById('deck-stats');
+  let ownedStatSection = document.getElementById('owned-stat-section');
+
+  if (!ownedStatSection) {
+    ownedStatSection = document.createElement('div');
+    ownedStatSection.id = 'owned-stat-section';
+    ownedStatSection.className = 'stat-section';
+    statsPanel.insertBefore(ownedStatSection, statsPanel.firstChild);
+  }
+
+  const ownedFilterClass = currentFilter.ownership === 'owned' ? 'filtered' : currentFilter.ownership === 'not-owned' ? 'filtered' : '';
+
+  ownedStatSection.innerHTML = `
+    <h4>Collection Status</h4>
+    <div class="owned-stat-bar ${ownedFilterClass}" style="cursor: pointer; padding: 1rem; background: var(--bg-tertiary); border-radius: 8px; transition: all 0.2s;" title="Click to filter by ownership">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+        <span style="font-weight: 600; font-size: 1rem;">${ownedPercentage}% Owned</span>
+        <span style="font-size: 0.875rem; color: var(--text-secondary);">${ownedCards} / ${totalCards} cards</span>
+      </div>
+      <div style="width: 100%; height: 8px; background: var(--border); border-radius: 4px; overflow: hidden;">
+        <div style="width: ${ownedPercentage}%; height: 100%; background: linear-gradient(90deg, #10b981, #059669); transition: width 0.3s;"></div>
+      </div>
+      ${currentFilter.ownership ? `
+        <div style="margin-top: 0.5rem; font-size: 0.75rem; color: var(--primary); font-weight: 600;">
+          ${currentFilter.ownership === 'owned' ? '✓ Showing owned cards only' : '○ Showing unowned cards only'}
+        </div>
+      ` : ''}
+    </div>
+  `;
+
+  // Add click handler for ownership filter cycling
+  const ownedStatBar = ownedStatSection.querySelector('.owned-stat-bar');
+  ownedStatBar.addEventListener('click', () => {
+    if (currentFilter.ownership === null) {
+      currentFilter.ownership = 'owned';
+    } else if (currentFilter.ownership === 'owned') {
+      currentFilter.ownership = 'not-owned';
+    } else {
+      currentFilter.ownership = null;
+    }
+    currentFilter.cmc = null; // Clear other filters
+    currentFilter.color = null;
+    renderDeckCards();
+    renderStats(stats); // Re-render to update filter indicator
+  });
+
   // Render mana curve chart
   const manaCurve = document.getElementById('mana-curve');
   const totalCurveCards = stats.manaCurve.reduce((sum, item) => sum + item.total_cards, 0);
@@ -1158,10 +1228,29 @@ function renderStats(stats) {
     // Determine which values need overflow labels (less than 5% of total)
     const overflowThreshold = 0.05;
 
+    // Calculate positions for overflow labels to prevent overlap
+    const overflowLabels = [];
+    stats.manaCurve.forEach((item, index) => {
+      const percentage = (item.total_cards / totalCurveCards) * 100;
+      const needsOverflow = percentage < (overflowThreshold * 100);
+      if (needsOverflow) {
+        overflowLabels.push({ cmc: item.cmc, index, percentage });
+      }
+    });
+
+    // Calculate cumulative positions to determine label placement
+    let cumulativeWidth = 0;
+    const labelPositions = stats.manaCurve.map((item, index) => {
+      const percentage = (item.total_cards / totalCurveCards) * 100;
+      const position = cumulativeWidth + (percentage / 2); // Center of segment
+      cumulativeWidth += percentage;
+      return position;
+    });
+
     manaCurve.innerHTML = `
-      <div class="mana-curve-container" style="padding-top: 2rem; position: relative;">
-        <div class="mana-curve-single-bar" style="overflow: visible;">
-          ${stats.manaCurve.map(item => {
+      <div class="mana-curve-container" style="padding-top: 2.5rem; position: relative;">
+        <div class="mana-curve-single-bar" style="overflow: visible; position: relative;">
+          ${stats.manaCurve.map((item, index) => {
             const percentage = (item.total_cards / totalCurveCards) * 100;
             const cmcColor = getCMCColor(item.cmc);
             const needsOverflow = percentage < (overflowThreshold * 100);
@@ -1170,14 +1259,23 @@ function renderStats(stats) {
             return `
               <div class="mana-curve-segment ${isFiltered ? 'filtered' : ''}"
                    data-cmc="${item.cmc}"
-                   style="width: ${percentage}%; background: ${cmcColor}; cursor: pointer; position: relative; ${needsOverflow ? 'overflow: visible;' : ''}"
+                   style="width: ${percentage}%; background: ${cmcColor}; cursor: pointer; position: relative;"
                    title="${item.cmc} CMC: ${item.total_cards} cards (${percentage.toFixed(1)}%)">
-                ${needsOverflow ? `
-                  <span class="mana-curve-overflow-label" style="position: absolute; bottom: calc(100% + 0.25rem); left: 50%; transform: translateX(-50%); font-size: 0.75rem; font-weight: 600; white-space: nowrap; padding: 0.25rem 0.5rem; background: ${cmcColor}; border-radius: 4px; color: white; text-shadow: 0 1px 2px rgba(0,0,0,0.5); z-index: 10;">${item.cmc}</span>
-                ` : `
+                ${!needsOverflow ? `
                   <span class="mana-curve-segment-label">${item.cmc}</span>
-                `}
+                ` : ''}
               </div>
+            `;
+          }).join('')}
+          ${overflowLabels.map((labelData, idx) => {
+            const position = labelPositions[labelData.index];
+            const cmcColor = getCMCColor(labelData.cmc);
+            const isFiltered = currentFilter.cmc === labelData.cmc;
+
+            return `
+              <span class="mana-curve-overflow-label ${isFiltered ? 'filtered' : ''}"
+                    data-cmc="${labelData.cmc}"
+                    style="position: absolute; bottom: calc(100% + 0.5rem); left: ${position}%; transform: translateX(-50%); font-size: 0.75rem; font-weight: 600; white-space: nowrap; padding: 0.25rem 0.5rem; background: ${cmcColor}; border-radius: 4px; color: white; text-shadow: 0 1px 2px rgba(0,0,0,0.5); z-index: ${50 + idx}; pointer-events: auto; cursor: pointer; transition: transform 0.15s ease-out, box-shadow 0.15s ease-out, z-index 0s;">${labelData.cmc}</span>
             `;
           }).join('')}
         </div>
@@ -1202,6 +1300,37 @@ function renderStats(stats) {
         }
         renderDeckCards();
         renderStats(stats); // Re-render to update highlighted segment
+      });
+    });
+
+    // Add click and hover handlers for overflow labels
+    manaCurve.querySelectorAll('.mana-curve-overflow-label').forEach((label, idx) => {
+      const defaultZIndex = 50 + idx;
+
+      label.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const cmc = parseInt(label.dataset.cmc);
+        if (currentFilter.cmc === cmc) {
+          currentFilter.cmc = null;
+        } else {
+          currentFilter.cmc = cmc;
+          currentFilter.color = null;
+        }
+        renderDeckCards();
+        renderStats(stats);
+      });
+
+      // Add hover effect - bring to front and scale up
+      label.addEventListener('mouseenter', () => {
+        label.style.zIndex = '500';
+        label.style.transform = 'translateX(-50%) scale(1.2)';
+        label.style.boxShadow = '0 6px 16px rgba(0, 0, 0, 0.7)';
+      });
+
+      label.addEventListener('mouseleave', () => {
+        label.style.zIndex = defaultZIndex;
+        label.style.transform = 'translateX(-50%)';
+        label.style.boxShadow = 'none';
       });
     });
   }
@@ -1267,12 +1396,28 @@ function renderStats(stats) {
 }
 
 function getCMCColor(cmc) {
-  // Color gradient based on mana value
-  if (cmc === 0) return '#94a3b8'; // Gray for 0
-  if (cmc <= 2) return '#10b981'; // Green for low cost
-  if (cmc <= 4) return '#f59e0b'; // Yellow/Orange for mid cost
-  if (cmc <= 6) return '#ef4444'; // Red for high cost
-  return '#7c3aed'; // Purple for very high cost
+  // Unique color for each CMC value
+  const colors = {
+    0: '#94a3b8',  // Gray
+    1: '#10b981',  // Green
+    2: '#34d399',  // Light Green
+    3: '#fbbf24',  // Yellow
+    4: '#fb923c',  // Orange
+    5: '#f87171',  // Light Red
+    6: '#ef4444',  // Red
+    7: '#c084fc',  // Light Purple
+    8: '#a855f7',  // Purple
+    9: '#7c3aed',  // Dark Purple
+    10: '#6366f1', // Indigo
+  };
+
+  // For CMC > 10, use a cycling pattern
+  if (cmc > 10) {
+    const colorKeys = Object.keys(colors);
+    return colors[colorKeys[cmc % colorKeys.length]];
+  }
+
+  return colors[cmc] || '#6b7280'; // Default gray if not found
 }
 
 function getTypeColor(type) {

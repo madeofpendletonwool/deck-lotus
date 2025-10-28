@@ -28,6 +28,7 @@ export function getPrintingPrices(uuid) {
  * Get deck total price
  */
 export function getDeckPrice(deckId) {
+  // Get total price
   const result = db.get(
     `SELECT
       SUM(
@@ -46,10 +47,50 @@ export function getDeckPrice(deckId) {
     [deckId]
   );
 
+  // Get card-level pricing with card details
+  const cardPrices = db.all(
+    `SELECT
+      dc.id as deck_card_id,
+      dc.printing_id,
+      p.uuid,
+      c.name,
+      p.image_url,
+      dc.quantity,
+      COALESCE(
+        (SELECT price FROM prices
+         WHERE printing_uuid = p.uuid
+         AND provider = 'tcgplayer'
+         AND price_type = 'normal'
+         LIMIT 1),
+        0
+      ) as unit_price
+     FROM deck_cards dc
+     JOIN printings p ON dc.printing_id = p.id
+     JOIN cards c ON p.card_id = c.id
+     WHERE dc.deck_id = ?
+     ORDER BY unit_price DESC`,
+    [deckId]
+  );
+
+  // Find most expensive card
+  const mostExpensive = cardPrices.length > 0 ? cardPrices[0] : null;
+
+  // Create a map of deck_card_id to price for quick lookup
+  const cardPriceMap = {};
+  cardPrices.forEach(card => {
+    cardPriceMap[card.deck_card_id] = card.unit_price;
+  });
+
   return {
     total: result?.total_price || 0,
     provider: 'tcgplayer',
-    currency: 'USD'
+    currency: 'USD',
+    mostExpensive: mostExpensive ? {
+      name: mostExpensive.name,
+      price: mostExpensive.unit_price,
+      imageUrl: mostExpensive.image_url
+    } : null,
+    cardPrices: cardPriceMap
   };
 }
 

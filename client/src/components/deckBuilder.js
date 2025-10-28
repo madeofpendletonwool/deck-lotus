@@ -7,6 +7,14 @@ let currentDeckId = null;
 let searchTimeout = null;
 let currentFilter = { cmc: null, color: null, ownership: null }; // Filter state for deck cards (null, 'owned', 'not-owned')
 let exampleHand = []; // Current example hand
+let activeTab = 'mainboard'; // Track which tab is currently active ('mainboard' or 'sideboard')
+let pricingMode = false; // Track if pricing mode is enabled
+let currentPriceData = null; // Store current price data for cards
+
+// Detect if device is touch-enabled (mobile/tablet)
+function isTouchDevice() {
+  return ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || (navigator.msMaxTouchPoints > 0);
+}
 
 export function setupDeckBuilder() {
   const cardSearch = document.getElementById('card-search');
@@ -249,6 +257,10 @@ async function loadDeck(deckId) {
     currentDeck = result.deck;
     currentDeckId = deckId;
 
+    // Reset to mainboard tab when loading a deck
+    activeTab = 'mainboard';
+    switchTab('mainboard');
+
     // Clear previous example hand
     exampleHand = [];
 
@@ -335,13 +347,16 @@ async function addCardToDeck(cardId) {
     // Use first printing by default (could show modal to choose)
     const printingId = printings[0].id;
 
+    // Add card to the currently active tab (mainboard or sideboard)
+    const isSideboard = activeTab === 'sideboard';
+
     showLoading();
-    const updatedDeck = await api.addCardToDeck(currentDeckId, printingId, 1, false);
+    const updatedDeck = await api.addCardToDeck(currentDeckId, printingId, 1, isSideboard);
     currentDeck = updatedDeck.deck;
     renderDeckCards();
     await loadDeckStats();
     hideLoading();
-    showToast('Card added to deck', 'success', 2000);
+    showToast(`Card added to ${isSideboard ? 'sideboard' : 'mainboard'}`, 'success', 2000);
   } catch (error) {
     hideLoading();
     showToast('Failed to add card: ' + error.message, 'error');
@@ -468,10 +483,20 @@ function renderCardsList(cards) {
       const count = grouped[type].reduce((sum, c) => sum + c.quantity, 0);
       const pluralType = type === 'Sorcery' ? 'Sorceries' : type + 's';
 
+      // Sort cards by price if pricing mode is on, otherwise keep as-is
+      let cardsToRender = grouped[type];
+      if (pricingMode && currentPriceData?.cardPrices) {
+        cardsToRender = [...grouped[type]].sort((a, b) => {
+          const priceA = currentPriceData.cardPrices[a.deck_card_id] || 0;
+          const priceB = currentPriceData.cardPrices[b.deck_card_id] || 0;
+          return priceB - priceA; // Sort descending (most expensive first)
+        });
+      }
+
       html += `
         <div class="card-type-group">
           <div class="card-type-header">${pluralType} (${count})</div>
-          ${grouped[type].map(card => renderCardItem(card)).join('')}
+          ${cardsToRender.map(card => renderCardItem(card)).join('')}
         </div>
       `;
     }
@@ -520,6 +545,11 @@ function renderCardItem(card) {
     `;
   }
 
+  // Get price for this card if pricing mode is on
+  const cardPrice = pricingMode && currentPriceData?.cardPrices
+    ? currentPriceData.cardPrices[card.deck_card_id] || 0
+    : 0;
+
   return `
     <div class="deck-card-item ${card.is_commander ? 'is-commander' : ''}" data-deck-card-id="${card.deck_card_id}" data-printing-id="${card.printing_id}" data-is-sideboard="${card.is_sideboard}" data-card-id="${card.card_id}" draggable="true" style="position: relative;">
       <button class="ownership-toggle-btn ${card.is_owned ? 'owned' : ''}" data-card-id="${card.card_id}" style="position: absolute; top: 8px; left: 8px; background: ${card.is_owned ? 'rgba(16, 185, 129, 0.9)' : 'rgba(0,0,0,0.8)'}; color: white; border: none; border-radius: 50%; width: 24px; height: 24px; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; z-index: 10; transition: all 0.2s;">
@@ -540,7 +570,10 @@ function renderCardItem(card) {
         <div class="card-name">${card.name}</div>
         <div class="card-type">${card.type_line || ''}</div>
         <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">
-          ${card.set_code} • ${card.artist || 'Unknown'}
+          ${pricingMode
+            ? `<span style="color: var(--primary); font-weight: 600;">$${cardPrice.toFixed(2)}</span>`
+            : `${card.set_code} • ${card.artist || 'Unknown'}`
+          }
         </div>
       </div>
       <div class="deck-card-controls">
@@ -572,27 +605,29 @@ function setupCardControls() {
       }
     });
 
-    // Add hover preview
-    item.addEventListener('mouseenter', (e) => {
-      // Don't show preview if hovering over commander button
-      if (e.target.closest('.commander-toggle-btn')) return;
+    // Add hover preview (only on non-touch devices)
+    if (!isTouchDevice()) {
+      item.addEventListener('mouseenter', (e) => {
+        // Don't show preview if hovering over commander button
+        if (e.target.closest('.commander-toggle-btn')) return;
 
-      const img = item.querySelector('.deck-card-image, .deck-card-image-compact');
-      if (img && img.src) {
-        showCardPreview(img.src, e);
-      }
-    });
+        const img = item.querySelector('.deck-card-image, .deck-card-image-compact');
+        if (img && img.src) {
+          showCardPreview(img.src, e);
+        }
+      });
 
-    item.addEventListener('mouseleave', () => {
-      hideCardPreview();
-    });
-
-    // Prevent preview when hovering over commander button
-    const commanderBtn = item.querySelector('.commander-toggle-btn');
-    if (commanderBtn) {
-      commanderBtn.addEventListener('mouseenter', () => {
+      item.addEventListener('mouseleave', () => {
         hideCardPreview();
       });
+
+      // Prevent preview when hovering over commander button
+      const commanderBtn = item.querySelector('.commander-toggle-btn');
+      if (commanderBtn) {
+        commanderBtn.addEventListener('mouseenter', () => {
+          hideCardPreview();
+        });
+      }
     }
   });
 
@@ -940,6 +975,9 @@ async function toggleCardOwnership(cardId, buttonEl) {
 }
 
 function switchTab(tab) {
+  // Update active tab state
+  activeTab = tab;
+
   document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.tab === tab);
   });
@@ -955,8 +993,9 @@ async function loadDeckStats() {
     const stats = await api.getDeckStats(currentDeckId);
     renderStats(stats);
 
-    // Load deck price
+    // Load deck price and store globally
     const price = await api.getDeckPrice(currentDeckId);
+    currentPriceData = price;
     displayDeckPrice(price);
   } catch (error) {
     console.error('Failed to load stats:', error);
@@ -971,6 +1010,54 @@ function displayDeckPrice(price) {
       <span style="margin-left: 0.5rem;">$${price.total.toFixed(2)}</span>
     `;
   }
+
+  // Add pricing statistics section under color distribution
+  const statsPanel = document.getElementById('deck-stats');
+  let pricingStatSection = document.getElementById('pricing-stat-section');
+
+  if (!pricingStatSection) {
+    pricingStatSection = document.createElement('div');
+    pricingStatSection.id = 'pricing-stat-section';
+    pricingStatSection.className = 'stat-section';
+    statsPanel.appendChild(pricingStatSection);
+  }
+
+  pricingStatSection.innerHTML = `
+    <h4>Pricing</h4>
+    <div style="padding: 1rem; background: var(--bg-tertiary); border-radius: 8px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+        <span style="color: var(--text-secondary);">Deck Total:</span>
+        <span style="font-weight: 600; font-size: 1.1rem;">$${price.total.toFixed(2)}</span>
+      </div>
+      ${price.mostExpensive ? `
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+          <span style="color: var(--text-secondary);">Most Expensive:</span>
+          <div style="text-align: right;">
+            <div style="font-weight: 600;">${price.mostExpensive.name}</div>
+            <div style="color: var(--primary); font-weight: 600;">$${price.mostExpensive.price.toFixed(2)}</div>
+          </div>
+        </div>
+      ` : ''}
+      <button id="toggle-pricing-btn" class="btn btn-secondary btn-sm ${pricingMode ? 'active' : ''}" style="width: 100%;">
+        <i class="ph ${pricingMode ? 'ph-eye-slash' : 'ph-currency-dollar'}"></i>
+        ${pricingMode ? 'Hide Pricing Mode' : 'Show Pricing Mode'}
+      </button>
+    </div>
+  `;
+
+  // Add click handler for pricing mode toggle
+  const togglePricingBtn = document.getElementById('toggle-pricing-btn');
+  togglePricingBtn.addEventListener('click', () => {
+    pricingMode = !pricingMode;
+    renderDeckCards();
+
+    // Update button text and icon
+    togglePricingBtn.classList.toggle('active', pricingMode);
+    togglePricingBtn.innerHTML = `
+      <i class="ph ${pricingMode ? 'ph-eye-slash' : 'ph-currency-dollar'}"></i>
+      ${pricingMode ? 'Hide Pricing Mode' : 'Show Pricing Mode'}
+    `;
+  });
 }
 
 function openBuyDeckModal() {
@@ -1714,17 +1801,19 @@ function renderExampleHand() {
       }
     });
 
-    // Hover preview
-    cardEl.addEventListener('mouseenter', (e) => {
-      const img = cardEl.querySelector('img');
-      if (img && img.src) {
-        showCardPreview(img.src, e);
-      }
-    });
+    // Hover preview (only on non-touch devices)
+    if (!isTouchDevice()) {
+      cardEl.addEventListener('mouseenter', (e) => {
+        const img = cardEl.querySelector('img');
+        if (img && img.src) {
+          showCardPreview(img.src, e);
+        }
+      });
 
-    cardEl.addEventListener('mouseleave', () => {
-      hideCardPreview();
-    });
+      cardEl.addEventListener('mouseleave', () => {
+        hideCardPreview();
+      });
+    }
   });
 }
 

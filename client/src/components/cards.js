@@ -601,6 +601,41 @@ export async function showCardDetail(cardId) {
               </div>
             </div>
           ` : ''}
+          ${card.printings && card.printings.length > 0 ? `
+            <div style="margin-top: 2rem;">
+              <h3>Available Sets</h3>
+              <div style="margin-top: 1rem; display: grid; gap: 0.5rem;">
+                ${(() => {
+                  // Group printings by set to get unique sets
+                  const uniqueSets = new Map();
+                  card.printings.forEach(p => {
+                    if (!uniqueSets.has(p.set_code)) {
+                      uniqueSets.set(p.set_code, {
+                        code: p.set_code,
+                        name: p.set_name || p.set_code.toUpperCase(),
+                        count: 1
+                      });
+                    } else {
+                      uniqueSets.get(p.set_code).count++;
+                    }
+                  });
+
+                  return Array.from(uniqueSets.values())
+                    .map(set => `
+                      <div style="padding: 0.75rem; background: var(--bg-tertiary); border-radius: 6px; display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                          <span style="font-weight: 600;">${set.name}</span>
+                          <span style="margin-left: 0.5rem; color: var(--text-secondary); font-size: 0.875rem;">(${set.code.toUpperCase()})</span>
+                        </div>
+                        <span style="color: var(--text-secondary); font-size: 0.875rem;">
+                          ${set.count} printing${set.count > 1 ? 's' : ''}
+                        </span>
+                      </div>
+                    `).join('');
+                })()}
+              </div>
+            </div>
+          ` : ''}
           ${card.relatedCards && card.relatedCards.length > 0 ? `
             <div style="margin-top: 2rem;">
               <h3>Related Cards</h3>

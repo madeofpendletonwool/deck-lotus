@@ -176,12 +176,13 @@ router.put('/:id/cards/:cardId', authenticate, (req, res, next) => {
   try {
     const deckId = parseInt(req.params.id);
     const deckCardId = parseInt(req.params.cardId);
-    const { quantity, isSideboard, isCommander } = req.body;
+    const { quantity, isSideboard, isCommander, printingId } = req.body;
 
     const deck = updateDeckCard(deckId, req.user.id, deckCardId, {
       quantity,
       isSideboard,
       isCommander,
+      printingId,
     });
 
     res.json({ deck });

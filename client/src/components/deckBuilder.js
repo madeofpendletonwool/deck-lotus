@@ -1,5 +1,5 @@
 import api from '../services/api.js';
-import { showLoading, hideLoading, debounce, formatMana, showToast } from '../utils/ui.js';
+import { showLoading, hideLoading, debounce, formatMana, showToast, hideModal } from '../utils/ui.js';
 import { showCardDetail } from './cards.js';
 
 let currentDeck = null;
@@ -9,6 +9,7 @@ let currentFilter = { cmc: null, color: null, ownership: null }; // Filter state
 let exampleHand = []; // Current example hand
 let activeTab = 'mainboard'; // Track which tab is currently active ('mainboard' or 'sideboard')
 let pricingMode = false; // Track if pricing mode is enabled
+let setGroupMode = false; // Track if set grouping mode is enabled
 let currentPriceData = null; // Store current price data for cards
 
 // Detect if device is touch-enabled (mobile/tablet)
@@ -442,27 +443,46 @@ function renderCardsList(cards) {
   const commanders = cards.filter(c => c.is_commander);
   const nonCommanders = cards.filter(c => !c.is_commander);
 
-  // Group non-commander cards by type
-  const grouped = {};
-  const typeOrder = ['Creature', 'Planeswalker', 'Instant', 'Sorcery', 'Enchantment', 'Artifact', 'Land', 'Other'];
+  // Group non-commander cards by set or type based on mode
+  let grouped = {};
+  let groupOrder = [];
 
-  nonCommanders.forEach(card => {
-    const typeLine = card.type_line || '';
-    let category = 'Other';
-
-    // Determine category based on type line
-    for (const type of typeOrder) {
-      if (typeLine.includes(type)) {
-        category = type;
-        break;
+  if (setGroupMode) {
+    // Group by set
+    nonCommanders.forEach(card => {
+      const setCode = card.set_code || 'unknown';
+      if (!grouped[setCode]) {
+        grouped[setCode] = {
+          cards: [],
+          setName: card.set_name || setCode.toUpperCase()
+        };
+        groupOrder.push(setCode);
       }
-    }
+      grouped[setCode].cards.push(card);
+    });
+  } else {
+    // Group by type
+    const typeOrder = ['Creature', 'Planeswalker', 'Instant', 'Sorcery', 'Enchantment', 'Artifact', 'Land', 'Other'];
+    groupOrder = typeOrder;
 
-    if (!grouped[category]) {
-      grouped[category] = [];
-    }
-    grouped[category].push(card);
-  });
+    nonCommanders.forEach(card => {
+      const typeLine = card.type_line || '';
+      let category = 'Other';
+
+      // Determine category based on type line
+      for (const type of typeOrder) {
+        if (typeLine.includes(type)) {
+          category = type;
+          break;
+        }
+      }
+
+      if (!grouped[category]) {
+        grouped[category] = { cards: [] };
+      }
+      grouped[category].cards.push(card);
+    });
+  }
 
   // Render grouped cards
   let html = '';
@@ -477,16 +497,26 @@ function renderCardsList(cards) {
     `;
   }
 
-  // Render other card types
-  for (const type of typeOrder) {
-    if (grouped[type] && grouped[type].length > 0) {
-      const count = grouped[type].reduce((sum, c) => sum + c.quantity, 0);
-      const pluralType = type === 'Sorcery' ? 'Sorceries' : type + 's';
+  // Render other card groups
+  for (const groupKey of groupOrder) {
+    const group = grouped[groupKey];
+    if (group && group.cards && group.cards.length > 0) {
+      const count = group.cards.reduce((sum, c) => sum + c.quantity, 0);
+
+      let headerLabel;
+      if (setGroupMode) {
+        // Show full set name with code in parentheses
+        headerLabel = `${group.setName} (${groupKey.toUpperCase()})`;
+      } else {
+        // Show type name (pluralized)
+        const pluralType = groupKey === 'Sorcery' ? 'Sorceries' : groupKey + 's';
+        headerLabel = pluralType;
+      }
 
       // Sort cards by price if pricing mode is on, otherwise keep as-is
-      let cardsToRender = grouped[type];
+      let cardsToRender = group.cards;
       if (pricingMode && currentPriceData?.cardPrices) {
-        cardsToRender = [...grouped[type]].sort((a, b) => {
+        cardsToRender = [...group.cards].sort((a, b) => {
           const priceA = currentPriceData.cardPrices[a.deck_card_id] || 0;
           const priceB = currentPriceData.cardPrices[b.deck_card_id] || 0;
           return priceB - priceA; // Sort descending (most expensive first)
@@ -495,7 +525,7 @@ function renderCardsList(cards) {
 
       html += `
         <div class="card-type-group">
-          <div class="card-type-header">${pluralType} (${count})</div>
+          <div class="card-type-header">${headerLabel} (${count})</div>
           ${cardsToRender.map(card => renderCardItem(card)).join('')}
         </div>
       `;
@@ -572,7 +602,7 @@ function renderCardItem(card) {
         <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">
           ${pricingMode
             ? `<span style="color: var(--primary); font-weight: 600;">$${cardPrice.toFixed(2)}</span>`
-            : `${card.set_code} • ${card.artist || 'Unknown'}`
+            : `<span class="set-code-link" data-card-id="${card.card_id}" data-deck-card-id="${card.deck_card_id}" style="cursor: pointer; text-decoration: underline;">${card.set_code}</span> • ${card.artist || 'Unknown'}`
           }
         </div>
       </div>
@@ -714,6 +744,16 @@ function setupCardControls() {
       e.stopPropagation();
       const cardId = btn.dataset.cardId;
       await toggleCardOwnership(cardId, btn);
+    });
+  });
+
+  // Set code link to swap printings
+  document.querySelectorAll('.set-code-link').forEach(link => {
+    link.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const cardId = link.dataset.cardId;
+      const deckCardId = link.dataset.deckCardId;
+      await showPrintingSelectionModal(cardId, deckCardId);
     });
   });
 }
@@ -1023,7 +1063,7 @@ function displayDeckPrice(price) {
   }
 
   pricingStatSection.innerHTML = `
-    <h4>Pricing</h4>
+    <h4>Pricing & Display</h4>
     <div style="padding: 1rem; background: var(--bg-tertiary); border-radius: 8px;">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
         <span style="color: var(--text-secondary);">Deck Total:</span>
@@ -1038,9 +1078,13 @@ function displayDeckPrice(price) {
           </div>
         </div>
       ` : ''}
-      <button id="toggle-pricing-btn" class="btn btn-secondary btn-sm ${pricingMode ? 'active' : ''}" style="width: 100%;">
+      <button id="toggle-pricing-btn" class="btn btn-secondary btn-sm ${pricingMode ? 'active' : ''}" style="width: 100%; margin-bottom: 0.5rem;">
         <i class="ph ${pricingMode ? 'ph-eye-slash' : 'ph-currency-dollar'}"></i>
         ${pricingMode ? 'Hide Pricing Mode' : 'Show Pricing Mode'}
+      </button>
+      <button id="toggle-set-group-btn" class="btn btn-secondary btn-sm ${setGroupMode ? 'active' : ''}" style="width: 100%;">
+        <i class="ph ${setGroupMode ? 'ph-grid-four' : 'ph-stack'}"></i>
+        ${setGroupMode ? 'Group by Type' : 'Group by Set'}
       </button>
     </div>
   `;
@@ -1056,6 +1100,20 @@ function displayDeckPrice(price) {
     togglePricingBtn.innerHTML = `
       <i class="ph ${pricingMode ? 'ph-eye-slash' : 'ph-currency-dollar'}"></i>
       ${pricingMode ? 'Hide Pricing Mode' : 'Show Pricing Mode'}
+    `;
+  });
+
+  // Add click handler for set group mode toggle
+  const toggleSetGroupBtn = document.getElementById('toggle-set-group-btn');
+  toggleSetGroupBtn.addEventListener('click', () => {
+    setGroupMode = !setGroupMode;
+    renderDeckCards();
+
+    // Update button text and icon
+    toggleSetGroupBtn.classList.toggle('active', setGroupMode);
+    toggleSetGroupBtn.innerHTML = `
+      <i class="ph ${setGroupMode ? 'ph-grid-four' : 'ph-stack'}"></i>
+      ${setGroupMode ? 'Group by Type' : 'Group by Set'}
     `;
   });
 }
@@ -1202,6 +1260,110 @@ async function showCardModal(printingId) {
   } catch (error) {
     console.error('Error in showCardModal:', error);
     showToast('Failed to load card details', 'error');
+  }
+}
+
+async function showPrintingSelectionModal(cardId, deckCardId) {
+  try {
+    showLoading();
+    const result = await api.getCardPrintings(cardId);
+    const printings = result.printings || [];
+    hideLoading();
+
+    if (printings.length === 0) {
+      showToast('No printings found for this card', 'warning');
+      return;
+    }
+
+    // Get the current printing for this deck card
+    const currentCard = currentDeck.cards.find(c => c.deck_card_id == deckCardId);
+    const currentPrintingId = currentCard?.printing_id;
+
+    // Create modal content
+    const modalBody = document.getElementById('modal-body');
+    modalBody.innerHTML = `
+      <div style="max-width: 900px; margin: 0 auto;">
+        <h2 style="margin: 0 0 1.5rem 0;">Select a Printing</h2>
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem; max-height: 70vh; overflow-y: auto;">
+          ${printings.map(printing => `
+            <div class="printing-option ${printing.id == currentPrintingId ? 'current-printing' : ''}"
+                 data-printing-id="${printing.id}"
+                 style="cursor: pointer; padding: 1rem; background: var(--bg-tertiary); border-radius: 8px; transition: all 0.2s; border: 2px solid ${printing.id == currentPrintingId ? 'var(--primary)' : 'transparent'};">
+              <img src="${printing.image_url}"
+                   alt="${printing.set_name || printing.set_code}"
+                   style="width: 100%; border-radius: 8px; margin-bottom: 0.5rem;"
+                   onerror="this.style.display='none'">
+              <div style="font-weight: 600; font-size: 0.9rem; margin-bottom: 0.25rem;">
+                ${printing.set_name || printing.set_code.toUpperCase()}
+              </div>
+              <div style="font-size: 0.75rem; color: var(--text-secondary);">
+                ${printing.set_code.toUpperCase()} #${printing.collector_number || '?'}
+              </div>
+              ${printing.rarity ? `
+                <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">
+                  ${printing.rarity}
+                </div>
+              ` : ''}
+              ${printing.id == currentPrintingId ? `
+                <div style="margin-top: 0.5rem; padding: 0.25rem 0.5rem; background: var(--primary); color: white; border-radius: 4px; font-size: 0.75rem; text-align: center; font-weight: 600;">
+                  Current
+                </div>
+              ` : ''}
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+
+    // Add click handlers for printing selection
+    modalBody.querySelectorAll('.printing-option').forEach(option => {
+      // Hover effect
+      option.addEventListener('mouseenter', function() {
+        if (!this.classList.contains('current-printing')) {
+          this.style.background = 'var(--bg-secondary)';
+          this.style.borderColor = 'var(--primary)';
+        }
+      });
+      option.addEventListener('mouseleave', function() {
+        if (!this.classList.contains('current-printing')) {
+          this.style.background = 'var(--bg-tertiary)';
+          this.style.borderColor = 'transparent';
+        }
+      });
+
+      // Click to select
+      option.addEventListener('click', async function() {
+        const printingId = this.dataset.printingId;
+        await swapPrinting(deckCardId, printingId);
+        hideModal();
+      });
+    });
+
+    // Show the modal
+    document.getElementById('modal').classList.remove('hidden');
+  } catch (error) {
+    hideLoading();
+    console.error('Failed to load printings:', error);
+    showToast('Failed to load printings', 'error');
+  }
+}
+
+async function swapPrinting(deckCardId, newPrintingId) {
+  try {
+    console.log('Swapping printing:', { deckCardId, newPrintingId, currentDeckId });
+    showLoading();
+    // Update the deck card with the new printing
+    const updatedDeck = await api.updateDeckCard(currentDeckId, deckCardId, { printingId: parseInt(newPrintingId) });
+    console.log('Updated deck received:', updatedDeck);
+    currentDeck = updatedDeck.deck;
+    renderDeckCards();
+    await loadDeckStats();
+    hideLoading();
+    showToast('Printing updated!', 'success', 2000);
+  } catch (error) {
+    console.error('Swap printing error:', error);
+    hideLoading();
+    showToast('Failed to update printing: ' + error.message, 'error');
   }
 }
 

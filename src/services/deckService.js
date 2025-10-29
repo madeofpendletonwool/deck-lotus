@@ -65,6 +65,7 @@ export function getDeckById(deckId, userId) {
       p.artist,
       p.image_url,
       p.uuid,
+      s.name as set_name,
       c.name,
       c.mana_cost,
       c.cmc,
@@ -79,6 +80,7 @@ export function getDeckById(deckId, userId) {
      FROM deck_cards dc
      JOIN printings p ON dc.printing_id = p.id
      JOIN cards c ON p.card_id = c.id
+     LEFT JOIN sets s ON p.set_code = s.code
      WHERE dc.deck_id = ?
      ORDER BY dc.is_sideboard, c.cmc, c.name`,
     [userId, deckId]
@@ -226,7 +228,7 @@ export function updateDeckCard(deckId, userId, deckCardId, updates) {
     throw new Error('Deck not found or access denied');
   }
 
-  const { quantity, isSideboard, isCommander } = updates;
+  const { quantity, isSideboard, isCommander, printingId } = updates;
 
   const fields = [];
   const params = [];
@@ -246,6 +248,10 @@ export function updateDeckCard(deckId, userId, deckCardId, updates) {
   if (isCommander !== undefined) {
     fields.push('is_commander = ?');
     params.push(isCommander ? 1 : 0);
+  }
+  if (printingId !== undefined) {
+    fields.push('printing_id = ?');
+    params.push(printingId);
   }
 
   if (fields.length === 0) {
@@ -453,6 +459,7 @@ export function getDeckByShareToken(shareToken) {
       p.artist,
       p.image_url,
       p.uuid,
+      s.name as set_name,
       c.name,
       c.mana_cost,
       c.cmc,
@@ -466,6 +473,7 @@ export function getDeckByShareToken(shareToken) {
      FROM deck_cards dc
      JOIN printings p ON dc.printing_id = p.id
      JOIN cards c ON p.card_id = c.id
+     LEFT JOIN sets s ON p.set_code = s.code
      WHERE dc.deck_id = ?
      ORDER BY dc.is_sideboard, c.cmc, c.name`,
     [share.deck_id]

@@ -63,12 +63,14 @@ export function getCardById(cardId) {
     return null;
   }
 
-  // Get all printings for this card with prices
+  // Get all printings for this card with prices and set names
   const printings = db.all(
     `SELECT p.*,
+            s.name as set_name,
             (SELECT price FROM prices WHERE printing_uuid = p.uuid AND provider = 'tcgplayer' AND price_type = 'normal' LIMIT 1) as price_normal,
             (SELECT price FROM prices WHERE printing_uuid = p.uuid AND provider = 'tcgplayer' AND price_type = 'foil' LIMIT 1) as price_foil
      FROM printings p
+     LEFT JOIN sets s ON p.set_code = s.code
      WHERE p.card_id = ?
      ORDER BY p.set_code, p.collector_number`,
     [cardId]
@@ -140,9 +142,10 @@ export function getCardByName(name) {
  */
 export function getCardPrintings(cardId) {
   const printings = db.all(
-    `SELECT p.*, c.name as card_name
+    `SELECT p.*, c.name as card_name, s.name as set_name
      FROM printings p
      JOIN cards c ON p.card_id = c.id
+     LEFT JOIN sets s ON p.set_code = s.code
      WHERE p.card_id = ?
      ORDER BY p.set_code, p.collector_number`,
     [cardId]

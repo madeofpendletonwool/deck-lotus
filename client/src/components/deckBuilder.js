@@ -1283,11 +1283,18 @@ async function showPrintingSelectionModal(cardId, deckCardId) {
     const modalBody = document.getElementById('modal-body');
     modalBody.innerHTML = `
       <div style="max-width: 900px; margin: 0 auto;">
-        <h2 style="margin: 0 0 1.5rem 0;">Select a Printing</h2>
-        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem; max-height: 70vh; overflow-y: auto;">
+        <h2 style="margin: 0 0 1rem 0;">Select a Printing</h2>
+        <input type="text"
+               id="printing-search"
+               placeholder="Search by set code (e.g., INR, J25)..."
+               style="width: 100%; padding: 0.75rem; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-secondary); color: var(--text-primary); font-size: 0.95rem; margin-bottom: 1.5rem;"
+               autocomplete="off">
+        <div id="printing-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem; max-height: 60vh; overflow-y: auto;">
           ${printings.map(printing => `
             <div class="printing-option ${printing.id == currentPrintingId ? 'current-printing' : ''}"
                  data-printing-id="${printing.id}"
+                 data-set-code="${printing.set_code.toUpperCase()}"
+                 data-set-name="${(printing.set_name || '').toLowerCase()}"
                  style="cursor: pointer; padding: 1rem; background: var(--bg-tertiary); border-radius: 8px; transition: all 0.2s; border: 2px solid ${printing.id == currentPrintingId ? 'var(--primary)' : 'transparent'};">
               <img src="${printing.image_url}"
                    alt="${printing.set_name || printing.set_code}"
@@ -1315,8 +1322,33 @@ async function showPrintingSelectionModal(cardId, deckCardId) {
       </div>
     `;
 
+    // Add search functionality
+    const searchInput = document.getElementById('printing-search');
+    const printingOptions = modalBody.querySelectorAll('.printing-option');
+
+    searchInput.addEventListener('input', (e) => {
+      const searchTerm = e.target.value.toUpperCase().trim();
+
+      printingOptions.forEach(option => {
+        const setCode = option.dataset.setCode;
+        const setName = option.dataset.setName;
+
+        // Match against set code or set name
+        const matches = setCode.includes(searchTerm) || setName.includes(searchTerm.toLowerCase());
+
+        if (matches || searchTerm === '') {
+          option.style.display = '';
+        } else {
+          option.style.display = 'none';
+        }
+      });
+    });
+
+    // Focus the search input
+    setTimeout(() => searchInput.focus(), 100);
+
     // Add click handlers for printing selection
-    modalBody.querySelectorAll('.printing-option').forEach(option => {
+    printingOptions.forEach(option => {
       // Hover effect
       option.addEventListener('mouseenter', function() {
         if (!this.classList.contains('current-printing')) {

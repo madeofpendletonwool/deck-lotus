@@ -102,6 +102,11 @@ export function setupDeckBuilder() {
     exportToTCGPlayer();
   });
 
+  // Manapool button in modal
+  document.querySelector('#buy-manapool .btn').addEventListener('click', () => {
+    exportToManapool();
+  });
+
   // Copy decklist button
   document.getElementById('copy-decklist').addEventListener('click', () => {
     const deckText = generateDeckList();
@@ -1124,14 +1129,24 @@ function openBuyDeckModal() {
 }
 
 function generateDeckList() {
+  // Check if non-owned only filter is enabled
+  const nonOwnedOnly = document.getElementById('copy-non-owned-only')?.checked || false;
+
   // Build deck list in TCGPlayer format with set codes
-  const mainboard = currentDeck.cards
-    .filter(c => !c.is_sideboard)
+  let mainboardCards = currentDeck.cards.filter(c => !c.is_sideboard);
+  let sideboardCards = currentDeck.cards.filter(c => c.is_sideboard);
+
+  // Filter for non-owned cards if checkbox is checked
+  if (nonOwnedOnly) {
+    mainboardCards = mainboardCards.filter(c => !c.is_owned);
+    sideboardCards = sideboardCards.filter(c => !c.is_owned);
+  }
+
+  const mainboard = mainboardCards
     .map(c => `${c.quantity} ${c.name} [${c.set_code}]`)
     .join('\n');
 
-  const sideboard = currentDeck.cards
-    .filter(c => c.is_sideboard)
+  const sideboard = sideboardCards
     .map(c => `${c.quantity} ${c.name} [${c.set_code}]`)
     .join('\n');
 
@@ -1148,6 +1163,16 @@ function exportToTCGPlayer() {
   try {
     const deckText = generateDeckList();
 
+    if (!deckText.trim()) {
+      const nonOwnedOnly = document.getElementById('copy-non-owned-only')?.checked || false;
+      if (nonOwnedOnly) {
+        showToast('No non-owned cards to export', 'warning', 3000);
+      } else {
+        showToast('No cards to export', 'warning', 3000);
+      }
+      return;
+    }
+
     // Copy to clipboard
     navigator.clipboard.writeText(deckText).then(() => {
       // Open TCGPlayer mass entry page
@@ -1160,6 +1185,38 @@ function exportToTCGPlayer() {
       document.getElementById('decklist-preview').classList.remove('hidden');
       document.getElementById('decklist-text').value = deckText;
       showToast('Copy the deck list below and paste into TCGPlayer', 'warning', 4000);
+    });
+  } catch (error) {
+    showToast('Failed to export', 'error');
+  }
+}
+
+function exportToManapool() {
+  try {
+    const deckText = generateDeckList();
+
+    if (!deckText.trim()) {
+      const nonOwnedOnly = document.getElementById('copy-non-owned-only')?.checked || false;
+      if (nonOwnedOnly) {
+        showToast('No non-owned cards to export', 'warning', 3000);
+      } else {
+        showToast('No cards to export', 'warning', 3000);
+      }
+      return;
+    }
+
+    // Copy to clipboard
+    navigator.clipboard.writeText(deckText).then(() => {
+      // Open Manapool mass entry page
+      window.open('https://manapool.com/add-deck', '_blank');
+
+      document.getElementById('buy-deck-modal').classList.add('hidden');
+      showToast('Deck list copied! Paste it into Manapool Mass Entry.', 'success', 4000);
+    }).catch(() => {
+      // Fallback: just show the text
+      document.getElementById('decklist-preview').classList.remove('hidden');
+      document.getElementById('decklist-text').value = deckText;
+      showToast('Copy the deck list below and paste into Manapool', 'warning', 4000);
     });
   } catch (error) {
     showToast('Failed to export', 'error');

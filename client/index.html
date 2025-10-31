@@ -857,6 +857,15 @@
                         >&times;</span
                     >
                     <h2 style="margin-bottom: 1.5rem">Buy Deck</h2>
+                    <div style="margin-bottom: 1.5rem; padding: 1rem; background: var(--bg-tertiary); border-radius: 0.5rem;">
+                        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; user-select: none;">
+                            <input type="checkbox" id="copy-non-owned-only" style="width: 18px; height: 18px; cursor: pointer;">
+                            <span style="font-weight: 600;">Copy only non-owned cards</span>
+                        </label>
+                        <p style="margin: 0.5rem 0 0 1.75rem; font-size: 0.875rem; color: var(--text-secondary);">
+                            When enabled, only cards you don't own will be copied to clipboard
+                        </p>
+                    </div>
                     <div class="buy-options">
                         <div class="buy-option" id="buy-tcgplayer">
                             <div class="buy-option-header">
@@ -871,6 +880,18 @@
                             </p>
                             <button class="btn btn-primary btn-block">
                                 Open in TCGplayer
+                            </button>
+                        </div>
+                        <div class="buy-option" id="buy-manapool">
+                            <div class="buy-option-header">
+                                <h3>Manapool Mass Entry</h3>
+                            </div>
+                            <p>
+                                Import your deck to Manapool with set codes for
+                                accurate pricing
+                            </p>
+                            <button class="btn btn-primary btn-block">
+                                Open in Manapool
                             </button>
                         </div>
                         <div class="buy-option">

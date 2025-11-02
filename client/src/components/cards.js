@@ -462,6 +462,9 @@ export async function showCardDetail(cardId) {
 
     const typeInfo = parseTypeLine(card.type_line);
 
+    // Check if this is a double-faced card (has " // " in the name)
+    const isDoubleFaced = card.name.includes(' // ');
+
     const modalBody = document.getElementById('modal-body');
     modalBody.innerHTML = `
       <div class="card-detail-grid">
@@ -470,7 +473,17 @@ export async function showCardDetail(cardId) {
             <img src="${firstPrinting.image_url}"
                  alt="${card.name}"
                  id="card-detail-image"
-                 style="width: 100%; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.5);">
+                 data-front-url="${firstPrinting.image_url}"
+                 data-back-url="${firstPrinting.image_url.replace('/front/', '/back/')}"
+                 data-is-flipped="false"
+                 style="width: 100%; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); transition: transform 0.6s;">
+            ${isDoubleFaced ? `
+              <div style="display: flex; justify-content: center; margin-top: 0.75rem;">
+                <button id="flip-card-btn" class="btn btn-secondary" style="width: auto; padding: 0.5rem 0.75rem; display: flex; align-items: center; justify-content: center;">
+                  <i class="ph ph-arrows-clockwise" style="font-size: 1.25rem;"></i>
+                </button>
+              </div>
+            ` : ''}
           ` : ''}
         </div>
         <div>
@@ -779,6 +792,10 @@ export async function showCardDetail(cardId) {
         if (img && imageUrl) {
           img.src = imageUrl;
           img.dataset.fallback = fallback;
+          // Update flip URLs if this is a double-faced card
+          img.dataset.frontUrl = imageUrl;
+          img.dataset.backUrl = imageUrl.replace('/front/', '/back/');
+          img.dataset.isFlipped = 'false';
         }
       });
 
@@ -796,6 +813,42 @@ export async function showCardDetail(cardId) {
     if (quickAddModalBtn) {
       quickAddModalBtn.addEventListener('click', async () => {
         await showQuickAddMenuModal(cardId);
+      });
+    }
+
+    // Flip card handler for double-faced cards
+    const flipCardBtn = document.getElementById('flip-card-btn');
+    if (flipCardBtn) {
+      flipCardBtn.addEventListener('click', () => {
+        const img = document.getElementById('card-detail-image');
+        if (img) {
+          const isFlipped = img.dataset.isFlipped === 'true';
+          const frontUrl = img.dataset.frontUrl;
+          const backUrl = img.dataset.backUrl;
+
+          // Trigger flip animation - go all the way to edge (90deg)
+          img.style.transform = 'rotateY(90deg) scaleX(0)';
+
+          // Change image at the midpoint of the animation
+          setTimeout(() => {
+            if (isFlipped) {
+              // Show front face
+              img.src = frontUrl;
+              img.dataset.isFlipped = 'false';
+            } else {
+              // Show back face
+              img.src = backUrl;
+              img.dataset.isFlipped = 'true';
+            }
+            // Complete the flip from the other side
+            img.style.transform = 'rotateY(-90deg) scaleX(0)';
+
+            // Return to normal
+            setTimeout(() => {
+              img.style.transform = 'rotateY(0deg) scaleX(1)';
+            }, 50);
+          }, 300);
+        }
       });
     }
 

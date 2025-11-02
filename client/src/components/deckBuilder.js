@@ -115,10 +115,29 @@ export function setupDeckBuilder() {
     });
   });
 
-  // Compact view toggle
+  // Layout view toggle - cycles through: full -> compact -> ultra-compact
   document.getElementById('toggle-compact-btn').addEventListener('click', () => {
-    compactView = !compactView;
-    document.getElementById('toggle-compact-btn').classList.toggle('active', compactView);
+    // Cycle through three states: 'full' -> 'compact' -> 'ultra-compact' -> 'full'
+    if (layoutView === 'full') {
+      layoutView = 'compact';
+    } else if (layoutView === 'compact') {
+      layoutView = 'ultra-compact';
+    } else {
+      layoutView = 'full';
+    }
+
+    const btn = document.getElementById('toggle-compact-btn');
+    btn.classList.toggle('active', layoutView !== 'full');
+
+    // Update icon based on current layout
+    let icon = 'ph-rows'; // full view
+    if (layoutView === 'compact') {
+      icon = 'ph-rows-plus-bottom';
+    } else if (layoutView === 'ultra-compact') {
+      icon = 'ph-list';
+    }
+
+    btn.innerHTML = `<i class="ph ${icon}"></i>`;
     renderDeckCards();
   });
 
@@ -364,7 +383,7 @@ async function addCardToDeck(cardId) {
   }
 }
 
-let compactView = false;
+let layoutView = 'full'; // Can be 'full', 'compact', or 'ultra-compact'
 
 function renderDeckCards() {
   const mainboard = document.getElementById('mainboard');
@@ -542,7 +561,40 @@ function renderCardItem(card) {
     (card.type_line.includes('Creature') || card.type_line.includes('creature'));
   const showCommanderIcon = isCommanderDeck && isLegendaryCreature && !card.is_sideboard;
 
-  if (compactView) {
+  // Ultra-compact view - minimal text-only with dropdown
+  if (layoutView === 'ultra-compact') {
+    return `
+      <div class="deck-card-item ultra-compact ${card.is_commander ? 'is-commander' : ''}" data-deck-card-id="${card.deck_card_id}" data-printing-id="${card.printing_id}" data-is-sideboard="${card.is_sideboard}" data-card-id="${card.card_id}" draggable="true">
+        <button class="ownership-toggle-btn ${card.is_owned ? 'owned' : ''}" data-card-id="${card.card_id}" style="position: absolute; top: 2px; left: 2px; background: ${card.is_owned ? 'rgba(16, 185, 129, 0.9)' : 'rgba(0,0,0,0.8)'}; color: white; border: none; border-radius: 50%; width: 16px; height: 16px; cursor: pointer; font-size: 10px; display: flex; align-items: center; justify-content: center; z-index: 10; transition: all 0.2s;">
+          <i class="ph ${card.is_owned ? 'ph-check-circle' : 'ph-circle'}"></i>
+        </button>
+        <span class="card-quantity-badge">${card.quantity}</span>
+        <div class="deck-card-info-ultra-compact">
+          <span class="card-name">${card.name}</span>
+          <span class="card-mana">${formatMana(card.mana_cost || '')}</span>
+        </div>
+        <div class="card-actions-dropdown">
+          <button class="card-actions-menu-btn" data-deck-card-id="${card.deck_card_id}" onclick="event.stopPropagation(); this.nextElementSibling.classList.toggle('hidden')">
+            <i class="ph ph-dots-three-vertical"></i>
+          </button>
+          <div class="card-actions-menu hidden">
+            <div class="card-actions-menu-item quantity-adjuster">
+              <button class="quantity-adjuster-btn quantity-btn btn-decrease" data-deck-card-id="${card.deck_card_id}">-</button>
+              <span class="quantity-adjuster-value">${card.quantity}</span>
+              <button class="quantity-adjuster-btn quantity-btn btn-increase" data-deck-card-id="${card.deck_card_id}">+</button>
+            </div>
+            <div class="card-actions-menu-item remove-card-item danger" data-deck-card-id="${card.deck_card_id}">
+              <i class="ph ph-trash"></i>
+              Remove
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  // Compact view - with small images
+  if (layoutView === 'compact') {
     return `
       <div class="deck-card-item compact ${card.is_commander ? 'is-commander' : ''}" data-deck-card-id="${card.deck_card_id}" data-printing-id="${card.printing_id}" data-is-sideboard="${card.is_sideboard}" data-card-id="${card.card_id}" draggable="true" style="position: relative;">
         <button class="ownership-toggle-btn ${card.is_owned ? 'owned' : ''}" data-card-id="${card.card_id}" style="position: absolute; top: 4px; left: 4px; background: ${card.is_owned ? 'rgba(16, 185, 129, 0.9)' : 'rgba(0,0,0,0.8)'}; color: white; border: none; border-radius: 50%; width: 20px; height: 20px; cursor: pointer; font-size: 12px; display: flex; align-items: center; justify-content: center; z-index: 10; transition: all 0.2s;">
@@ -665,9 +717,16 @@ function setupCardControls() {
   document.querySelectorAll('.btn-increase').forEach(btn => {
     btn.addEventListener('click', async (e) => {
       e.stopPropagation();
+      e.preventDefault();
       const deckCardId = btn.dataset.deckCardId;
       const card = currentDeck.cards.find(c => c.deck_card_id == deckCardId);
       await updateCardQuantity(deckCardId, card.quantity + 1);
+
+      // Update the quantity display in the dropdown if it exists
+      const quantityDisplay = btn.parentElement.querySelector('.quantity-adjuster-value');
+      if (quantityDisplay) {
+        quantityDisplay.textContent = card.quantity + 1;
+      }
     });
   });
 
@@ -675,10 +734,17 @@ function setupCardControls() {
   document.querySelectorAll('.btn-decrease').forEach(btn => {
     btn.addEventListener('click', async (e) => {
       e.stopPropagation();
+      e.preventDefault();
       const deckCardId = btn.dataset.deckCardId;
       const card = currentDeck.cards.find(c => c.deck_card_id == deckCardId);
       if (card.quantity > 1) {
         await updateCardQuantity(deckCardId, card.quantity - 1);
+
+        // Update the quantity display in the dropdown if it exists
+        const quantityDisplay = btn.parentElement.querySelector('.quantity-adjuster-value');
+        if (quantityDisplay) {
+          quantityDisplay.textContent = card.quantity - 1;
+        }
       }
     });
   });
@@ -755,6 +821,37 @@ function setupCardControls() {
       const deckCardId = link.dataset.deckCardId;
       await showPrintingSelectionModal(cardId, deckCardId);
     });
+  });
+
+  // Ultra-compact view dropdown remove button
+  document.querySelectorAll('.remove-card-item').forEach(item => {
+    item.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const deckCardId = item.dataset.deckCardId;
+      await removeCard(deckCardId);
+      // Close the dropdown
+      const menu = item.closest('.card-actions-menu');
+      if (menu) menu.classList.add('hidden');
+    });
+  });
+
+  // Prevent dropdown from closing when clicking inside it
+  document.querySelectorAll('.card-actions-menu').forEach(menu => {
+    menu.addEventListener('click', (e) => {
+      // Only stop propagation for quantity adjuster, not for remove button
+      if (e.target.closest('.quantity-adjuster')) {
+        e.stopPropagation();
+      }
+    });
+  });
+
+  // Close dropdown when clicking outside
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.card-actions-dropdown')) {
+      document.querySelectorAll('.card-actions-menu').forEach(menu => {
+        menu.classList.add('hidden');
+      });
+    }
   });
 }
 

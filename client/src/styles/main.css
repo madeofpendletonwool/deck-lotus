@@ -693,6 +693,12 @@ button.btn-icon.active {
 .deck-card-item:hover {
   background: var(--border);
   transform: translateX(2px);
+  z-index: 1;
+}
+
+/* When dropdown is open, ensure the card stays on top */
+.deck-card-item:has(.card-actions-menu:not(.hidden)) {
+  z-index: 100;
 }
 
 .deck-card-image {
@@ -761,7 +767,7 @@ button.btn-icon.active {
 }
 
 .quantity-input {
-  width: 45px;
+  width: 32px !important;
   height: 28px;
   text-align: center;
   font-weight: 600;
@@ -770,7 +776,7 @@ button.btn-icon.active {
   color: var(--text);
   border-radius: 0.25rem;
   font-size: 0.875rem;
-  padding: 0;
+  padding: 0 !important;
   -moz-appearance: textfield; /* Firefox */
 }
 
@@ -800,6 +806,146 @@ button.btn-icon.active {
   border-radius: 0.25rem;
   cursor: pointer;
   font-size: 0.75rem;
+}
+
+/* Ultra-compact text-only layout */
+.deck-card-item.ultra-compact {
+  padding: 0.4rem 0.5rem;
+  gap: 0.5rem;
+}
+
+.deck-card-info-ultra-compact {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex: 1;
+  gap: 0.5rem;
+}
+
+.deck-card-info-ultra-compact .card-name {
+  flex: 1;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.deck-card-info-ultra-compact .card-mana {
+  margin-left: auto;
+  font-size: 1rem;
+}
+
+.card-quantity-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 0.35rem;
+  background: var(--primary);
+  color: white;
+  border-radius: 0.25rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.card-actions-dropdown {
+  position: relative;
+}
+
+.card-actions-menu-btn {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  padding: 0.25rem 0.4rem;
+  border-radius: 0.25rem;
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.card-actions-menu-btn:hover {
+  background: var(--bg-tertiary);
+  border-color: var(--primary);
+  color: var(--text);
+}
+
+.card-actions-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 0.25rem);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6);
+  z-index: 1000;
+  min-width: 140px;
+  overflow: hidden;
+}
+
+.card-actions-menu-item {
+  padding: 0.6rem 0.75rem;
+  cursor: pointer;
+  border-bottom: 1px solid var(--border);
+  transition: background 0.15s;
+  font-size: 0.813rem;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.card-actions-menu-item:last-child {
+  border-bottom: none;
+}
+
+.card-actions-menu-item:hover {
+  background: var(--bg-tertiary);
+}
+
+.card-actions-menu-item.danger {
+  color: var(--danger);
+}
+
+.card-actions-menu-item.danger:hover {
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.quantity-adjuster {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  background: var(--bg-tertiary);
+}
+
+.quantity-adjuster-btn {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 0.25rem;
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.quantity-adjuster-btn:hover {
+  background: var(--border);
+}
+
+.quantity-adjuster-value {
+  min-width: 32px;
+  text-align: center;
+  font-weight: 600;
 }
 
 /* Stats Panel */
@@ -1119,16 +1265,27 @@ button.btn-icon.active {
 }
 
 .modal-close {
-  position: absolute;
-  top: 1rem;
-  right: 1rem;
+  position: sticky;
+  top: 0.5rem;
+  float: right;
+  margin-bottom: -2rem;
   font-size: 2rem;
   cursor: pointer;
   color: var(--text-secondary);
+  background: var(--bg-secondary);
+  width: 3rem;
+  height: 3rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  z-index: 100;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
 .modal-close:hover {
   color: var(--text);
+  background: var(--bg-tertiary);
 }
 
 /* Card Detail Grid */

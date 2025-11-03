@@ -42,33 +42,6 @@ document.getElementById('modal')?.addEventListener('click', (e) => {
   }
 });
 
-// Add swipe-down gesture to close modal on mobile
-let touchStartY = 0;
-let touchStartX = 0;
-let modalContent = null;
-
-document.getElementById('modal')?.addEventListener('touchstart', (e) => {
-  modalContent = document.querySelector('.modal-content');
-  if (modalContent && modalContent.contains(e.target)) {
-    touchStartY = e.touches[0].clientY;
-    touchStartX = e.touches[0].clientX;
-  }
-}, { passive: true });
-
-document.getElementById('modal')?.addEventListener('touchend', (e) => {
-  if (!modalContent) return;
-
-  const touchEndY = e.changedTouches[0].clientY;
-  const touchEndX = e.changedTouches[0].clientX;
-  const deltaY = touchEndY - touchStartY;
-  const deltaX = touchEndX - touchStartX;
-
-  // Check if it's a downward swipe (deltaY > 100) and mostly vertical (abs(deltaX) < abs(deltaY))
-  if (deltaY > 100 && Math.abs(deltaX) < Math.abs(deltaY)) {
-    hideModal();
-  }
-}, { passive: true });
-
 export function debounce(func, wait) {
   let timeout;
   return function executedFunction(...args) {

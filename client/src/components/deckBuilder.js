@@ -588,6 +588,10 @@ function renderCardItem(card) {
               <span class="quantity-adjuster-value">${card.quantity}</span>
               <button class="quantity-adjuster-btn quantity-btn btn-increase" data-deck-card-id="${card.deck_card_id}">+</button>
             </div>
+            <div class="card-actions-menu-item move-card-item" data-deck-card-id="${card.deck_card_id}" data-is-sideboard="${card.is_sideboard}">
+              <i class="ph ph-arrows-left-right"></i>
+              Move to ${card.is_sideboard ? 'Mainboard' : 'Sideboard'}
+            </div>
             <div class="card-actions-menu-item remove-card-item danger" data-deck-card-id="${card.deck_card_id}">
               <i class="ph ph-trash"></i>
               Remove
@@ -834,6 +838,19 @@ function setupCardControls() {
       e.stopPropagation();
       const deckCardId = item.dataset.deckCardId;
       await removeCard(deckCardId);
+      // Close the dropdown
+      const menu = item.closest('.card-actions-menu');
+      if (menu) menu.classList.add('hidden');
+    });
+  });
+
+  // Ultra-compact view dropdown move to sideboard/mainboard button
+  document.querySelectorAll('.move-card-item').forEach(item => {
+    item.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const deckCardId = item.dataset.deckCardId;
+      const isSideboard = item.dataset.isSideboard === 'true' || item.dataset.isSideboard === '1';
+      await moveCardToBoard(deckCardId, !isSideboard);
       // Close the dropdown
       const menu = item.closest('.card-actions-menu');
       if (menu) menu.classList.add('hidden');

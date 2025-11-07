@@ -11,6 +11,9 @@ import {
   toggleCardOwnership,
   getUserOwnedCards,
   getCardOwnershipStatus,
+  getCardOwnedPrintings,
+  setOwnedPrintingQuantity,
+  getCardOwnershipAndUsage,
 } from '../services/cardService.js';
 import { authenticate } from '../middleware/auth.js';
 
@@ -202,6 +205,43 @@ router.get('/:id/owned', authenticate, (req, res, next) => {
 
     const status = getCardOwnershipStatus(userId, cardId);
     res.json(status);
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * GET /api/cards/:id/ownership-usage
+ * Get comprehensive ownership and deck usage info for a card
+ */
+router.get('/:id/ownership-usage', authenticate, (req, res, next) => {
+  try {
+    const cardId = parseInt(req.params.id);
+    const userId = req.user.id;
+
+    const data = getCardOwnershipAndUsage(userId, cardId);
+    res.json(data);
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /api/cards/printings/:printingId/quantity
+ * Set owned quantity for a specific printing
+ */
+router.post('/printings/:printingId/quantity', authenticate, (req, res, next) => {
+  try {
+    const printingId = parseInt(req.params.printingId);
+    const userId = req.user.id;
+    const { quantity } = req.body;
+
+    if (quantity === undefined || quantity === null) {
+      return res.status(400).json({ error: 'Quantity is required' });
+    }
+
+    const result = setOwnedPrintingQuantity(userId, printingId, parseInt(quantity));
+    res.json(result);
   } catch (error) {
     next(error);
   }

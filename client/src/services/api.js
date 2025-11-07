@@ -127,6 +127,17 @@ class ApiClient {
     return this.request(`/cards/${cardId}/owned`);
   }
 
+  async getCardOwnershipAndUsage(cardId) {
+    return this.request(`/cards/${cardId}/ownership-usage`);
+  }
+
+  async setOwnedPrintingQuantity(printingId, quantity) {
+    return this.request(`/cards/printings/${printingId}/quantity`, {
+      method: 'POST',
+      body: JSON.stringify({ quantity }),
+    });
+  }
+
   // Deck methods
   async getDecks() {
     return this.request('/decks');

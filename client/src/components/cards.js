@@ -443,8 +443,12 @@ async function quickAddCard(cardId, deckId) {
 export async function showCardDetail(cardId) {
   try {
     showLoading();
-    const result = await api.getCard(cardId);
-    const card = result.card;
+    const [cardResult, ownershipResult] = await Promise.all([
+      api.getCard(cardId),
+      api.getCardOwnershipAndUsage(cardId)
+    ]);
+    const card = cardResult.card;
+    const ownership = ownershipResult;
     const firstPrinting = card.printings && card.printings.length > 0 ? card.printings[0] : null;
     hideLoading();
 
@@ -462,8 +466,28 @@ export async function showCardDetail(cardId) {
 
     const typeInfo = parseTypeLine(card.type_line);
 
-    // Check if this is a double-faced card (has " // " in the name)
-    const isDoubleFaced = card.name.includes(' // ');
+    // Check if this is a card with a flippable backside based on layout
+    // Cards with actual separate back face images that can be flipped to:
+    // - transform: Transforming DFCs (werewolves, igniting planeswalkers, etc.)
+    // - modal_dfc: Modal DFCs (Zendikar Rising lands, Kaldheim gods, etc.)
+    // - meld: Meld cards (combine into one large card)
+    // - reversible_card: Reversible cards
+    // - double_faced_token: Double-faced tokens
+    // - art_series: Art series cards
+    //
+    // Cards that should NOT flip (both faces printed on same side):
+    // - split: Split cards like Fire // Ice
+    // - adventure: Adventure cards
+    // - aftermath: Aftermath cards
+    // - flip: Flip cards (printed upside-down on same card)
+    const hasFlippableBackside = card.layout && (
+      card.layout === 'transform' ||
+      card.layout === 'modal_dfc' ||
+      card.layout === 'meld' ||
+      card.layout === 'reversible_card' ||
+      card.layout === 'double_faced_token' ||
+      card.layout === 'art_series'
+    );
 
     const modalBody = document.getElementById('modal-body');
     modalBody.innerHTML = `
@@ -477,7 +501,7 @@ export async function showCardDetail(cardId) {
                  data-back-url="${firstPrinting.image_url.replace('/front/', '/back/')}"
                  data-is-flipped="false"
                  style="width: 100%; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); transition: transform 0.6s;">
-            ${isDoubleFaced ? `
+            ${hasFlippableBackside ? `
               <div style="display: flex; justify-content: center; margin-top: 0.75rem;">
                 <button id="flip-card-btn" class="btn btn-secondary" style="width: auto; padding: 0.5rem 0.75rem; display: flex; align-items: center; justify-content: center;">
                   <i class="ph ph-arrows-clockwise" style="font-size: 1.25rem;"></i>
@@ -538,6 +562,113 @@ export async function showCardDetail(cardId) {
           <div style="margin-bottom: 1rem;">
             <strong>Mana Value:</strong> ${card.cmc || 0}
           </div>
+
+          <!-- Ownership & Deck Usage Section -->
+          <div style="margin: 2rem 0; padding: 1.25rem; background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(5, 150, 105, 0.05)); border-radius: 12px; border: 1px solid rgba(16, 185, 129, 0.3);">
+            <h3 style="margin: 0 0 1rem 0; color: #10b981; display: flex; align-items: center; gap: 0.5rem;">
+              <i class="ph ph-check-circle-fill" style="font-size: 1.5rem;"></i>
+              Collection & Deck Usage
+            </h3>
+
+            <!-- Owned Printings Section - Always Visible -->
+            <div style="margin-bottom: ${ownership && ownership.deckUsage.length > 0 ? '1.5rem' : '0'};">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+                <span style="font-weight: 600; font-size: 0.95rem;">Owned Printings</span>
+                ${ownership && ownership.totalOwned > 0 ? `
+                  <span style="font-size: 0.875rem; color: var(--text-secondary);">
+                    Total: ${ownership.totalOwned} •
+                    Available: <span style="color: ${ownership.available > 0 ? '#10b981' : '#f59e0b'}; font-weight: 600;">${ownership.available}</span>
+                  </span>
+                ` : ''}
+              </div>
+
+              <!-- Add New Printing Dropdown -->
+              <div style="margin-bottom: 1rem;">
+                <div style="position: relative;">
+                  <button id="add-printing-dropdown-btn" style="width: 100%; padding: 0.75rem; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; font-size: 0.95rem; transition: all 0.2s;" onmouseenter="this.style.borderColor='var(--accent-color)'" onmouseleave="this.style.borderColor='var(--border-color)'">
+                    <span style="color: var(--text-secondary);">+ Add printing to collection...</span>
+                    <i class="ph ph-caret-down"></i>
+                  </button>
+                  <div id="printing-dropdown" class="hidden" style="position: absolute; top: 100%; left: 0; right: 0; margin-top: 0.5rem; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; max-height: 350px; z-index: 1000; box-shadow: 0 4px 12px rgba(0,0,0,0.3); display: flex; flex-direction: column;">
+                    <div style="padding: 0.75rem; border-bottom: 1px solid var(--border-color); position: sticky; top: 0; background: var(--bg-secondary); z-index: 1;">
+                      <input type="text" id="printing-search" placeholder="Search set code or name..." style="width: 100%; padding: 0.5rem; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-size: 0.875rem;" autocomplete="off">
+                    </div>
+                    <div id="printing-dropdown-list" style="overflow-y: auto; flex: 1;">
+                      ${card.printings.map(p => {
+                        const isOwned = ownership && ownership.ownedPrintings.find(op => op.printing_id === p.id);
+                        return `
+                          <div class="printing-dropdown-item" data-printing-id="${p.id}" data-set-code="${p.set_code.toLowerCase()}" data-set-name="${(p.set_name || '').toLowerCase()}" style="padding: 0.75rem; cursor: pointer; border-bottom: 1px solid var(--border-color); transition: background 0.2s; display: flex; align-items: center; gap: 0.75rem;" onmouseenter="this.style.background='var(--bg-tertiary)'" onmouseleave="this.style.background='transparent'">
+                            <img src="${p.image_url}" alt="${p.set_code}" style="width: 50px; height: 70px; border-radius: 4px; object-fit: cover; flex-shrink: 0;" onerror="this.style.display='none'">
+                            <div style="flex: 1; min-width: 0;">
+                              <div style="font-weight: 500;">
+                                ${p.set_code.toUpperCase()}
+                                <span style="margin-left: 0.5rem; color: var(--text-secondary); font-size: 0.875rem;">#${p.collector_number || '?'}</span>
+                                ${isOwned ? `<span style="margin-left: 0.5rem; color: #10b981; font-size: 0.875rem;">✓ Owned</span>` : ''}
+                              </div>
+                              <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.25rem;">
+                                ${p.set_name || p.set_code.toUpperCase()} • ${p.rarity || 'Unknown'}
+                              </div>
+                            </div>
+                          </div>
+                        `;
+                      }).join('')}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Owned Printings List -->
+              ${ownership && ownership.ownedPrintings.length > 0 ? `
+                <div style="display: grid; gap: 0.5rem;">
+                  ${ownership.ownedPrintings.map(op => `
+                    <div class="owned-printing-item" data-printing-id="${op.printing_id}" style="padding: 0.75rem; background: var(--bg-secondary); border-radius: 8px; display: flex; align-items: center; gap: 0.75rem; border: 1px solid var(--border-color);">
+                      <img src="${op.image_url}" alt="${op.set_code}" class="printing-preview" data-image-url="${op.image_url}" data-fallback="${op.image_url}" style="width: 50px; height: 70px; border-radius: 4px; object-fit: cover; flex-shrink: 0; cursor: pointer;" onerror="this.style.display='none'">
+                      <div style="flex: 1; min-width: 0; cursor: pointer;" class="printing-preview" data-image-url="${op.image_url}" data-fallback="${op.image_url}">
+                        <div style="font-weight: 500;">
+                          ${op.set_code.toUpperCase()}
+                          <span style="margin-left: 0.5rem; color: var(--text-secondary); font-size: 0.875rem;">#${op.collector_number || '?'}</span>
+                        </div>
+                        <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.25rem;">
+                          ${op.set_name || op.set_code.toUpperCase()}${op.rarity ? ` • ${op.rarity}` : ''}
+                        </div>
+                      </div>
+                      <div style="display: flex; align-items: center; gap: 0.75rem;">
+                        <div style="display: flex; align-items: center; gap: 0.5rem; background: var(--bg-tertiary); border-radius: 6px; padding: 0.25rem;">
+                          <button class="owned-qty-decrease" data-printing-id="${op.printing_id}" data-current-qty="${op.quantity}" style="background: none; border: none; color: var(--text-primary); cursor: pointer; padding: 0.25rem 0.5rem; font-size: 1.1rem; line-height: 1; transition: all 0.2s;" onmouseenter="this.style.color='#ef4444'" onmouseleave="this.style.color='var(--text-primary)'">−</button>
+                          <span class="owned-qty-display" data-printing-id="${op.printing_id}" style="min-width: 2rem; text-align: center; font-weight: 600;">${op.quantity}</span>
+                          <button class="owned-qty-increase" data-printing-id="${op.printing_id}" data-current-qty="${op.quantity}" style="background: none; border: none; color: var(--text-primary); cursor: pointer; padding: 0.25rem 0.5rem; font-size: 1.1rem; line-height: 1; transition: all 0.2s;" onmouseenter="this.style.color='#10b981'" onmouseleave="this.style.color='var(--text-primary)'">+</button>
+                        </div>
+                      </div>
+                    </div>
+                  `).join('')}
+                </div>
+              ` : `
+                <div style="text-align: center; padding: 1.5rem; color: var(--text-secondary); background: var(--bg-secondary); border-radius: 8px; border: 1px dashed var(--border-color);">
+                  <p style="margin: 0; font-size: 0.95rem;">You don't own any copies of this card yet.</p>
+                  <p style="margin: 0.5rem 0 0 0; font-size: 0.875rem;">Use the dropdown above to add printings to your collection!</p>
+                </div>
+              `}
+            </div>
+
+            <!-- Deck Usage Section -->
+            ${ownership && ownership.deckUsage.length > 0 ? `
+              <div>
+                <div style="font-weight: 600; font-size: 0.95rem; margin-bottom: 0.75rem;">Used in Decks (${ownership.totalInDecks} total)</div>
+                <div style="display: grid; gap: 0.5rem;">
+                  ${ownership.deckUsage.map(deck => `
+                    <div class="deck-usage-item" data-deck-id="${deck.id}" style="padding: 0.75rem; background: var(--bg-secondary); border-radius: 8px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; transition: all 0.2s; border: 1px solid var(--border-color);" onmouseenter="this.style.background='var(--bg-tertiary)'; this.style.borderColor='var(--accent-color)';" onmouseleave="this.style.background='var(--bg-secondary)'; this.style.borderColor='var(--border-color)';">
+                      <div style="flex: 1;">
+                        <div style="font-weight: 500;">${deck.name}</div>
+                        ${deck.format ? `<div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.25rem;">${deck.format}</div>` : ''}
+                      </div>
+                      <div style="font-weight: 600; color: var(--accent-color);">×${deck.total_quantity}</div>
+                    </div>
+                  `).join('')}
+                </div>
+              </div>
+            ` : ''}
+          </div>
+
           ${card.oracle_text ? `
             <div style="margin-bottom: 1rem; padding: 1rem; background: var(--bg-tertiary); border-radius: 8px;">
               ${formatOracleText(card.oracle_text)}
@@ -746,21 +877,28 @@ export async function showCardDetail(cardId) {
               </div>
             </div>
           ` : ''}
-          ${card.printings && card.printings.length > 0 ? `
+          ${false && card.printings && card.printings.length > 0 ? `
             <div style="margin-top: 2rem;">
               <h3>Available Printings (${card.printings.length})</h3>
               <div id="printings-list" style="margin-top: 1rem; display: grid; gap: 0.5rem;">
-                ${card.printings.slice(0, 10).map(p => `
-                  <div class="printing-item" data-image-url="${p.large_image_url || p.image_url}" data-fallback="${p.image_url}" style="padding: 0.75rem; background: var(--bg-tertiary); border-radius: 6px; display: flex; justify-content: space-between; cursor: pointer; transition: background 0.2s;">
-                    <div>
+                ${card.printings.slice(0, 10).map(p => {
+                  const isOwned = ownership && ownership.ownedPrintings.find(op => op.printing_id === p.id);
+                  return `
+                  <div class="printing-item" data-printing-id="${p.id}" data-image-url="${p.large_image_url || p.image_url}" data-fallback="${p.image_url}" style="padding: 0.75rem; background: var(--bg-tertiary); border-radius: 6px; display: flex; justify-content: space-between; align-items: center; transition: background 0.2s; border: 1px solid ${isOwned ? 'rgba(16, 185, 129, 0.5)' : 'var(--border-color)'};">
+                    <div style="flex: 1; cursor: pointer;" class="printing-preview" data-image-url="${p.large_image_url || p.image_url}" data-fallback="${p.image_url}">
                       <strong>${p.set_code.toUpperCase()}</strong> #${p.collector_number || '?'}
                       ${p.rarity ? `<span style="margin-left: 1rem; color: var(--text-secondary);">${p.rarity}</span>` : ''}
+                      ${isOwned ? `<span style="margin-left: 0.5rem; color: #10b981; font-size: 0.875rem;">✓ Owned</span>` : ''}
+                      <div style="color: var(--text-secondary); font-size: 0.875rem; margin-top: 0.25rem;">
+                        ${p.artist || 'Unknown Artist'}
+                      </div>
                     </div>
-                    <div style="color: var(--text-secondary);">
-                      ${p.artist || 'Unknown Artist'}
-                    </div>
+                    <button class="add-printing-btn" data-printing-id="${p.id}" style="background: var(--accent-color); color: white; border: none; border-radius: 6px; padding: 0.5rem 0.75rem; cursor: pointer; font-size: 0.875rem; font-weight: 500; transition: all 0.2s; white-space: nowrap;" onmouseenter="this.style.opacity='0.8'" onmouseleave="this.style.opacity='1'">
+                      + Add
+                    </button>
                   </div>
-                `).join('')}
+                `;
+                }).join('')}
                 ${card.printings.length > 10 ? `<div style="color: var(--text-secondary); text-align: center;">...and ${card.printings.length - 10} more</div>` : ''}
               </div>
             </div>
@@ -783,9 +921,10 @@ export async function showCardDetail(cardId) {
       });
     }
 
-    // Add click handlers for printings
-    document.querySelectorAll('.printing-item').forEach(item => {
-      item.addEventListener('click', function() {
+    // Add click handlers for printing previews
+    document.querySelectorAll('.printing-preview').forEach(preview => {
+      preview.addEventListener('click', function(e) {
+        e.stopPropagation();
         const imageUrl = this.dataset.imageUrl;
         const fallback = this.dataset.fallback;
         const img = document.getElementById('card-detail-image');
@@ -798,13 +937,118 @@ export async function showCardDetail(cardId) {
           img.dataset.isFlipped = 'false';
         }
       });
+    });
 
-      // Hover effect
-      item.addEventListener('mouseenter', function() {
-        this.style.background = 'var(--bg-secondary)';
+    // Dropdown toggle for printing selector
+    const dropdownBtn = document.getElementById('add-printing-dropdown-btn');
+    const dropdownMenu = document.getElementById('printing-dropdown');
+    const printingSearch = document.getElementById('printing-search');
+
+    if (dropdownBtn && dropdownMenu) {
+      dropdownBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const wasHidden = dropdownMenu.classList.contains('hidden');
+        dropdownMenu.classList.toggle('hidden');
+
+        // Focus search input when opening
+        if (wasHidden && printingSearch) {
+          setTimeout(() => printingSearch.focus(), 50);
+        }
       });
-      item.addEventListener('mouseleave', function() {
-        this.style.background = 'var(--bg-tertiary)';
+
+      // Close dropdown when clicking outside
+      const closeDropdown = (e) => {
+        if (!e.target.closest('#add-printing-dropdown-btn') && !e.target.closest('#printing-dropdown')) {
+          dropdownMenu.classList.add('hidden');
+          if (printingSearch) printingSearch.value = ''; // Clear search on close
+          document.querySelectorAll('.printing-dropdown-item').forEach(item => {
+            item.style.display = 'flex'; // Reset all items to visible
+          });
+          document.removeEventListener('click', closeDropdown);
+        }
+      };
+
+      // Add listener after a brief delay to avoid immediate triggering
+      setTimeout(() => {
+        document.addEventListener('click', closeDropdown);
+      }, 100);
+
+      // Search filter for printings
+      if (printingSearch) {
+        printingSearch.addEventListener('input', (e) => {
+          const query = e.target.value.toLowerCase().trim();
+          const items = document.querySelectorAll('.printing-dropdown-item');
+
+          items.forEach(item => {
+            const setCode = item.dataset.setCode || '';
+            const setName = item.dataset.setName || '';
+            const matches = setCode.includes(query) || setName.includes(query);
+            item.style.display = matches ? 'flex' : 'none';
+          });
+        });
+
+        // Prevent dropdown from closing when clicking search input
+        printingSearch.addEventListener('click', (e) => {
+          e.stopPropagation();
+        });
+      }
+    }
+
+    // Dropdown item click handlers - add printings from dropdown
+    document.querySelectorAll('.printing-dropdown-item').forEach(item => {
+      item.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const printingId = parseInt(item.dataset.printingId);
+        if (dropdownMenu) {
+          dropdownMenu.classList.add('hidden'); // Close dropdown after selection
+        }
+        await addPrintingToCollection(printingId, cardId);
+      });
+    });
+
+    // Add printing to collection buttons (old section, now disabled)
+    document.querySelectorAll('.add-printing-btn').forEach(btn => {
+      btn.addEventListener('click', async function(e) {
+        e.stopPropagation();
+        const printingId = parseInt(this.dataset.printingId);
+        await addPrintingToCollection(printingId, cardId);
+      });
+    });
+
+    // Owned printing quantity controls
+    document.querySelectorAll('.owned-qty-increase').forEach(btn => {
+      btn.addEventListener('click', async function(e) {
+        e.stopPropagation();
+        const printingId = parseInt(this.dataset.printingId);
+        const currentQty = parseInt(this.dataset.currentQty);
+        await updateOwnedPrintingQuantity(printingId, currentQty + 1, cardId);
+      });
+    });
+
+    document.querySelectorAll('.owned-qty-decrease').forEach(btn => {
+      btn.addEventListener('click', async function(e) {
+        e.stopPropagation();
+        const printingId = parseInt(this.dataset.printingId);
+        const currentQty = parseInt(this.dataset.currentQty);
+        if (currentQty > 0) {
+          await updateOwnedPrintingQuantity(printingId, currentQty - 1, cardId);
+        }
+      });
+    });
+
+    // Deck usage items - click to navigate to deck
+    document.querySelectorAll('.deck-usage-item').forEach(item => {
+      item.addEventListener('click', function() {
+        const deckId = this.dataset.deckId;
+        // Close modal
+        hideModal();
+        // Navigate to decks page and open that deck
+        document.dispatchEvent(new CustomEvent('navigate', { detail: 'decks' }));
+        // After a brief delay, load that specific deck
+        setTimeout(() => {
+          const event = new CustomEvent('load-deck', { detail: { deckId } });
+          document.dispatchEvent(event);
+        }, 100);
       });
     });
 
@@ -915,6 +1159,72 @@ async function showQuickAddMenuModal(cardId) {
     }, 100);
   } catch (error) {
     showToast('Failed to load decks', 'error');
+  }
+}
+
+async function addPrintingToCollection(printingId, cardId) {
+  try {
+    showLoading();
+    await api.setOwnedPrintingQuantity(printingId, 1);
+    showToast('Added to collection!', 'success', 2000);
+    // Update the browse grid checkbox
+    updateBrowseGridOwnership(cardId, true);
+    // Reload the card detail to show updated ownership
+    await showCardDetail(cardId);
+    hideLoading();
+  } catch (error) {
+    hideLoading();
+    showToast('Failed to add printing', 'error');
+    console.error('Add printing error:', error);
+  }
+}
+
+async function updateOwnedPrintingQuantity(printingId, newQuantity, cardId) {
+  try {
+    showLoading();
+    await api.setOwnedPrintingQuantity(printingId, newQuantity);
+
+    // Check if we need to update the browse grid checkbox
+    // If quantity is 0, we might need to uncheck if this was the last printing
+    if (newQuantity === 0) {
+      showToast('Removed from collection', 'success', 2000);
+      // Check if there are any other printings left
+      const ownershipData = await api.getCardOwnershipAndUsage(cardId);
+      const stillOwned = ownershipData.ownedPrintings && ownershipData.ownedPrintings.length > 0;
+      updateBrowseGridOwnership(cardId, stillOwned);
+    } else {
+      showToast(`Updated quantity to ${newQuantity}`, 'success', 2000);
+      updateBrowseGridOwnership(cardId, true);
+    }
+
+    // Reload the card detail to show updated ownership
+    await showCardDetail(cardId);
+    hideLoading();
+  } catch (error) {
+    hideLoading();
+    showToast('Failed to update quantity', 'error');
+    console.error('Update quantity error:', error);
+  }
+}
+
+/**
+ * Update the ownership checkbox on the browse grid
+ */
+function updateBrowseGridOwnership(cardId, isOwned) {
+  const cardItem = document.querySelector(`.card-item[data-card-id="${cardId}"]`);
+  if (!cardItem) return; // Card not in current browse view
+
+  const ownershipBtn = cardItem.querySelector('.ownership-toggle-btn');
+  if (!ownershipBtn) return;
+
+  if (isOwned) {
+    ownershipBtn.classList.add('owned');
+    ownershipBtn.style.background = 'rgba(16, 185, 129, 0.9)';
+    ownershipBtn.innerHTML = '<i class="ph ph-check-circle"></i>';
+  } else {
+    ownershipBtn.classList.remove('owned');
+    ownershipBtn.style.background = 'rgba(0,0,0,0.8)';
+    ownershipBtn.innerHTML = '<i class="ph ph-circle"></i>';
   }
 }
 

@@ -453,27 +453,52 @@ export function getCardStats() {
 
 /**
  * Toggle card ownership for a user
+ * This now manages owned_printings instead of owned_cards
  */
 export function toggleCardOwnership(userId, cardId) {
-  // Check if card is already owned
-  const existing = db.get(
-    `SELECT id, quantity FROM owned_cards WHERE user_id = ? AND card_id = ?`,
+  // Check if any printings are owned
+  const ownedPrintings = db.all(
+    `SELECT op.id, op.printing_id
+     FROM owned_printings op
+     JOIN printings p ON op.printing_id = p.id
+     WHERE op.user_id = ? AND p.card_id = ?`,
     [userId, cardId]
   );
 
-  if (existing) {
-    // Remove ownership
+  if (ownedPrintings.length > 0) {
+    // Remove all owned printings for this card
     db.run(
-      `DELETE FROM owned_cards WHERE id = ?`,
-      [existing.id]
+      `DELETE FROM owned_printings
+       WHERE user_id = ? AND printing_id IN (
+         SELECT p.id FROM printings p WHERE p.card_id = ?
+       )`,
+      [userId, cardId]
+    );
+    // Also remove from owned_cards
+    db.run(
+      `DELETE FROM owned_cards WHERE user_id = ? AND card_id = ?`,
+      [userId, cardId]
     );
     return { owned: false, message: 'Card removed from collection' };
   } else {
-    // Add ownership
-    db.run(
-      `INSERT INTO owned_cards (user_id, card_id, quantity) VALUES (?, ?, 1)`,
-      [userId, cardId]
+    // Add the first printing with quantity 1
+    const firstPrinting = db.get(
+      `SELECT id FROM printings WHERE card_id = ? ORDER BY set_code, collector_number LIMIT 1`,
+      [cardId]
     );
+
+    if (firstPrinting) {
+      db.run(
+        `INSERT INTO owned_printings (user_id, printing_id, quantity) VALUES (?, ?, 1)`,
+        [userId, firstPrinting.id]
+      );
+      // Also add to owned_cards for backward compatibility
+      db.run(
+        `INSERT INTO owned_cards (user_id, card_id, quantity) VALUES (?, ?, 1)
+         ON CONFLICT(user_id, card_id) DO UPDATE SET quantity = 1`,
+        [userId, cardId]
+      );
+    }
     return { owned: true, message: 'Card added to collection' };
   }
 }
@@ -505,5 +530,142 @@ export function getCardOwnershipStatus(userId, cardId) {
   return {
     owned: !!owned,
     quantity: owned ? owned.quantity : 0
+  };
+}
+
+/**
+ * Get owned printings for a specific card
+ */
+export function getCardOwnedPrintings(userId, cardId) {
+  return db.all(
+    `SELECT op.*, p.set_code, p.collector_number, p.rarity, p.image_url,
+            s.name as set_name
+     FROM owned_printings op
+     JOIN printings p ON op.printing_id = p.id
+     LEFT JOIN sets s ON p.set_code = s.code
+     WHERE op.user_id = ? AND p.card_id = ?
+     ORDER BY p.set_code, p.collector_number`,
+    [userId, cardId]
+  );
+}
+
+/**
+ * Add or update owned printing quantity
+ * Also syncs with owned_cards table
+ */
+export function setOwnedPrintingQuantity(userId, printingId, quantity) {
+  // Get the card_id for this printing
+  const printing = db.get(
+    `SELECT card_id FROM printings WHERE id = ?`,
+    [printingId]
+  );
+
+  if (!printing) {
+    throw new Error('Printing not found');
+  }
+
+  const cardId = printing.card_id;
+
+  if (quantity <= 0) {
+    // Remove if quantity is 0 or less
+    db.run(
+      `DELETE FROM owned_printings WHERE user_id = ? AND printing_id = ?`,
+      [userId, printingId]
+    );
+
+    // Check if any other printings of this card are still owned
+    const otherPrintings = db.get(
+      `SELECT COUNT(*) as count
+       FROM owned_printings op
+       JOIN printings p ON op.printing_id = p.id
+       WHERE op.user_id = ? AND p.card_id = ?`,
+      [userId, cardId]
+    );
+
+    if (otherPrintings.count === 0) {
+      // No more printings owned, remove from owned_cards
+      db.run(
+        `DELETE FROM owned_cards WHERE user_id = ? AND card_id = ?`,
+        [userId, cardId]
+      );
+    }
+
+    return { success: true, message: 'Printing removed from collection' };
+  }
+
+  // Check if already exists
+  const existing = db.get(
+    `SELECT id FROM owned_printings WHERE user_id = ? AND printing_id = ?`,
+    [userId, printingId]
+  );
+
+  if (existing) {
+    // Update quantity
+    db.run(
+      `UPDATE owned_printings SET quantity = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+      [quantity, existing.id]
+    );
+  } else {
+    // Insert new
+    db.run(
+      `INSERT INTO owned_printings (user_id, printing_id, quantity) VALUES (?, ?, ?)`,
+      [userId, printingId, quantity]
+    );
+  }
+
+  // Ensure owned_cards is marked as owned
+  db.run(
+    `INSERT INTO owned_cards (user_id, card_id, quantity) VALUES (?, ?, 1)
+     ON CONFLICT(user_id, card_id) DO UPDATE SET quantity = 1`,
+    [userId, cardId]
+  );
+
+  return { success: true, quantity };
+}
+
+/**
+ * Get all decks that contain a specific card
+ */
+export function getCardDeckUsage(userId, cardId) {
+  return db.all(
+    `SELECT DISTINCT d.id, d.name, d.format,
+            SUM(dc.quantity) as total_quantity,
+            GROUP_CONCAT(CASE WHEN dc.is_sideboard = 1 THEN dc.quantity ELSE 0 END) as sideboard_quantities,
+            GROUP_CONCAT(CASE WHEN dc.is_sideboard = 0 THEN dc.quantity ELSE 0 END) as mainboard_quantities
+     FROM deck_cards dc
+     JOIN decks d ON dc.deck_id = d.id
+     JOIN printings p ON dc.printing_id = p.id
+     WHERE d.user_id = ? AND p.card_id = ?
+     GROUP BY d.id, d.name, d.format
+     ORDER BY d.name ASC`,
+    [userId, cardId]
+  );
+}
+
+/**
+ * Get comprehensive card ownership and usage info
+ */
+export function getCardOwnershipAndUsage(userId, cardId) {
+  // Get owned printings
+  const ownedPrintings = getCardOwnedPrintings(userId, cardId);
+
+  // Get deck usage
+  const deckUsage = getCardDeckUsage(userId, cardId);
+
+  // Calculate total owned
+  const totalOwned = ownedPrintings.reduce((sum, op) => sum + op.quantity, 0);
+
+  // Calculate total in decks
+  const totalInDecks = deckUsage.reduce((sum, deck) => sum + deck.total_quantity, 0);
+
+  // Calculate available (not in decks)
+  const available = totalOwned - totalInDecks;
+
+  return {
+    ownedPrintings,
+    deckUsage,
+    totalOwned,
+    totalInDecks,
+    available
   };
 }

@@ -113,7 +113,7 @@ async function importCards(sourceDb, targetDb) {
   `).all();
 
   const insertCard = targetDb.prepare(`
-    INSERT OR IGNORE INTO cards (
+    INSERT OR REPLACE INTO cards (
       name, mana_cost, cmc, colors, color_identity,
       type_line, oracle_text, power, toughness, loyalty,
       keywords, legalities, is_reserved, edhrec_rank,
@@ -256,7 +256,7 @@ async function importCards(sourceDb, targetDb) {
   `).all();
 
   const insertPrinting = targetDb.prepare(`
-    INSERT OR IGNORE INTO printings (
+    INSERT OR REPLACE INTO printings (
       card_id, uuid, set_code, collector_number, rarity,
       artist, flavor_text, finishes, is_promo, is_full_art,
       frame_version, border_color, watermark, language, image_url,
@@ -327,7 +327,7 @@ async function importCards(sourceDb, targetDb) {
   `).all();
 
   const insertSet = targetDb.prepare(`
-    INSERT OR IGNORE INTO sets (
+    INSERT OR REPLACE INTO sets (
       code, name, type, release_date, block, base_set_size, total_set_size,
       keyrune_code, tcgplayer_group_id, is_online_only, is_foil_only
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -590,21 +590,7 @@ async function main() {
       fs.mkdirSync(DATA_DIR, { recursive: true });
     }
 
-    // Check if we need to download
-    if (!fs.existsSync(EXTRACTED_PATH)) {
-      if (!fs.existsSync(DOWNLOAD_PATH)) {
-        await downloadFile(MTGJSON_URL, DOWNLOAD_PATH);
-      }
-
-      await decompressBz2(DOWNLOAD_PATH, EXTRACTED_PATH);
-
-      // Clean up compressed file
-      fs.unlinkSync(DOWNLOAD_PATH);
-    } else {
-      console.log('✓ MTGJSON database already exists, skipping download');
-    }
-
-    // Open target database
+    // Open target database to check if we need force reimport
     console.log('Opening target database...');
     const targetDb = new Database(TARGET_DB_PATH);
     targetDb.pragma('journal_mode = WAL');
@@ -634,6 +620,20 @@ async function main() {
     if (cardCount.count > 0 && forceReimport) {
       console.log(`\n⚠️  FORCE_REIMPORT=true detected`);
       console.log(`Clearing existing MTGJSON data (preserving user data)...`);
+
+      // Delete stale MTGJSON source files to force fresh download
+      if (fs.existsSync(EXTRACTED_PATH)) {
+        console.log('  🗑️  Deleting stale AllPrintings.sqlite...');
+        fs.unlinkSync(EXTRACTED_PATH);
+      }
+      if (fs.existsSync(DOWNLOAD_PATH)) {
+        console.log('  🗑️  Deleting stale AllPrintings.sqlite.bz2...');
+        fs.unlinkSync(DOWNLOAD_PATH);
+      }
+      if (fs.existsSync(PRICES_PATH)) {
+        console.log('  🗑️  Deleting stale AllPricesToday.json...');
+        fs.unlinkSync(PRICES_PATH);
+      }
 
       // STEP 1: Save user deck data using UUIDs (stable across imports)
       console.log('  📦 Backing up user deck data...');
@@ -682,6 +682,20 @@ async function main() {
       // We'll do this after importCards() completes
       targetDb._deckCardsBackup = deckCardsBackup;
       targetDb._ownedCardsBackup = ownedCardsBackup;
+    }
+
+    // Download MTGJSON database if not exists
+    if (!fs.existsSync(EXTRACTED_PATH)) {
+      if (!fs.existsSync(DOWNLOAD_PATH)) {
+        await downloadFile(MTGJSON_URL, DOWNLOAD_PATH);
+      }
+
+      await decompressBz2(DOWNLOAD_PATH, EXTRACTED_PATH);
+
+      // Clean up compressed file
+      fs.unlinkSync(DOWNLOAD_PATH);
+    } else {
+      console.log('✓ MTGJSON database already exists, skipping download');
     }
 
     // Import cards and sets
@@ -789,6 +803,17 @@ async function main() {
     }
 
     targetDb.close();
+
+    // Clean up temporary MTGJSON files to save disk space
+    console.log('\n🧹 Cleaning up temporary files...');
+    if (fs.existsSync(EXTRACTED_PATH)) {
+      fs.unlinkSync(EXTRACTED_PATH);
+      console.log('  ✓ Deleted AllPrintings.sqlite (~485MB saved)');
+    }
+    if (fs.existsSync(PRICES_PATH)) {
+      fs.unlinkSync(PRICES_PATH);
+      console.log('  ✓ Deleted AllPricesToday.json');
+    }
 
     console.log('\n✓ All done! Card data imported successfully.');
   } catch (error) {

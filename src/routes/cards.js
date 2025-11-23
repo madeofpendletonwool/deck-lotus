@@ -7,6 +7,7 @@ import {
   getPrintingByUuid,
   getRandomCards,
   getCardStats,
+  getAllSubtypes,
   browseCards,
   toggleCardOwnership,
   getUserOwnedCards,
@@ -25,7 +26,7 @@ const router = express.Router();
  */
 router.get('/browse', authenticate, (req, res, next) => {
   try {
-    const { name, colors, type, sort, sets, cmcMin, cmcMax, page = 1, limit = 50, onlyOwned } = req.query;
+    const { name, colors, type, sort, sets, subtypes, cmcMin, cmcMax, page = 1, limit = 50, onlyOwned } = req.query;
     const offset = (parseInt(page) - 1) * parseInt(limit);
 
     const result = browseCards({
@@ -34,6 +35,7 @@ router.get('/browse', authenticate, (req, res, next) => {
       type,
       sort: sort || 'random',
       sets: sets ? sets.split(',') : [],
+      subtypes: subtypes ? subtypes.split(',') : [],
       cmcMin: cmcMin ? parseInt(cmcMin) : null,
       cmcMax: cmcMax ? parseInt(cmcMax) : null,
       onlyOwned: onlyOwned === 'true',
@@ -90,6 +92,19 @@ router.get('/stats', authenticate, (req, res, next) => {
   try {
     const stats = getCardStats();
     res.json(stats);
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * GET /api/cards/subtypes
+ * Get all unique subtypes
+ */
+router.get('/subtypes', authenticate, (req, res, next) => {
+  try {
+    const subtypes = getAllSubtypes();
+    res.json({ subtypes });
   } catch (error) {
     next(error);
   }

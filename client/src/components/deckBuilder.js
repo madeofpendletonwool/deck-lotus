@@ -6,6 +6,7 @@ let currentDeck = null;
 let currentDeckId = null;
 let searchTimeout = null;
 let currentFilter = { cmc: null, color: null, ownership: null }; // Filter state for deck cards (null, 'owned', 'not-owned')
+let deckFilterQuery = ''; // Name filter for deck cards
 let exampleHand = []; // Current example hand
 let activeTab = 'mainboard'; // Track which tab is currently active ('mainboard' or 'sideboard')
 let pricingMode = false; // Track if pricing mode is enabled
@@ -51,6 +52,28 @@ export function setupDeckBuilder() {
 
   cardSearch.addEventListener('input', (e) => {
     debouncedSearch(e.target.value);
+  });
+
+  // Deck filter search
+  const deckFilterSearch = document.getElementById('deck-filter-search');
+  const deckFilterClear = document.getElementById('deck-filter-clear');
+
+  deckFilterSearch.addEventListener('input', (e) => {
+    deckFilterQuery = e.target.value.toLowerCase();
+    // Show/hide clear button
+    if (deckFilterQuery) {
+      deckFilterClear.classList.remove('hidden');
+    } else {
+      deckFilterClear.classList.add('hidden');
+    }
+    renderDeckCards();
+  });
+
+  deckFilterClear.addEventListener('click', () => {
+    deckFilterSearch.value = '';
+    deckFilterQuery = '';
+    deckFilterClear.classList.add('hidden');
+    renderDeckCards();
   });
 
   // Click outside to close search results
@@ -398,7 +421,13 @@ function renderDeckCards() {
   let sideboardCards = currentDeck.cards.filter(c => c.is_sideboard);
 
   // Apply filters
-  const hasFilter = currentFilter.cmc !== null || currentFilter.color !== null || currentFilter.ownership !== null;
+  const hasFilter = currentFilter.cmc !== null || currentFilter.color !== null || currentFilter.ownership !== null || deckFilterQuery;
+
+  // Apply name filter
+  if (deckFilterQuery) {
+    mainboardCards = mainboardCards.filter(c => c.name.toLowerCase().includes(deckFilterQuery));
+    sideboardCards = sideboardCards.filter(c => c.name.toLowerCase().includes(deckFilterQuery));
+  }
 
   if (currentFilter.cmc !== null) {
     mainboardCards = mainboardCards.filter(c => calculateActualCMC(c) === currentFilter.cmc);

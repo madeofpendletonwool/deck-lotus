@@ -362,7 +362,7 @@
                             <input
                                 type="text"
                                 id="card-search"
-                                placeholder="Search for cards..."
+                                placeholder="Add new cards..."
                                 autocomplete="off"
                             />
                             <div
@@ -405,6 +405,23 @@
                                         <i class="ph ph-download-simple"></i>
                                     </button>
                                 </div>
+                            </div>
+                            <div style="padding: 0.75rem; position: relative;">
+                                <input
+                                    type="text"
+                                    id="deck-filter-search"
+                                    placeholder="Filter cards in deck..."
+                                    autocomplete="off"
+                                    style="width: 100%; padding: 0.5rem 2rem 0.5rem 0.75rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-secondary); font-size: 0.9rem;"
+                                />
+                                <button
+                                    id="deck-filter-clear"
+                                    class="hidden"
+                                    style="position: absolute; right: 1.5rem; top: 50%; transform: translateY(-50%); background: none; border: none; color: var(--text-secondary); cursor: pointer; padding: 0.25rem; display: flex; align-items: center; justify-content: center; font-size: 1.25rem;"
+                                    title="Clear filter"
+                                >
+                                    <i class="ph ph-x"></i>
+                                </button>
                             </div>
                             <div id="mainboard" class="deck-list active"></div>
                             <div id="sideboard" class="deck-list hidden"></div>
@@ -503,13 +520,22 @@
                 <div class="page-header">
                     <h2>Browse Cards</h2>
                 </div>
-                <div class="cards-search">
+                <div class="cards-search" style="position: relative;">
                     <input
                         type="text"
                         id="cards-browse-search"
                         placeholder="Search cards..."
                         class="search-input"
+                        style="padding-right: 2.5rem;"
                     />
+                    <button
+                        id="cards-browse-clear"
+                        class="hidden"
+                        style="position: absolute; right: 0.75rem; top: 50%; transform: translateY(-50%); background: none; border: none; color: var(--text-secondary); cursor: pointer; padding: 0.25rem; display: flex; align-items: center; justify-content: center; font-size: 1.25rem;"
+                        title="Clear search"
+                    >
+                        <i class="ph ph-x"></i>
+                    </button>
                     <div
                         class="filters"
                         style="
@@ -688,6 +714,23 @@
                                 style="padding: 0.5rem 1rem"
                             >
                                 <span id="selected-sets-count">All Sets</span>
+                            </button>
+                        </div>
+                        <div>
+                            <label
+                                style="
+                                    display: block;
+                                    margin-bottom: 0.5rem;
+                                    font-weight: 600;
+                                "
+                                >Subtypes</label
+                            >
+                            <button
+                                id="filter-subtypes-btn"
+                                class="btn btn-secondary"
+                                style="padding: 0.5rem 1rem"
+                            >
+                                <span id="selected-subtypes-count">All Subtypes</span>
                             </button>
                         </div>
                         <div>
@@ -1250,6 +1293,55 @@
                         </button>
                         <button
                             id="apply-set-filter"
+                            class="btn btn-primary"
+                            style="flex: 1"
+                        >
+                            Apply Filters
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Subtype Filter Modal -->
+            <div id="subtype-filter-modal" class="modal hidden">
+                <div class="modal-content" style="max-width: 600px">
+                    <span class="modal-close" id="subtype-filter-modal-close"
+                        >&times;</span
+                    >
+                    <h2 style="margin-bottom: 1rem">Filter by Subtypes</h2>
+                    <div class="form-group">
+                        <input
+                            type="text"
+                            id="subtype-search-input"
+                            placeholder="Search subtypes..."
+                            style="
+                                width: 100%;
+                                padding: 0.75rem;
+                                border-radius: 6px;
+                                border: 1px solid var(--border-color);
+                                background: var(--bg-secondary);
+                            "
+                        />
+                    </div>
+                    <div
+                        id="subtype-list"
+                        style="
+                            max-height: 400px;
+                            overflow-y: auto;
+                            margin: 1rem 0;
+                        "
+                    >
+                        <!-- Subtypes will be populated here -->
+                    </div>
+                    <div style="display: flex; gap: 0.5rem; margin-top: 1rem">
+                        <button
+                            id="clear-subtype-selection"
+                            class="btn btn-secondary"
+                        >
+                            Clear All
+                        </button>
+                        <button
+                            id="apply-subtype-filter"
                             class="btn btn-primary"
                             style="flex: 1"
                         >

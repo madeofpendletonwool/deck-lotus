@@ -64,6 +64,7 @@ export function getCardById(cardId) {
   }
 
   // Get all printings for this card with prices and set names
+  // Order by lowest price first, so users see the cheapest available printing
   const printings = db.all(
     `SELECT p.*,
             s.name as set_name,
@@ -72,7 +73,12 @@ export function getCardById(cardId) {
      FROM printings p
      LEFT JOIN sets s ON p.set_code = s.code
      WHERE p.card_id = ?
-     ORDER BY p.set_code, p.collector_number`,
+     ORDER BY
+       CASE
+         WHEN (SELECT price FROM prices WHERE printing_uuid = p.uuid AND provider = 'tcgplayer' AND price_type = 'normal' LIMIT 1) IS NULL THEN 999999
+         ELSE (SELECT price FROM prices WHERE printing_uuid = p.uuid AND provider = 'tcgplayer' AND price_type = 'normal' LIMIT 1)
+       END ASC,
+       p.set_code, p.collector_number`,
     [cardId]
   );
 
@@ -182,6 +188,7 @@ export function browseCards(filters = {}) {
     type,
     sort = 'random',
     sets = [],
+    subtypes = [],
     cmcMin = null,
     cmcMax = null,
     onlyOwned = false,
@@ -190,11 +197,12 @@ export function browseCards(filters = {}) {
     offset = 0
   } = filters;
 
-  // Ensure colors and sets are arrays
+  // Ensure colors, sets, and subtypes are arrays
   const colorsArray = Array.isArray(colors) ? colors : [];
   const setsArray = Array.isArray(sets) ? sets : [];
+  const subtypesArray = Array.isArray(subtypes) ? subtypes : [];
 
-  console.log('Browse cards filters:', { name, colors: colorsArray, type, sort, sets: setsArray, cmcMin, cmcMax, limit, offset });
+  console.log('Browse cards filters:', { name, colors: colorsArray, type, sort, sets: setsArray, subtypes: subtypesArray, cmcMin, cmcMax, limit, offset });
 
   // Need LEFT JOIN for price sorting
   const needsPriceJoin = sort === 'price';
@@ -291,6 +299,18 @@ export function browseCards(filters = {}) {
     params.push(...setsArray);
   }
 
+  // Subtype filter - cards that have ANY of the selected subtypes
+  if (subtypesArray && subtypesArray.length > 0) {
+    sql += ` AND (`;
+    const subtypeConditions = [];
+    subtypesArray.forEach(subtype => {
+      subtypeConditions.push(`c.subtypes LIKE ?`);
+      params.push(`%${subtype}%`);
+    });
+    sql += subtypeConditions.join(' OR ');
+    sql += `)`;
+  }
+
   // CMC filter
   if (cmcMin !== null && cmcMin !== undefined) {
     sql += ` AND c.cmc >= ?`;
@@ -358,6 +378,18 @@ export function browseCards(filters = {}) {
     const placeholders = setsArray.map(() => '?').join(',');
     countSql += ` AND p.set_code IN (${placeholders})`;
     countParams.push(...setsArray);
+  }
+
+  // Subtype filter for count query
+  if (subtypesArray && subtypesArray.length > 0) {
+    countSql += ` AND (`;
+    const subtypeConditions = [];
+    subtypesArray.forEach(subtype => {
+      subtypeConditions.push(`c.subtypes LIKE ?`);
+      countParams.push(`%${subtype}%`);
+    });
+    countSql += subtypeConditions.join(' OR ');
+    countSql += `)`;
   }
 
   if (cmcMin !== null && cmcMin !== undefined) {
@@ -449,6 +481,31 @@ export function getCardStats() {
   `);
 
   return stats;
+}
+
+/**
+ * Get all unique subtypes from cards
+ */
+export function getAllSubtypes() {
+  // Get all non-null subtypes
+  const cards = db.all(
+    `SELECT DISTINCT subtypes FROM cards WHERE subtypes IS NOT NULL AND subtypes != ''`
+  );
+
+  // Parse comma-separated subtypes and collect unique ones
+  const subtypesSet = new Set();
+
+  cards.forEach(card => {
+    if (card.subtypes) {
+      const subtypesList = card.subtypes.split(',').map(s => s.trim()).filter(s => s);
+      subtypesList.forEach(subtype => subtypesSet.add(subtype));
+    }
+  });
+
+  // Convert to array and sort alphabetically
+  const subtypes = Array.from(subtypesSet).sort((a, b) => a.localeCompare(b));
+
+  return subtypes;
 }
 
 /**

@@ -92,6 +92,7 @@ class ApiClient {
     if (filters.type) params.append('type', filters.type);
     if (filters.sort) params.append('sort', filters.sort);
     if (filters.sets) params.append('sets', filters.sets); // Already a string from frontend
+    if (filters.subtypes) params.append('subtypes', filters.subtypes); // Already a string from frontend
     if (filters.cmcMin !== null && filters.cmcMin !== undefined) params.append('cmcMin', filters.cmcMin);
     if (filters.cmcMax !== null && filters.cmcMax !== undefined) params.append('cmcMax', filters.cmcMax);
     if (filters.onlyOwned) params.append('onlyOwned', filters.onlyOwned);
@@ -236,6 +237,11 @@ class ApiClient {
 
   async getSet(code) {
     return this.request(`/sets/${code}`);
+  }
+
+  // Subtype methods
+  async getSubtypes() {
+    return this.request('/cards/subtypes');
   }
 
   async getSetCards(code, page = 1) {

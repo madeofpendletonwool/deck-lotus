@@ -8,17 +8,21 @@ let currentFilters = {
   type: 'all',
   sort: 'random',
   sets: [],
+  subtypes: [],
   cmcMin: null,
   cmcMax: null,
   onlyOwned: false
 };
 let allSets = [];
+let allSubtypes = [];
 
 export function setupCards() {
   const searchInput = document.getElementById('cards-browse-search');
+  const clearBtn = document.getElementById('cards-browse-clear');
   const sortSelect = document.getElementById('filter-sort');
   const typeSelect = document.getElementById('filter-types');
   const setsBtn = document.getElementById('filter-sets-btn');
+  const subtypesBtn = document.getElementById('filter-subtypes-btn');
   const cmcMinInput = document.getElementById('filter-cmc-min');
   const cmcMaxInput = document.getElementById('filter-cmc-max');
   const colorCheckboxes = document.querySelectorAll('#filter-colors input[type="checkbox"]');
@@ -26,11 +30,13 @@ export function setupCards() {
   const prevBtn = document.getElementById('prev-page');
   const nextBtn = document.getElementById('next-page');
 
-  // Load sets for modal
+  // Load sets and subtypes for modals
   loadSets();
+  loadSubtypes();
 
-  // Setup set filter modal
+  // Setup filter modals
   setupSetFilterModal();
+  setupSubtypeFilterModal();
 
   // Debounced search on name input
   const debouncedSearch = debounce(async (query) => {
@@ -41,6 +47,21 @@ export function setupCards() {
 
   searchInput.addEventListener('input', (e) => {
     debouncedSearch(e.target.value);
+    // Show/hide clear button
+    if (e.target.value) {
+      clearBtn.classList.remove('hidden');
+    } else {
+      clearBtn.classList.add('hidden');
+    }
+  });
+
+  // Clear button handler
+  clearBtn.addEventListener('click', () => {
+    searchInput.value = '';
+    clearBtn.classList.add('hidden');
+    currentFilters.name = '';
+    currentPage = 1;
+    loadCards();
   });
 
   // Sort change
@@ -71,6 +92,11 @@ export function setupCards() {
   // Set filter button - opens modal
   setsBtn.addEventListener('click', () => {
     document.getElementById('set-filter-modal').classList.remove('hidden');
+  });
+
+  // Subtype filter button - opens modal
+  subtypesBtn.addEventListener('click', () => {
+    document.getElementById('subtype-filter-modal').classList.remove('hidden');
   });
 
   // Color filter changes
@@ -221,6 +247,109 @@ function renderSetList(sets) {
   });
 }
 
+function setupSubtypeFilterModal() {
+  const modal = document.getElementById('subtype-filter-modal');
+  const closeBtn = document.getElementById('subtype-filter-modal-close');
+  const applyBtn = document.getElementById('apply-subtype-filter');
+  const clearBtn = document.getElementById('clear-subtype-selection');
+  const searchInput = document.getElementById('subtype-search-input');
+
+  closeBtn.addEventListener('click', () => {
+    modal.classList.add('hidden');
+  });
+
+  applyBtn.addEventListener('click', async () => {
+    modal.classList.add('hidden');
+    currentPage = 1;
+    updateSubtypeButtonText();
+    await loadCards();
+  });
+
+  clearBtn.addEventListener('click', () => {
+    currentFilters.subtypes = [];
+    renderSubtypeList(allSubtypes);
+    updateSubtypeButtonText();
+  });
+
+  // Search subtypes
+  const debouncedSubtypeSearch = debounce((query) => {
+    const filtered = allSubtypes.filter(subtype =>
+      subtype.toLowerCase().includes(query.toLowerCase())
+    );
+    renderSubtypeList(filtered);
+  }, 200);
+
+  searchInput.addEventListener('input', (e) => {
+    debouncedSubtypeSearch(e.target.value);
+  });
+
+  // Close modal on outside click
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) {
+      modal.classList.add('hidden');
+    }
+  });
+}
+
+function updateSubtypeButtonText() {
+  const btn = document.getElementById('selected-subtypes-count');
+  if (currentFilters.subtypes.length === 0) {
+    btn.textContent = 'All Subtypes';
+  } else if (currentFilters.subtypes.length === 1) {
+    btn.textContent = currentFilters.subtypes[0];
+  } else {
+    btn.textContent = `${currentFilters.subtypes.length} Subtypes`;
+  }
+}
+
+async function loadSubtypes() {
+  try {
+    const result = await api.getSubtypes();
+    allSubtypes = result.subtypes || [];
+    renderSubtypeList(allSubtypes);
+  } catch (error) {
+    console.error('Failed to load subtypes:', error);
+  }
+}
+
+function renderSubtypeList(subtypes) {
+  const subtypeList = document.getElementById('subtype-list');
+  if (subtypes.length === 0) {
+    subtypeList.innerHTML = '<div style="padding: 1rem; text-align: center; color: var(--text-secondary);">No subtypes found</div>';
+    return;
+  }
+
+  subtypeList.innerHTML = subtypes.map(subtype => {
+    const isSelected = currentFilters.subtypes.includes(subtype);
+    return `
+      <div class="set-item ${isSelected ? 'selected' : ''}" data-subtype="${subtype}">
+        <div class="set-checkbox"></div>
+        <div class="set-info">
+          <div class="set-name">${subtype}</div>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  // Add click handlers
+  subtypeList.querySelectorAll('.set-item').forEach(item => {
+    item.addEventListener('click', () => {
+      const subtype = item.dataset.subtype;
+      const index = currentFilters.subtypes.indexOf(subtype);
+
+      if (index > -1) {
+        // Remove from selection
+        currentFilters.subtypes.splice(index, 1);
+        item.classList.remove('selected');
+      } else {
+        // Add to selection
+        currentFilters.subtypes.push(subtype);
+        item.classList.add('selected');
+      }
+    });
+  });
+}
+
 async function loadCards() {
   try {
     showLoading();
@@ -231,6 +360,7 @@ async function loadCards() {
       type: currentFilters.type !== 'all' ? currentFilters.type : undefined,
       sort: currentFilters.sort,
       sets: currentFilters.sets.length > 0 ? currentFilters.sets.join(',') : undefined,
+      subtypes: currentFilters.subtypes.length > 0 ? currentFilters.subtypes.join(',') : undefined,
       cmcMin: currentFilters.cmcMin,
       cmcMax: currentFilters.cmcMax,
       onlyOwned: currentFilters.onlyOwned,

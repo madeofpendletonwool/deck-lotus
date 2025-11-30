@@ -37,7 +37,7 @@ app.use(helmet({
 })); // Security headers
 app.use(cors()); // CORS
 app.use(compression()); // Gzip compression
-app.use(express.json()); // JSON body parser
+app.use(express.json({ limit: '10mb' })); // JSON body parser with increased limit for backups
 // app.use(limiter); // Rate limiting - REMOVED for self-hosted app
 
 // Serve static files from client build (in production)

@@ -7,8 +7,9 @@ import crypto from 'crypto';
 export function getUserDecks(userId) {
   const decks = db.all(
     `SELECT d.*,
-      (SELECT COALESCE(SUM(quantity), 0) FROM deck_cards WHERE deck_id = d.id AND is_sideboard = 0) as mainboard_count,
-      (SELECT COALESCE(SUM(quantity), 0) FROM deck_cards WHERE deck_id = d.id AND is_sideboard = 1) as sideboard_count
+      (SELECT COALESCE(SUM(quantity), 0) FROM deck_cards WHERE deck_id = d.id AND (board_type = 'mainboard' OR (board_type IS NULL AND is_sideboard = 0))) as mainboard_count,
+      (SELECT COALESCE(SUM(quantity), 0) FROM deck_cards WHERE deck_id = d.id AND (board_type = 'sideboard' OR (board_type IS NULL AND is_sideboard = 1))) as sideboard_count,
+      (SELECT COALESCE(SUM(quantity), 0) FROM deck_cards WHERE deck_id = d.id AND board_type = 'maybeboard') as maybeboard_count
      FROM decks d
      WHERE user_id = ?
      ORDER BY updated_at DESC`,
@@ -22,7 +23,7 @@ export function getUserDecks(userId) {
        FROM deck_cards dc
        JOIN printings p ON dc.printing_id = p.id
        JOIN cards c ON p.card_id = c.id
-       WHERE dc.deck_id = ? AND dc.is_sideboard = 0 AND p.image_url IS NOT NULL
+       WHERE dc.deck_id = ? AND (dc.board_type = 'mainboard' OR (dc.board_type IS NULL AND dc.is_sideboard = 0)) AND p.image_url IS NOT NULL
        ORDER BY
          CASE WHEN c.type_line LIKE '%Creature%' THEN 0 ELSE 1 END,
          RANDOM()
@@ -56,6 +57,7 @@ export function getDeckById(deckId, userId) {
       dc.id as deck_card_id,
       dc.quantity,
       dc.is_sideboard,
+      COALESCE(dc.board_type, CASE WHEN dc.is_sideboard = 1 THEN 'sideboard' ELSE 'mainboard' END) as board_type,
       dc.is_commander,
       p.id as printing_id,
       p.card_id,
@@ -82,7 +84,14 @@ export function getDeckById(deckId, userId) {
      JOIN cards c ON p.card_id = c.id
      LEFT JOIN sets s ON p.set_code = s.code
      WHERE dc.deck_id = ?
-     ORDER BY dc.is_sideboard, c.cmc, c.name`,
+     ORDER BY
+       CASE board_type
+         WHEN 'mainboard' THEN 0
+         WHEN 'sideboard' THEN 1
+         WHEN 'maybeboard' THEN 2
+         ELSE 3
+       END,
+       c.cmc, c.name`,
     [userId, deckId]
   );
 
@@ -174,7 +183,7 @@ export function deleteDeck(deckId, userId) {
 /**
  * Add card to deck
  */
-export function addCardToDeck(deckId, userId, printingId, quantity = 1, isSideboard = false, isCommander = false) {
+export function addCardToDeck(deckId, userId, printingId, quantity = 1, isSideboard = false, isCommander = false, boardType = null) {
   // Verify deck ownership
   const deck = db.get(
     `SELECT id FROM decks WHERE id = ? AND user_id = ?`,
@@ -185,11 +194,14 @@ export function addCardToDeck(deckId, userId, printingId, quantity = 1, isSidebo
     throw new Error('Deck not found or access denied');
   }
 
+  // Determine board type
+  const finalBoardType = boardType || (isSideboard ? 'sideboard' : 'mainboard');
+
   // Check if card already exists in deck
   const existing = db.get(
     `SELECT id, quantity FROM deck_cards
-     WHERE deck_id = ? AND printing_id = ? AND is_sideboard = ?`,
-    [deckId, printingId, isSideboard ? 1 : 0]
+     WHERE deck_id = ? AND printing_id = ? AND board_type = ?`,
+    [deckId, printingId, finalBoardType]
   );
 
   if (existing) {
@@ -202,9 +214,9 @@ export function addCardToDeck(deckId, userId, printingId, quantity = 1, isSidebo
   } else {
     // Insert new
     db.run(
-      `INSERT INTO deck_cards (deck_id, printing_id, quantity, is_sideboard, is_commander)
-       VALUES (?, ?, ?, ?, ?)`,
-      [deckId, printingId, quantity, isSideboard ? 1 : 0, isCommander ? 1 : 0]
+      `INSERT INTO deck_cards (deck_id, printing_id, quantity, is_sideboard, is_commander, board_type)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [deckId, printingId, quantity, isSideboard ? 1 : 0, isCommander ? 1 : 0, finalBoardType]
     );
   }
 
@@ -228,7 +240,7 @@ export function updateDeckCard(deckId, userId, deckCardId, updates) {
     throw new Error('Deck not found or access denied');
   }
 
-  const { quantity, isSideboard, isCommander, printingId } = updates;
+  const { quantity, isSideboard, isCommander, printingId, boardType } = updates;
 
   const fields = [];
   const params = [];
@@ -241,9 +253,18 @@ export function updateDeckCard(deckId, userId, deckCardId, updates) {
     fields.push('quantity = ?');
     params.push(quantity);
   }
-  if (isSideboard !== undefined) {
+  if (boardType !== undefined) {
+    fields.push('board_type = ?');
+    params.push(boardType);
+    // Update is_sideboard for backward compatibility
+    fields.push('is_sideboard = ?');
+    params.push(boardType === 'sideboard' ? 1 : 0);
+  } else if (isSideboard !== undefined) {
+    // Backward compatibility
     fields.push('is_sideboard = ?');
     params.push(isSideboard ? 1 : 0);
+    fields.push('board_type = ?');
+    params.push(isSideboard ? 'sideboard' : 'mainboard');
   }
   if (isCommander !== undefined) {
     fields.push('is_commander = ?');

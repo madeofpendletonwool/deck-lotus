@@ -147,7 +147,7 @@ router.get('/:id/price', authenticate, (req, res, next) => {
 router.post('/:id/cards', authenticate, (req, res, next) => {
   try {
     const deckId = parseInt(req.params.id);
-    const { printingId, quantity, isSideboard, isCommander } = req.body;
+    const { printingId, quantity, isSideboard, isCommander, boardType } = req.body;
 
     if (!printingId) {
       return res.status(400).json({ error: 'printingId is required' });
@@ -159,7 +159,8 @@ router.post('/:id/cards', authenticate, (req, res, next) => {
       printingId,
       quantity || 1,
       isSideboard || false,
-      isCommander || false
+      isCommander || false,
+      boardType
     );
 
     res.json({ deck });
@@ -176,13 +177,14 @@ router.put('/:id/cards/:cardId', authenticate, (req, res, next) => {
   try {
     const deckId = parseInt(req.params.id);
     const deckCardId = parseInt(req.params.cardId);
-    const { quantity, isSideboard, isCommander, printingId } = req.body;
+    const { quantity, isSideboard, isCommander, printingId, boardType } = req.body;
 
     const deck = updateDeckCard(deckId, req.user.id, deckCardId, {
       quantity,
       isSideboard,
       isCommander,
       printingId,
+      boardType,
     });
 
     res.json({ deck });

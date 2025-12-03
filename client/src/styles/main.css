@@ -914,6 +914,41 @@ button.btn-icon.active {
   background: rgba(239, 68, 68, 0.1);
 }
 
+.move-card-submenu {
+  position: relative;
+}
+
+.move-submenu {
+  position: absolute;
+  left: 100%;
+  top: 0;
+  margin-left: 0.5rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6);
+  z-index: 1001;
+  min-width: 120px;
+  overflow: hidden;
+}
+
+.move-submenu-item {
+  padding: 0.6rem 0.75rem;
+  cursor: pointer;
+  border-bottom: 1px solid var(--border);
+  transition: background 0.15s;
+  font-size: 0.813rem;
+  color: var(--text);
+}
+
+.move-submenu-item:last-child {
+  border-bottom: none;
+}
+
+.move-submenu-item:hover {
+  background: var(--bg-tertiary);
+}
+
 .quantity-adjuster {
   display: flex;
   align-items: center;
@@ -2355,13 +2390,14 @@ button.btn-icon.active {
 }
 
 .shopping-set-content {
-  max-height: 2000px;
-  overflow: hidden;
+  max-height: none;
+  overflow: visible;
   transition: max-height 0.3s ease-out;
 }
 
 .shopping-set-content.collapsed {
   max-height: 0;
+  overflow: hidden;
 }
 
 /* Shopping Cards List */

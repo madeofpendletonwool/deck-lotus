@@ -168,10 +168,10 @@ class ApiClient {
     });
   }
 
-  async addCardToDeck(deckId, printingId, quantity = 1, isSideboard = false) {
+  async addCardToDeck(deckId, printingId, quantity = 1, isSideboard = false, isCommander = false, boardType = null) {
     return this.request(`/decks/${deckId}/cards`, {
       method: 'POST',
-      body: JSON.stringify({ printingId, quantity, isSideboard }),
+      body: JSON.stringify({ printingId, quantity, isSideboard, isCommander, boardType }),
     });
   }
 

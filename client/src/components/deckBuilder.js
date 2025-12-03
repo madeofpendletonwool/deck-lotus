@@ -8,7 +8,7 @@ let searchTimeout = null;
 let currentFilter = { cmc: null, color: null, ownership: null }; // Filter state for deck cards (null, 'owned', 'not-owned')
 let deckFilterQuery = ''; // Name filter for deck cards
 let exampleHand = []; // Current example hand
-let activeTab = 'mainboard'; // Track which tab is currently active ('mainboard' or 'sideboard')
+let activeTab = 'mainboard'; // Track which tab is currently active ('mainboard', 'sideboard', or 'maybeboard')
 let pricingMode = false; // Track if pricing mode is enabled
 let setGroupMode = false; // Track if set grouping mode is enabled
 let currentPriceData = null; // Store current price data for cards
@@ -395,16 +395,17 @@ async function addCardToDeck(cardId) {
     // Use first printing by default (could show modal to choose)
     const printingId = printings[0].id;
 
-    // Add card to the currently active tab (mainboard or sideboard)
+    // Add card to the currently active tab (mainboard, sideboard, or maybeboard)
     const isSideboard = activeTab === 'sideboard';
+    const boardType = activeTab; // Use the active tab as board type
 
     showLoading();
-    const updatedDeck = await api.addCardToDeck(currentDeckId, printingId, 1, isSideboard);
+    const updatedDeck = await api.addCardToDeck(currentDeckId, printingId, 1, isSideboard, false, boardType);
     currentDeck = updatedDeck.deck;
     renderDeckCards();
     await loadDeckStats();
     hideLoading();
-    showToast(`Card added to ${isSideboard ? 'sideboard' : 'mainboard'}`, 'success', 2000);
+    showToast(`Card added to ${activeTab}`, 'success', 2000);
   } catch (error) {
     hideLoading();
     showToast('Failed to add card: ' + error.message, 'error');
@@ -416,9 +417,18 @@ let layoutView = 'full'; // Can be 'full', 'compact', or 'ultra-compact'
 function renderDeckCards() {
   const mainboard = document.getElementById('mainboard');
   const sideboard = document.getElementById('sideboard');
+  const maybeboard = document.getElementById('maybeboard');
 
-  let mainboardCards = currentDeck.cards.filter(c => !c.is_sideboard);
-  let sideboardCards = currentDeck.cards.filter(c => c.is_sideboard);
+  // Filter cards by board type, using board_type if available, falling back to is_sideboard
+  let mainboardCards = currentDeck.cards.filter(c => {
+    if (c.board_type) return c.board_type === 'mainboard';
+    return !c.is_sideboard;
+  });
+  let sideboardCards = currentDeck.cards.filter(c => {
+    if (c.board_type) return c.board_type === 'sideboard';
+    return c.is_sideboard;
+  });
+  let maybeboardCards = currentDeck.cards.filter(c => c.board_type === 'maybeboard');
 
   // Apply filters
   const hasFilter = currentFilter.cmc !== null || currentFilter.color !== null || currentFilter.ownership !== null || deckFilterQuery;
@@ -427,32 +437,39 @@ function renderDeckCards() {
   if (deckFilterQuery) {
     mainboardCards = mainboardCards.filter(c => c.name.toLowerCase().includes(deckFilterQuery));
     sideboardCards = sideboardCards.filter(c => c.name.toLowerCase().includes(deckFilterQuery));
+    maybeboardCards = maybeboardCards.filter(c => c.name.toLowerCase().includes(deckFilterQuery));
   }
 
   if (currentFilter.cmc !== null) {
     mainboardCards = mainboardCards.filter(c => calculateActualCMC(c) === currentFilter.cmc);
     sideboardCards = sideboardCards.filter(c => calculateActualCMC(c) === currentFilter.cmc);
+    maybeboardCards = maybeboardCards.filter(c => calculateActualCMC(c) === currentFilter.cmc);
   }
 
   if (currentFilter.color !== null) {
     mainboardCards = mainboardCards.filter(c => c.colors === currentFilter.color);
     sideboardCards = sideboardCards.filter(c => c.colors === currentFilter.color);
+    maybeboardCards = maybeboardCards.filter(c => c.colors === currentFilter.color);
   }
 
   if (currentFilter.ownership === 'owned') {
     mainboardCards = mainboardCards.filter(c => c.is_owned);
     sideboardCards = sideboardCards.filter(c => c.is_owned);
+    maybeboardCards = maybeboardCards.filter(c => c.is_owned);
   } else if (currentFilter.ownership === 'not-owned') {
     mainboardCards = mainboardCards.filter(c => !c.is_owned);
     sideboardCards = sideboardCards.filter(c => !c.is_owned);
+    maybeboardCards = maybeboardCards.filter(c => !c.is_owned);
   }
 
   // Update counts
   const mainboardTotal = mainboardCards.reduce((sum, c) => sum + c.quantity, 0);
   const sideboardTotal = sideboardCards.reduce((sum, c) => sum + c.quantity, 0);
+  const maybeboardTotal = maybeboardCards.reduce((sum, c) => sum + c.quantity, 0);
 
   document.getElementById('mainboard-count').textContent = mainboardTotal;
   document.getElementById('sideboard-count').textContent = sideboardTotal;
+  document.getElementById('maybeboard-count').textContent = maybeboardTotal;
 
   // Add/update clear filter button
   let clearFilterBtn = document.getElementById('clear-filter-btn');
@@ -482,6 +499,7 @@ function renderDeckCards() {
 
   mainboard.innerHTML = renderCardsList(mainboardCards);
   sideboard.innerHTML = renderCardsList(sideboardCards);
+  maybeboard.innerHTML = renderCardsList(maybeboardCards);
 
   // Add event listeners
   setupCardControls();
@@ -598,7 +616,7 @@ function renderCardItem(card) {
   // Ultra-compact view - minimal text-only with dropdown
   if (layoutView === 'ultra-compact') {
     return `
-      <div class="deck-card-item ultra-compact ${card.is_commander ? 'is-commander' : ''}" data-deck-card-id="${card.deck_card_id}" data-printing-id="${card.printing_id}" data-is-sideboard="${card.is_sideboard}" data-card-id="${card.card_id}" draggable="true">
+      <div class="deck-card-item ultra-compact ${card.is_commander ? 'is-commander' : ''}" data-deck-card-id="${card.deck_card_id}" data-printing-id="${card.printing_id}" data-is-sideboard="${card.is_sideboard}" data-board-type="${card.board_type || (card.is_sideboard ? 'sideboard' : 'mainboard')}" data-card-id="${card.card_id}" draggable="true">
         <button class="ownership-toggle-btn ${card.is_owned ? 'owned' : ''}" data-card-id="${card.card_id}" style="position: absolute; top: 2px; left: 2px; background: ${card.is_owned ? 'rgba(16, 185, 129, 0.9)' : 'rgba(0,0,0,0.8)'}; color: white; border: none; border-radius: 50%; width: 16px; height: 16px; cursor: pointer; font-size: 10px; display: flex; align-items: center; justify-content: center; z-index: 10; transition: all 0.2s;">
           <i class="ph ${card.is_owned ? 'ph-check-circle' : 'ph-circle'}"></i>
         </button>
@@ -617,9 +635,14 @@ function renderCardItem(card) {
               <span class="quantity-adjuster-value">${card.quantity}</span>
               <button class="quantity-adjuster-btn quantity-btn btn-increase" data-deck-card-id="${card.deck_card_id}">+</button>
             </div>
-            <div class="card-actions-menu-item move-card-item" data-deck-card-id="${card.deck_card_id}" data-is-sideboard="${card.is_sideboard}">
+            <div class="card-actions-menu-item move-card-submenu">
               <i class="ph ph-arrows-left-right"></i>
-              Move to ${card.is_sideboard ? 'Mainboard' : 'Sideboard'}
+              Move to...
+              <div class="move-submenu hidden">
+                ${card.board_type !== 'mainboard' ? `<div class="move-submenu-item" data-deck-card-id="${card.deck_card_id}" data-board-type="mainboard">Mainboard</div>` : ''}
+                ${card.board_type !== 'sideboard' ? `<div class="move-submenu-item" data-deck-card-id="${card.deck_card_id}" data-board-type="sideboard">Sideboard</div>` : ''}
+                ${card.board_type !== 'maybeboard' ? `<div class="move-submenu-item" data-deck-card-id="${card.deck_card_id}" data-board-type="maybeboard">Maybeboard</div>` : ''}
+              </div>
             </div>
             <div class="card-actions-menu-item remove-card-item danger" data-deck-card-id="${card.deck_card_id}">
               <i class="ph ph-trash"></i>
@@ -634,7 +657,7 @@ function renderCardItem(card) {
   // Compact view - with small images
   if (layoutView === 'compact') {
     return `
-      <div class="deck-card-item compact ${card.is_commander ? 'is-commander' : ''}" data-deck-card-id="${card.deck_card_id}" data-printing-id="${card.printing_id}" data-is-sideboard="${card.is_sideboard}" data-card-id="${card.card_id}" draggable="true" style="position: relative;">
+      <div class="deck-card-item compact ${card.is_commander ? 'is-commander' : ''}" data-deck-card-id="${card.deck_card_id}" data-printing-id="${card.printing_id}" data-is-sideboard="${card.is_sideboard}" data-board-type="${card.board_type || (card.is_sideboard ? 'sideboard' : 'mainboard')}" data-card-id="${card.card_id}" draggable="true" style="position: relative;">
         <button class="ownership-toggle-btn ${card.is_owned ? 'owned' : ''}" data-card-id="${card.card_id}" style="position: absolute; top: 4px; left: 4px; background: ${card.is_owned ? 'rgba(16, 185, 129, 0.9)' : 'rgba(0,0,0,0.8)'}; color: white; border: none; border-radius: 50%; width: 20px; height: 20px; cursor: pointer; font-size: 12px; display: flex; align-items: center; justify-content: center; z-index: 10; transition: all 0.2s;">
           <i class="ph ${card.is_owned ? 'ph-check-circle' : 'ph-circle'}"></i>
         </button>
@@ -671,7 +694,7 @@ function renderCardItem(card) {
     : 0;
 
   return `
-    <div class="deck-card-item ${card.is_commander ? 'is-commander' : ''}" data-deck-card-id="${card.deck_card_id}" data-printing-id="${card.printing_id}" data-is-sideboard="${card.is_sideboard}" data-card-id="${card.card_id}" draggable="true" style="position: relative;">
+    <div class="deck-card-item ${card.is_commander ? 'is-commander' : ''}" data-deck-card-id="${card.deck_card_id}" data-printing-id="${card.printing_id}" data-is-sideboard="${card.is_sideboard}" data-board-type="${card.board_type || (card.is_sideboard ? 'sideboard' : 'mainboard')}" data-card-id="${card.card_id}" draggable="true" style="position: relative;">
       <button class="ownership-toggle-btn ${card.is_owned ? 'owned' : ''}" data-card-id="${card.card_id}" style="position: absolute; top: 8px; left: 8px; background: ${card.is_owned ? 'rgba(16, 185, 129, 0.9)' : 'rgba(0,0,0,0.8)'}; color: white; border: none; border-radius: 50%; width: 24px; height: 24px; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; z-index: 10; transition: all 0.2s;">
         <i class="ph ${card.is_owned ? 'ph-check-circle' : 'ph-circle'}"></i>
       </button>
@@ -873,13 +896,24 @@ function setupCardControls() {
     });
   });
 
-  // Ultra-compact view dropdown move to sideboard/mainboard button
-  document.querySelectorAll('.move-card-item').forEach(item => {
+  // Ultra-compact view dropdown move to board submenu
+  document.querySelectorAll('.move-card-submenu').forEach(item => {
+    item.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const submenu = item.querySelector('.move-submenu');
+      if (submenu) {
+        submenu.classList.toggle('hidden');
+      }
+    });
+  });
+
+  // Move submenu items
+  document.querySelectorAll('.move-submenu-item').forEach(item => {
     item.addEventListener('click', async (e) => {
       e.stopPropagation();
       const deckCardId = item.dataset.deckCardId;
-      const isSideboard = item.dataset.isSideboard === 'true' || item.dataset.isSideboard === '1';
-      await moveCardToBoard(deckCardId, !isSideboard);
+      const boardType = item.dataset.boardType;
+      await moveCardToBoard(deckCardId, boardType);
       // Close the dropdown
       const menu = item.closest('.card-actions-menu');
       if (menu) menu.classList.add('hidden');
@@ -907,7 +941,7 @@ function setupCardControls() {
 }
 
 let draggedCardId = null;
-let draggedIsSideboard = null;
+let draggedBoardType = null; // Now tracking board_type instead of just is_sideboard
 let dragPopupInitialized = false;
 
 function setupDragAndDrop() {
@@ -928,6 +962,10 @@ function setupDragAndDrop() {
           <div class="drag-zone-icon">📋</div>
           <div class="drag-zone-label">Sideboard</div>
         </div>
+        <div class="drag-zone" data-target="maybeboard">
+          <div class="drag-zone-icon">🤔</div>
+          <div class="drag-zone-label">Maybeboard</div>
+        </div>
       </div>
     `;
     document.body.appendChild(dragPopup);
@@ -941,8 +979,7 @@ function setupDragAndDrop() {
       zone.addEventListener('dragover', (e) => {
         e.preventDefault();
         const target = zone.dataset.target;
-        const canDrop = (target === 'mainboard' && draggedIsSideboard) ||
-                        (target === 'sideboard' && !draggedIsSideboard);
+        const canDrop = target !== draggedBoardType;
 
         if (canDrop) {
           e.dataTransfer.dropEffect = 'move';
@@ -961,11 +998,10 @@ function setupDragAndDrop() {
         zone.classList.remove('drag-over');
 
         const target = zone.dataset.target;
-        const newIsSideboard = target === 'sideboard';
 
         // Only move if it's actually changing boards
-        if (draggedCardId && newIsSideboard !== draggedIsSideboard) {
-          await moveCardToBoard(draggedCardId, newIsSideboard);
+        if (draggedCardId && target !== draggedBoardType) {
+          await moveCardToBoard(draggedCardId, target);
         }
       });
     });
@@ -976,7 +1012,10 @@ function setupDragAndDrop() {
   document.querySelectorAll('.deck-card-item').forEach(item => {
     item.addEventListener('dragstart', (e) => {
       draggedCardId = item.dataset.deckCardId;
-      draggedIsSideboard = item.dataset.isSideboard === 'true' || item.dataset.isSideboard === '1';
+      // Determine board type from the card's data
+      const isSideboard = item.dataset.isSideboard === 'true' || item.dataset.isSideboard === '1';
+      const boardTypeAttr = item.dataset.boardType;
+      draggedBoardType = boardTypeAttr || (isSideboard ? 'sideboard' : 'mainboard');
 
       // Get the actual card image
       const cardImage = item.querySelector('.deck-card-image, .deck-card-image-compact');
@@ -1024,8 +1063,7 @@ function setupDragAndDrop() {
       // Highlight the zone the card is NOT currently in
       dragZones.forEach(zone => {
         const target = zone.dataset.target;
-        if ((target === 'mainboard' && draggedIsSideboard) ||
-            (target === 'sideboard' && !draggedIsSideboard)) {
+        if (target !== draggedBoardType) {
           zone.classList.add('can-drop');
         } else {
           zone.classList.add('current-zone');
@@ -1045,20 +1083,21 @@ function setupDragAndDrop() {
       });
 
       draggedCardId = null;
-      draggedIsSideboard = null;
+      draggedBoardType = null;
     });
   });
 }
 
-async function moveCardToBoard(deckCardId, isSideboard) {
+async function moveCardToBoard(deckCardId, boardType) {
   try {
     showLoading();
-    const updatedDeck = await api.updateDeckCard(currentDeckId, deckCardId, { isSideboard });
+    const isSideboard = boardType === 'sideboard';
+    const updatedDeck = await api.updateDeckCard(currentDeckId, deckCardId, { isSideboard, boardType });
     currentDeck = updatedDeck.deck;
     renderDeckCards();
     await loadDeckStats();
     hideLoading();
-    showToast(`Card moved to ${isSideboard ? 'sideboard' : 'mainboard'}`, 'success', 2000);
+    showToast(`Card moved to ${boardType}`, 'success', 2000);
   } catch (error) {
     hideLoading();
     showToast('Failed to move card: ' + error.message, 'error');

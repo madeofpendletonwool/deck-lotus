@@ -34,6 +34,7 @@ export function getShoppingList(userId, deckIds) {
       d.id as deck_id,
       d.name as deck_name,
       dc.quantity,
+      COALESCE(dc.board_type, CASE WHEN dc.is_sideboard = 1 THEN 'sideboard' ELSE 'mainboard' END) as board_type,
       (SELECT price FROM prices WHERE printing_uuid = p.uuid AND provider = 'tcgplayer' AND price_type = 'normal' LIMIT 1) as price
     FROM deck_cards dc
     JOIN decks d ON dc.deck_id = d.id
@@ -43,7 +44,6 @@ export function getShoppingList(userId, deckIds) {
     LEFT JOIN owned_cards oc ON oc.user_id = ? AND oc.card_id = c.id
     WHERE d.user_id = ?
       AND d.id IN (${placeholders})
-      AND dc.is_sideboard = 0
       AND oc.id IS NULL
     ORDER BY s.name, p.collector_number, c.name
   `;
@@ -72,12 +72,17 @@ export function getShoppingList(userId, deckIds) {
     let existingCard = set.cards.find(c => c.cardId === card.card_id && c.printingId === card.printing_id);
 
     if (existingCard) {
-      // Add this deck to the card's deck list
-      if (!existingCard.decks.find(d => d.deckId === card.deck_id)) {
+      // Add this deck to the card's deck list (or update if same deck but different board)
+      const existingDeckEntry = existingCard.decks.find(
+        d => d.deckId === card.deck_id && d.boardType === card.board_type
+      );
+
+      if (!existingDeckEntry) {
         existingCard.decks.push({
           deckId: card.deck_id,
           deckName: card.deck_name,
           quantity: card.quantity,
+          boardType: card.board_type,
         });
       }
     } else {
@@ -98,6 +103,7 @@ export function getShoppingList(userId, deckIds) {
           deckId: card.deck_id,
           deckName: card.deck_name,
           quantity: card.quantity,
+          boardType: card.board_type,
         }],
       });
     }

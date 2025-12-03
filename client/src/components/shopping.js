@@ -484,7 +484,10 @@ function renderSetCards(cards) {
     return `
       <div class="shopping-cards-compact">
         ${cards.map(card => {
-          const deckNames = card.decks.map(d => d.deckName).join(', ');
+          const deckDetails = card.decks.map(d => {
+            const boardIcon = d.boardType === 'sideboard' ? '📋' : d.boardType === 'maybeboard' ? '🤔' : '📚';
+            return `${d.deckName} (${boardIcon} ${d.boardType})`;
+          }).join(', ');
           const totalQuantity = card.decks.reduce((sum, d) => sum + d.quantity, 0);
           const isHighPriority = card.decks.length >= 3;
           const cardKey = `${card.printingId}`;
@@ -499,7 +502,7 @@ function renderSetCards(cards) {
                 ${isHighPriority ? `<span class="compact-priority-badge" title="Format staple!"><i class="ph ph-star-fill"></i></span>` : ''}
               </div>
               <div class="compact-card-details">
-                <span class="compact-card-decks">${deckNames}</span>
+                <span class="compact-card-decks">${deckDetails}</span>
                 <div class="compact-card-actions">
                   <button class="btn-icon found-btn" data-card-key="${cardKey}" data-card-id="${card.cardId}" title="Found it!">
                     <i class="ph ph-check"></i>
@@ -520,7 +523,13 @@ function renderSetCards(cards) {
   return `
     <div class="shopping-cards-list">
       ${cards.map(card => {
-        const deckNames = card.decks.map(d => d.deckName).join(', ');
+        const deckDetails = card.decks.map(d => {
+          const boardIcon = d.boardType === 'sideboard' ? '📋' : d.boardType === 'maybeboard' ? '🤔' : '📚';
+          const boardLabel = d.boardType.charAt(0).toUpperCase() + d.boardType.slice(1);
+          return `<div style="margin-top: 0.25rem;">
+            ${boardIcon} <strong>${d.deckName}</strong>: ${boardLabel} (${d.quantity}x)
+          </div>`;
+        }).join('');
         const totalQuantity = card.decks.reduce((sum, d) => sum + d.quantity, 0);
         const isMultiDeck = card.decks.length > 1;
         const isHighPriority = card.decks.length >= 3; // Format staple
@@ -558,7 +567,8 @@ function renderSetCards(cards) {
                 ${card.price ? `<span class="card-price">$${card.price.toFixed(2)}</span>` : ''}
               </div>
               <div class="shopping-card-decks">
-                <strong>Needed for:</strong> ${deckNames}
+                <strong>Needed for:</strong>
+                ${deckDetails}
               </div>
               ${totalQuantity > 1 ? `
                 <div class="shopping-card-quantity">
@@ -602,10 +612,10 @@ function exportShoppingList() {
 
     set.cards.forEach(card => {
       const totalQty = card.decks.reduce((sum, d) => sum + d.quantity, 0);
-      const deckNames = card.decks.map(d => d.deckName).join(', ');
+      const deckDetails = card.decks.map(d => `${d.deckName} (${d.boardType}, ${d.quantity}x)`).join(', ');
       const price = card.price ? ` • $${card.price.toFixed(2)}` : '';
       exportText += `${totalQty}x ${card.name} (#${card.collectorNumber})${price}\n`;
-      exportText += `   Decks: ${deckNames}\n`;
+      exportText += `   Decks: ${deckDetails}\n`;
     });
     exportText += `\n`;
   });

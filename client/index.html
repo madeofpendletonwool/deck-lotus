@@ -68,6 +68,10 @@
                             <i class="ph ph-magnifying-glass nav-icon"></i>
                             <span class="nav-text">Browse Cards</span>
                         </a>
+                        <a href="#" data-page="shopping" class="nav-link">
+                            <i class="ph ph-shopping-cart nav-icon"></i>
+                            <span class="nav-text">Shopping</span>
+                        </a>
                         <a href="#" data-page="settings" class="nav-link">
                             <i class="ph ph-gear nav-icon"></i>
                             <span class="nav-text">Settings</span>
@@ -789,6 +793,36 @@
                 </div>
             </div>
 
+            <!-- Shopping Page -->
+            <div id="shopping-page" class="page hidden">
+                <div class="page-header">
+                    <h2>Shopping List</h2>
+                    <p style="color: var(--text-secondary); margin-top: 0.5rem;">Find cards you need from your decks, organized by set for easy LGS shopping</p>
+                </div>
+
+                <div class="shopping-content">
+                    <!-- Deck Selection -->
+                    <div class="shopping-section">
+                        <h3 style="margin-bottom: 1rem;">Select Decks to Shop For</h3>
+                        <div id="shopping-deck-selector"></div>
+                    </div>
+
+                    <!-- Filters -->
+                    <div class="shopping-section">
+                        <h3 style="margin-bottom: 1rem;">Filters & Sorting</h3>
+                        <div id="shopping-filters"></div>
+                    </div>
+
+                    <!-- Statistics -->
+                    <div id="shopping-stats" class="shopping-stats"></div>
+
+                    <!-- Shopping List by Set -->
+                    <div class="shopping-section">
+                        <div id="shopping-list-container"></div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Settings Page -->
             <div id="settings-page" class="page hidden">
                 <div class="page-header">
@@ -846,6 +880,8 @@
                             keys, and settings. They do NOT include the card
                             database (MTGJSON data).
                         </p>
+
+                        <!-- Quick Backup Actions -->
                         <div
                             style="display: flex; gap: 0.5rem; margin-top: 1rem"
                         >
@@ -861,6 +897,12 @@
                             >
                                 Restore from Backup
                             </button>
+                            <button
+                                id="create-backup-now-btn"
+                                class="btn btn-secondary"
+                            >
+                                Create Backup Now
+                            </button>
                         </div>
                         <input
                             type="file"
@@ -868,6 +910,69 @@
                             accept=".json"
                             style="display: none"
                         />
+
+                        <!-- Backup Schedule Configuration -->
+                        <div style="margin-top: 2rem; padding: 1.5rem; background: var(--bg-tertiary); border-radius: 8px;">
+                            <h4 style="margin-bottom: 1rem;">Automatic Backup Schedule</h4>
+                            <p style="font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 1rem;">
+                                Automatically create backups on a schedule. Backups are saved to the server and can be restored below.
+                            </p>
+
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+                                <div>
+                                    <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; user-select: none;">
+                                        <input type="checkbox" id="backup-schedule-enabled" style="width: 18px; height: 18px; cursor: pointer;">
+                                        <span style="font-weight: 600;">Enable Automatic Backups</span>
+                                    </label>
+                                </div>
+                                <div>
+                                    <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Frequency</label>
+                                    <select id="backup-frequency" style="width: 100%; padding: 0.5rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-secondary);">
+                                        <option value="6hours">Every 6 Hours</option>
+                                        <option value="12hours">Every 12 Hours</option>
+                                        <option value="daily" selected>Daily (2 AM)</option>
+                                        <option value="weekly">Weekly (Sunday 2 AM)</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div style="margin-bottom: 1rem;">
+                                <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Keep Last N Backups</label>
+                                <input
+                                    type="number"
+                                    id="backup-retain-count"
+                                    min="1"
+                                    max="100"
+                                    value="10"
+                                    style="width: 150px; padding: 0.5rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-secondary);"
+                                />
+                                <p style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">
+                                    Older backups will be automatically deleted
+                                </p>
+                            </div>
+
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <div id="backup-last-run" style="font-size: 0.875rem; color: var(--text-secondary);">
+                                    Last backup: Never
+                                </div>
+                                <button id="save-backup-config-btn" class="btn btn-primary">
+                                    Save Settings
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Available Backups List -->
+                        <div style="margin-top: 2rem;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                                <h4>Available Backups</h4>
+                                <button id="refresh-backups-btn" class="btn btn-secondary btn-sm">
+                                    <i class="ph ph-arrows-clockwise"></i> Refresh
+                                </button>
+                            </div>
+                            <div id="backups-list" style="display: flex; flex-direction: column; gap: 0.5rem;">
+                                <!-- Backups will be populated here -->
+                            </div>
+                        </div>
                     </section>
 
                     <section

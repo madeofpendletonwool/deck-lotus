@@ -1,6 +1,30 @@
 import { getDb } from '../db/index.js';
 import fs from 'fs';
 import path from 'path';
+import cron from 'node-cron';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+// Backup configuration
+const DATA_DIR = process.env.DATA_PATH || path.join(__dirname, '../../data');
+const BACKUP_DIR = path.join(DATA_DIR, 'backups');
+
+// Ensure backup directory exists
+if (!fs.existsSync(BACKUP_DIR)) {
+  fs.mkdirSync(BACKUP_DIR, { recursive: true });
+}
+
+// Scheduled backup state
+let scheduledBackupJob = null;
+let backupConfig = {
+  enabled: false,
+  frequency: 'daily', // daily, 6hours, 12hours, weekly
+  retainCount: 10, // Keep last N backups
+  lastRun: null
+};
 
 /**
  * Create a backup of all user data (users, decks, deck_cards, api_keys)
@@ -335,4 +359,165 @@ export function exportBackupToFile(backupData, filePath) {
 export function importBackupFromFile(filePath) {
   const data = fs.readFileSync(filePath, 'utf8');
   return JSON.parse(data);
+}
+
+/**
+ * Create and save a backup to the backups directory
+ */
+export function createScheduledBackup() {
+  const backup = createBackup(); // Backup all users
+  const timestamp = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+  const filename = `scheduled-backup-${timestamp}-${Date.now()}.json`;
+  const filepath = path.join(BACKUP_DIR, filename);
+
+  exportBackupToFile(backup, filepath);
+  backupConfig.lastRun = new Date().toISOString();
+
+  console.log(`✓ Scheduled backup created: ${filename}`);
+
+  // Clean up old backups based on retention policy
+  cleanupOldBackups();
+
+  return { filename, filepath, timestamp: backup.timestamp };
+}
+
+/**
+ * Clean up old backups, keeping only the most recent N backups
+ */
+export function cleanupOldBackups() {
+  try {
+    const files = fs.readdirSync(BACKUP_DIR)
+      .filter(f => f.startsWith('scheduled-backup-') && f.endsWith('.json'))
+      .map(f => ({
+        name: f,
+        path: path.join(BACKUP_DIR, f),
+        mtime: fs.statSync(path.join(BACKUP_DIR, f)).mtime.getTime()
+      }))
+      .sort((a, b) => b.mtime - a.mtime); // Sort by modified time, newest first
+
+    const toDelete = files.slice(backupConfig.retainCount);
+
+    toDelete.forEach(file => {
+      fs.unlinkSync(file.path);
+      console.log(`  🗑️  Deleted old backup: ${file.name}`);
+    });
+
+    if (toDelete.length > 0) {
+      console.log(`✓ Cleaned up ${toDelete.length} old backup(s), kept ${Math.min(files.length, backupConfig.retainCount)}`);
+    }
+  } catch (error) {
+    console.error('Error cleaning up old backups:', error.message);
+  }
+}
+
+/**
+ * Get list of available backup files
+ */
+export function listBackups() {
+  try {
+    const files = fs.readdirSync(BACKUP_DIR)
+      .filter(f => f.endsWith('.json'))
+      .map(f => {
+        const filepath = path.join(BACKUP_DIR, f);
+        const stats = fs.statSync(filepath);
+        return {
+          filename: f,
+          size: stats.size,
+          created: stats.mtime.toISOString(),
+          type: f.startsWith('scheduled-backup-') ? 'scheduled' :
+                f.startsWith('pre-sync-safety') ? 'pre-sync' : 'manual'
+        };
+      })
+      .sort((a, b) => new Date(b.created) - new Date(a.created)); // Newest first
+
+    return files;
+  } catch (error) {
+    console.error('Error listing backups:', error.message);
+    return [];
+  }
+}
+
+/**
+ * Load a backup file by filename
+ */
+export function loadBackupFile(filename) {
+  const filepath = path.join(BACKUP_DIR, filename);
+  if (!fs.existsSync(filepath)) {
+    throw new Error(`Backup file not found: ${filename}`);
+  }
+  return importBackupFromFile(filepath);
+}
+
+/**
+ * Delete a backup file
+ */
+export function deleteBackupFile(filename) {
+  const filepath = path.join(BACKUP_DIR, filename);
+  if (!fs.existsSync(filepath)) {
+    throw new Error(`Backup file not found: ${filename}`);
+  }
+  fs.unlinkSync(filepath);
+  console.log(`✓ Deleted backup: ${filename}`);
+  return { success: true };
+}
+
+/**
+ * Configure scheduled backups
+ */
+export function configureScheduledBackups(config) {
+  const { enabled, frequency, retainCount } = config;
+
+  if (enabled !== undefined) backupConfig.enabled = enabled;
+  if (frequency !== undefined) backupConfig.frequency = frequency;
+  if (retainCount !== undefined) backupConfig.retainCount = retainCount;
+
+  // Stop existing job if any
+  if (scheduledBackupJob) {
+    scheduledBackupJob.stop();
+    scheduledBackupJob = null;
+  }
+
+  // Start new job if enabled
+  if (backupConfig.enabled) {
+    let cronExpression;
+
+    switch (backupConfig.frequency) {
+      case '6hours':
+        cronExpression = '0 */6 * * *'; // Every 6 hours
+        break;
+      case '12hours':
+        cronExpression = '0 */12 * * *'; // Every 12 hours
+        break;
+      case 'daily':
+        cronExpression = '0 2 * * *'; // Every day at 2 AM
+        break;
+      case 'weekly':
+        cronExpression = '0 2 * * 0'; // Every Sunday at 2 AM
+        break;
+      default:
+        cronExpression = '0 2 * * *'; // Default to daily
+    }
+
+    scheduledBackupJob = cron.schedule(cronExpression, () => {
+      console.log(`\n⏰ Running scheduled backup (${backupConfig.frequency})...`);
+      try {
+        createScheduledBackup();
+      } catch (error) {
+        console.error('Scheduled backup failed:', error.message);
+      }
+    });
+
+    console.log(`✓ Scheduled backups enabled: ${backupConfig.frequency} (keeping last ${backupConfig.retainCount})`);
+  } else {
+    console.log('✓ Scheduled backups disabled');
+  }
+
+  return backupConfig;
+}
+
+/**
+ * Get current backup configuration
+ */
+export function getBackupConfig() {
+  return { ...backupConfig };
 }

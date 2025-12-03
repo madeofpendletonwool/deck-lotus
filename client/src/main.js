@@ -4,6 +4,7 @@ import { setupDecks } from './components/decks.js';
 import { setupDeckBuilder } from './components/deckBuilder.js';
 import { setupCards } from './components/cards.js';
 import { setupSettings } from './components/settings.js';
+import { setupShopping } from './components/shopping.js';
 import { setupSharedDeck, loadSharedDeck } from './components/sharedDeck.js';
 import { setupUserMenu } from './components/userMenu.js';
 import { showLoading, hideLoading } from './utils/ui.js';
@@ -94,6 +95,9 @@ class App {
       case 'cards':
         window.dispatchEvent(new CustomEvent('page:cards'));
         break;
+      case 'shopping':
+        window.dispatchEvent(new CustomEvent('page:shopping'));
+        break;
       case 'settings':
         window.dispatchEvent(new CustomEvent('page:settings'));
         break;
@@ -118,6 +122,7 @@ class App {
     setupDecks();
     setupDeckBuilder();
     setupCards();
+    setupShopping();
     setupSettings();
     setupSharedDeck();
   }

@@ -1,6 +1,15 @@
 import express from 'express';
 import { runSync, getSyncStatus } from '../services/syncService.js';
-import { createBackup, restoreBackup } from '../services/backupService.js';
+import {
+  createBackup,
+  restoreBackup,
+  createScheduledBackup,
+  listBackups,
+  loadBackupFile,
+  deleteBackupFile,
+  configureScheduledBackups,
+  getBackupConfig
+} from '../services/backupService.js';
 import { getAllUsers, updateUser, deleteUser } from '../services/authService.js';
 import { authenticate } from '../middleware/auth.js';
 import { requireAdmin } from '../middleware/adminAuth.js';
@@ -85,6 +94,127 @@ router.post('/restore', authenticate, (req, res, next) => {
       success: true,
       message: 'Backup restored successfully',
       results
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * GET /api/admin/backups
+ * List all available backup files
+ */
+router.get('/backups', authenticate, (req, res, next) => {
+  try {
+    const backups = listBackups();
+    res.json({ backups });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * GET /api/admin/backups/:filename
+ * Download a specific backup file
+ */
+router.get('/backups/:filename', authenticate, (req, res, next) => {
+  try {
+    const { filename } = req.params;
+    const backup = loadBackupFile(filename);
+
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.json(backup);
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * DELETE /api/admin/backups/:filename
+ * Delete a backup file
+ */
+router.delete('/backups/:filename', authenticate, (req, res, next) => {
+  try {
+    const { filename } = req.params;
+    deleteBackupFile(filename);
+    res.json({ success: true, message: 'Backup deleted successfully' });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /api/admin/backup/create
+ * Manually create a scheduled backup
+ */
+router.post('/backup/create', authenticate, (req, res, next) => {
+  try {
+    const result = createScheduledBackup();
+    res.json({ success: true, ...result });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /api/admin/restore-from-file
+ * Restore from a backup file in the backups directory
+ * Body: { filename: string, overwrite: boolean }
+ */
+router.post('/restore-from-file', authenticate, (req, res, next) => {
+  try {
+    const { filename, overwrite = false } = req.body;
+
+    if (!filename) {
+      return res.status(400).json({ error: 'Filename is required' });
+    }
+
+    const backup = loadBackupFile(filename);
+
+    // Admins can restore all users, regular users only their own data
+    const restoreUserId = req.user.is_admin ? null : req.user.id;
+
+    const results = restoreBackup(backup, {
+      overwrite,
+      userId: restoreUserId
+    });
+
+    res.json({
+      success: true,
+      message: `Restored from ${filename}`,
+      results
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * GET /api/admin/backup-config
+ * Get backup schedule configuration
+ */
+router.get('/backup-config', authenticate, (req, res, next) => {
+  try {
+    const config = getBackupConfig();
+    res.json(config);
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /api/admin/backup-config
+ * Configure backup schedule
+ * Body: { enabled: boolean, frequency: string, retainCount: number }
+ */
+router.post('/backup-config', authenticate, requireAdmin, (req, res, next) => {
+  try {
+    const config = configureScheduledBackups(req.body);
+    res.json({
+      success: true,
+      message: 'Backup configuration updated',
+      config
     });
   } catch (error) {
     next(error);

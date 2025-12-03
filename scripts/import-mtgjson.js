@@ -621,6 +621,46 @@ async function main() {
       console.log(`\n⚠️  FORCE_REIMPORT=true detected`);
       console.log(`Clearing existing MTGJSON data (preserving user data)...`);
 
+      // STEP 1: CRITICAL - Save user data to disk BEFORE deleting anything
+      console.log('  📦 Creating safety backup before sync...');
+
+      const deckCardsBackup = targetDb.prepare(`
+        SELECT dc.deck_id, dc.quantity, dc.is_sideboard, dc.is_commander, p.uuid
+        FROM deck_cards dc
+        JOIN printings p ON dc.printing_id = p.id
+      `).all();
+
+      const ownedCardsBackup = targetDb.prepare(`
+        SELECT oc.user_id, oc.quantity, c.name as card_name
+        FROM owned_cards oc
+        JOIN cards c ON oc.card_id = c.id
+      `).all();
+
+      // Create backup directory if it doesn't exist
+      const BACKUP_DIR = path.join(DATA_DIR, 'backups');
+      if (!fs.existsSync(BACKUP_DIR)) {
+        fs.mkdirSync(BACKUP_DIR, { recursive: true });
+      }
+
+      // Save to disk with timestamp
+      const timestamp = new Date().toISOString().replace(/:/g, '-').split('.')[0];
+      const safetyBackupPath = path.join(BACKUP_DIR, `pre-sync-safety-backup-${timestamp}.json`);
+
+      const safetyBackup = {
+        version: '1.0',
+        timestamp: new Date().toISOString(),
+        type: 'pre-sync-safety',
+        data: {
+          deck_cards: deckCardsBackup,
+          owned_cards: ownedCardsBackup
+        }
+      };
+
+      fs.writeFileSync(safetyBackupPath, JSON.stringify(safetyBackup, null, 2), 'utf8');
+      console.log(`  ✓ Safety backup saved to: ${path.basename(safetyBackupPath)}`);
+      console.log(`  ✓ Backed up ${deckCardsBackup.length} deck card entries`);
+      console.log(`  ✓ Backed up ${ownedCardsBackup.length} owned card entries`);
+
       // Delete stale MTGJSON source files to force fresh download
       if (fs.existsSync(EXTRACTED_PATH)) {
         console.log('  🗑️  Deleting stale AllPrintings.sqlite...');
@@ -634,24 +674,6 @@ async function main() {
         console.log('  🗑️  Deleting stale AllPricesToday.json...');
         fs.unlinkSync(PRICES_PATH);
       }
-
-      // STEP 1: Save user deck data using UUIDs (stable across imports)
-      console.log('  📦 Backing up user deck data...');
-      const deckCardsBackup = targetDb.prepare(`
-        SELECT dc.deck_id, dc.quantity, dc.is_sideboard, dc.is_commander, p.uuid
-        FROM deck_cards dc
-        JOIN printings p ON dc.printing_id = p.id
-      `).all();
-      console.log(`  ✓ Backed up ${deckCardsBackup.length} deck card entries`);
-
-      // STEP 1b: Save owned cards data using card names (stable across imports)
-      console.log('  📦 Backing up owned cards data...');
-      const ownedCardsBackup = targetDb.prepare(`
-        SELECT oc.user_id, oc.quantity, c.name as card_name
-        FROM owned_cards oc
-        JOIN cards c ON oc.card_id = c.id
-      `).all();
-      console.log(`  ✓ Backed up ${ownedCardsBackup.length} owned card entries`);
 
       // STEP 2: Delete MTGJSON-sourced data in correct order (preserve user data)
       targetDb.prepare('DELETE FROM prices').run();
@@ -678,10 +700,11 @@ async function main() {
 
       console.log(`\n✓ Database cleared. Starting fresh import...\n`);
 
-      // STEP 3: After import, restore deck data
-      // We'll do this after importCards() completes
+      // STEP 3: Store backup data for restoration after import
+      // Keep in memory for immediate use AND save path for recovery
       targetDb._deckCardsBackup = deckCardsBackup;
       targetDb._ownedCardsBackup = ownedCardsBackup;
+      targetDb._safetyBackupPath = safetyBackupPath;
     }
 
     // Download MTGJSON database if not exists

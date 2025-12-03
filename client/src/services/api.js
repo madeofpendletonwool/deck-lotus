@@ -269,6 +269,45 @@ class ApiClient {
     });
   }
 
+  // Backup management methods
+  async getBackups() {
+    return this.request('/admin/backups');
+  }
+
+  async downloadBackupFile(filename) {
+    return this.request(`/admin/backups/${filename}`);
+  }
+
+  async deleteBackupFile(filename) {
+    return this.request(`/admin/backups/${filename}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async createBackupNow() {
+    return this.request('/admin/backup/create', {
+      method: 'POST',
+    });
+  }
+
+  async restoreFromBackupFile(filename, overwrite = false) {
+    return this.request('/admin/restore-from-file', {
+      method: 'POST',
+      body: JSON.stringify({ filename, overwrite }),
+    });
+  }
+
+  async getBackupConfig() {
+    return this.request('/admin/backup-config');
+  }
+
+  async saveBackupConfig(config) {
+    return this.request('/admin/backup-config', {
+      method: 'POST',
+      body: JSON.stringify(config),
+    });
+  }
+
   // User management methods (admin only)
   async getAllUsers() {
     return this.request('/admin/users');
@@ -285,6 +324,15 @@ class ApiClient {
     return this.request(`/admin/users/${userId}`, {
       method: 'DELETE',
     });
+  }
+
+  // Shopping methods
+  async getShoppingList(deckIds) {
+    const params = new URLSearchParams();
+    if (deckIds && deckIds.length > 0) {
+      params.append('deckIds', deckIds.join(','));
+    }
+    return this.request(`/shopping?${params}`);
   }
 }
 

@@ -7,6 +7,9 @@ export function setupSettings() {
   const backupDataBtn = document.getElementById('backup-data-btn');
   const restoreDataBtn = document.getElementById('restore-data-btn');
   const restoreFileInput = document.getElementById('restore-file-input');
+  const createBackupNowBtn = document.getElementById('create-backup-now-btn');
+  const saveBackupConfigBtn = document.getElementById('save-backup-config-btn');
+  const refreshBackupsBtn = document.getElementById('refresh-backups-btn');
 
   // Backup data
   backupDataBtn.addEventListener('click', async () => {
@@ -152,10 +155,56 @@ export function setupSettings() {
     }
   });
 
+  // Create backup now
+  createBackupNowBtn.addEventListener('click', async () => {
+    try {
+      showLoading();
+      const result = await api.createBackupNow();
+      hideLoading();
+      showToast(`Backup created: ${result.filename}`, 'success');
+      await loadBackups();
+      await loadBackupConfig();
+    } catch (error) {
+      hideLoading();
+      showToast('Failed to create backup: ' + error.message, 'error');
+    }
+  });
+
+  // Save backup configuration
+  saveBackupConfigBtn.addEventListener('click', async () => {
+    try {
+      const enabled = document.getElementById('backup-schedule-enabled').checked;
+      const frequency = document.getElementById('backup-frequency').value;
+      const retainCount = parseInt(document.getElementById('backup-retain-count').value);
+
+      if (retainCount < 1 || retainCount > 100) {
+        showToast('Retain count must be between 1 and 100', 'error');
+        return;
+      }
+
+      showLoading();
+      const config = await api.saveBackupConfig({ enabled, frequency, retainCount });
+      hideLoading();
+
+      showToast('Backup schedule saved successfully!', 'success');
+      await loadBackupConfig();
+    } catch (error) {
+      hideLoading();
+      showToast('Failed to save backup config: ' + error.message, 'error');
+    }
+  });
+
+  // Refresh backups list
+  refreshBackupsBtn.addEventListener('click', async () => {
+    await loadBackups();
+  });
+
   window.addEventListener('page:settings', async () => {
     await loadApiKeys();
     await loadSyncStatus();
     await checkAdminAndLoadUsers();
+    await loadBackupConfig();
+    await loadBackups();
   });
 }
 
@@ -330,5 +379,166 @@ window.revokeApiKey = async function(keyId) {
   } catch (error) {
     hideLoading();
     showToast('Failed to revoke API key: ' + error.message, 'error');
+  }
+};
+
+async function loadBackupConfig() {
+  try {
+    const config = await api.getBackupConfig();
+
+    document.getElementById('backup-schedule-enabled').checked = config.enabled;
+    document.getElementById('backup-frequency').value = config.frequency;
+    document.getElementById('backup-retain-count').value = config.retainCount;
+
+    const lastRunEl = document.getElementById('backup-last-run');
+    if (config.lastRun) {
+      const date = new Date(config.lastRun);
+      lastRunEl.textContent = `Last backup: ${date.toLocaleString()}`;
+    } else {
+      lastRunEl.textContent = 'Last backup: Never';
+    }
+  } catch (error) {
+    console.error('Failed to load backup config:', error);
+  }
+}
+
+async function loadBackups() {
+  try {
+    showLoading();
+    const result = await api.getBackups();
+    renderBackups(result.backups);
+    hideLoading();
+  } catch (error) {
+    hideLoading();
+    console.error('Failed to load backups:', error);
+    showToast('Failed to load backups: ' + error.message, 'error');
+  }
+}
+
+function renderBackups(backups) {
+  const backupsList = document.getElementById('backups-list');
+
+  if (backups.length === 0) {
+    backupsList.innerHTML = '<p style="color: var(--text-secondary); text-align: center; padding: 2rem;">No backups available</p>';
+    return;
+  }
+
+  backupsList.innerHTML = backups.map(backup => {
+    const date = new Date(backup.created);
+    const sizeKB = (backup.size / 1024).toFixed(2);
+    const typeBadge = backup.type === 'scheduled' ? 'Scheduled' :
+                      backup.type === 'pre-sync' ? 'Pre-Sync Safety' : 'Manual';
+    const typeBadgeColor = backup.type === 'scheduled' ? 'var(--success)' :
+                           backup.type === 'pre-sync' ? 'var(--warning)' : 'var(--primary)';
+
+    return `
+      <div class="backup-item" style="display: flex; justify-content: space-between; align-items: center; padding: 1rem; background: var(--bg-tertiary); border-radius: 8px;">
+        <div style="flex: 1;">
+          <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
+            <strong>${backup.filename}</strong>
+            <span style="background: ${typeBadgeColor}; color: white; padding: 0.125rem 0.5rem; border-radius: 4px; font-size: 0.75rem;">${typeBadge}</span>
+          </div>
+          <div style="font-size: 0.875rem; color: var(--text-secondary);">
+            ${date.toLocaleString()} • ${sizeKB} KB
+          </div>
+        </div>
+        <div style="display: flex; gap: 0.5rem;">
+          <button class="btn btn-secondary btn-sm" onclick="downloadBackup('${backup.filename}')">
+            <i class="ph ph-download-simple"></i> Download
+          </button>
+          <button class="btn btn-primary btn-sm" onclick="restoreFromBackup('${backup.filename}')">
+            <i class="ph ph-arrow-counter-clockwise"></i> Restore
+          </button>
+          <button class="btn btn-danger btn-sm" onclick="deleteBackup('${backup.filename}')">
+            <i class="ph ph-trash"></i>
+          </button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+window.downloadBackup = async function(filename) {
+  try {
+    showLoading();
+    const backup = await api.downloadBackupFile(filename);
+    hideLoading();
+
+    // Create a download link
+    const dataStr = JSON.stringify(backup, null, 2);
+    const dataBlob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(dataBlob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    showToast('Backup downloaded successfully!', 'success');
+  } catch (error) {
+    hideLoading();
+    showToast('Failed to download backup: ' + error.message, 'error');
+  }
+};
+
+window.restoreFromBackup = async function(filename) {
+  const overwrite = confirm(
+    `Restore from "${filename}"?\n\n` +
+    'Do you want to overwrite existing data?\n\n' +
+    'YES: Replace all your current data with the backup\n' +
+    'NO: Merge the backup with your existing data (may create duplicates)'
+  );
+
+  try {
+    showLoading();
+    const result = await api.restoreFromBackupFile(filename, overwrite);
+    hideLoading();
+
+    showModal('Backup Restored', `
+      <p>Successfully restored from ${filename}!</p>
+      <ul style="text-align: left; margin: 1rem 0;">
+        <li>Users: ${result.results.users}</li>
+        <li>Owned Cards: ${result.results.owned_cards || 0}</li>
+        <li>Decks: ${result.results.decks}</li>
+        <li>Deck Cards: ${result.results.deck_cards}</li>
+        <li>API Keys: ${result.results.api_keys}</li>
+        <li>Deck Shares: ${result.results.deck_shares}</li>
+      </ul>
+      ${result.results.errors.length > 0 ? `
+        <p style="color: var(--danger); margin-top: 1rem;">Errors: ${result.results.errors.length}</p>
+        <details style="margin-top: 0.5rem;">
+          <summary>Show errors</summary>
+          <pre style="font-size: 0.75rem; max-height: 200px; overflow-y: auto;">${result.results.errors.join('\n')}</pre>
+        </details>
+      ` : ''}
+      <p style="margin-top: 1rem;">Refreshing page...</p>
+    `);
+
+    // Refresh the page after 2 seconds
+    setTimeout(() => {
+      window.location.reload();
+    }, 2000);
+  } catch (error) {
+    hideLoading();
+    showToast('Failed to restore backup: ' + error.message, 'error');
+  }
+};
+
+window.deleteBackup = async function(filename) {
+  if (!confirm(`Are you sure you want to delete "${filename}"? This action cannot be undone.`)) {
+    return;
+  }
+
+  try {
+    showLoading();
+    await api.deleteBackupFile(filename);
+    await loadBackups();
+    hideLoading();
+    showToast('Backup deleted successfully', 'success');
+  } catch (error) {
+    hideLoading();
+    showToast('Failed to delete backup: ' + error.message, 'error');
   }
 };

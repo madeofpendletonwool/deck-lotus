@@ -12,6 +12,12 @@ let activeTab = 'mainboard'; // Track which tab is currently active ('mainboard'
 let pricingMode = false; // Track if pricing mode is enabled
 let setGroupMode = false; // Track if set grouping mode is enabled
 let currentPriceData = null; // Store current price data for cards
+let optimizerState = {
+  suggestions: [],
+  currentIndex: 0,
+  currentSelection: null,
+  availableSets: []
+}; // Store printing optimizer state
 
 // Detect if device is touch-enabled (mobile/tablet)
 function isTouchDevice() {
@@ -260,6 +266,71 @@ export function setupDeckBuilder() {
   // Legality modal close
   document.getElementById('legality-modal-close').addEventListener('click', () => {
     document.getElementById('legality-check-modal').classList.add('hidden');
+  });
+
+  // Printing Optimizer button
+  document.getElementById('optimize-printings-btn').addEventListener('click', () => {
+    if (!currentDeck || !currentDeck.cards || currentDeck.cards.length === 0) {
+      showToast('Add some cards first', 'warning');
+      return;
+    }
+    openPrintingOptimizer();
+  });
+
+  // Printing Optimizer modal close
+  document.getElementById('optimizer-modal-close').addEventListener('click', () => {
+    closePrintingOptimizer();
+  });
+
+  document.getElementById('cancel-optimization-btn').addEventListener('click', () => {
+    closePrintingOptimizer();
+  });
+
+  // Optimizer tab switching
+  document.getElementById('optimizer-tab-auto').addEventListener('click', () => {
+    switchOptimizerTab('auto');
+  });
+
+  document.getElementById('optimizer-tab-manual').addEventListener('click', () => {
+    switchOptimizerTab('manual');
+  });
+
+  // Optimizer navigation
+  document.getElementById('prev-suggestion-btn').addEventListener('click', () => {
+    if (optimizerState.currentIndex > 0) {
+      optimizerState.currentIndex--;
+      displayCurrentSuggestion();
+    }
+  });
+
+  document.getElementById('next-suggestion-btn').addEventListener('click', () => {
+    if (optimizerState.currentIndex < optimizerState.suggestions.length - 1) {
+      optimizerState.currentIndex++;
+      displayCurrentSuggestion();
+    }
+  });
+
+  // Manual set analysis
+  document.getElementById('analyze-manual-set-btn').addEventListener('click', async () => {
+    const setCode = document.getElementById('manual-set-select').value;
+    if (!setCode) {
+      showToast('Please select a set', 'warning');
+      return;
+    }
+    await analyzeManualSet(setCode);
+  });
+
+  // Apply optimization
+  document.getElementById('apply-optimization-btn').addEventListener('click', async () => {
+    await applyOptimization();
+  });
+
+  // Commander sets exclusion checkbox
+  document.getElementById('exclude-commander-sets').addEventListener('change', async (e) => {
+    if (optimizerState.suggestions.length > 0) {
+      // Reload suggestions with new filter
+      await reloadOptimizerSuggestions();
+    }
   });
 
   // Listen for open deck event
@@ -2289,4 +2360,303 @@ function updateHandStats() {
   const expectedLands = (handSize * totalLands / totalCards).toFixed(2);
 
   statsContainer.innerHTML = `Average number of lands in opening hand: <strong>${expectedLands}</strong>`;
+}
+
+// ===== Printing Optimizer Functions =====
+
+async function openPrintingOptimizer() {
+  try {
+    // Reset state
+    optimizerState = {
+      suggestions: [],
+      currentIndex: 0,
+      currentSelection: null,
+      availableSets: []
+    };
+
+    // Show modal
+    document.getElementById('printing-optimizer-modal').classList.remove('hidden');
+
+    // Switch to auto tab by default
+    switchOptimizerTab('auto');
+
+    // Show loading
+    document.getElementById('optimizer-loading').classList.remove('hidden');
+    document.getElementById('optimizer-suggestions').classList.add('hidden');
+    document.getElementById('optimizer-empty').classList.add('hidden');
+    document.getElementById('apply-optimization-btn').disabled = true;
+
+    // Load auto suggestions with commander filter
+    const excludeCommander = document.getElementById('exclude-commander-sets').checked;
+    const result = await api.analyzeDeckPrintings(currentDeckId, 5, excludeCommander);
+
+    optimizerState.suggestions = result.suggestions || [];
+
+    if (optimizerState.suggestions.length === 0) {
+      document.getElementById('optimizer-loading').classList.add('hidden');
+      document.getElementById('optimizer-empty').classList.remove('hidden');
+      return;
+    }
+
+    // Load available sets for manual selection
+    const setsResult = await api.getOptimizationSets(currentDeckId);
+    optimizerState.availableSets = setsResult.sets || [];
+
+    // Populate set dropdown
+    const setSelect = document.getElementById('manual-set-select');
+    setSelect.innerHTML = '<option value="">Choose a set...</option>' +
+      optimizerState.availableSets.map(set =>
+        `<option value="${set.code}">${set.name} (${set.code}) - ${set.card_count} cards</option>`
+      ).join('');
+
+    // Display first suggestion
+    document.getElementById('optimizer-loading').classList.add('hidden');
+    document.getElementById('optimizer-suggestions').classList.remove('hidden');
+    displayCurrentSuggestion();
+
+  } catch (error) {
+    console.error('Failed to load optimizer:', error);
+    showToast('Failed to load optimizer: ' + error.message, 'error');
+    closePrintingOptimizer();
+  }
+}
+
+function closePrintingOptimizer() {
+  document.getElementById('printing-optimizer-modal').classList.add('hidden');
+  optimizerState = {
+    suggestions: [],
+    currentIndex: 0,
+    currentSelection: null,
+    availableSets: []
+  };
+}
+
+function switchOptimizerTab(tab) {
+  // Update tab buttons
+  document.getElementById('optimizer-tab-auto').classList.toggle('active', tab === 'auto');
+  document.getElementById('optimizer-tab-manual').classList.toggle('active', tab === 'manual');
+
+  // Update views
+  document.getElementById('optimizer-auto-view').classList.toggle('hidden', tab !== 'auto');
+  document.getElementById('optimizer-manual-view').classList.toggle('hidden', tab !== 'manual');
+
+  // Reset apply button
+  document.getElementById('apply-optimization-btn').disabled = true;
+
+  // If switching to auto, enable apply button if we have suggestions
+  if (tab === 'auto' && optimizerState.suggestions.length > 0) {
+    optimizerState.currentSelection = optimizerState.suggestions[optimizerState.currentIndex];
+    document.getElementById('apply-optimization-btn').disabled = false;
+  } else if (tab === 'manual') {
+    // Clear manual selection when switching to manual
+    optimizerState.currentSelection = null;
+    document.getElementById('manual-result').classList.add('hidden');
+  }
+}
+
+function displayCurrentSuggestion() {
+  const suggestion = optimizerState.suggestions[optimizerState.currentIndex];
+  if (!suggestion) return;
+
+  // Update counter
+  document.getElementById('suggestion-counter').textContent =
+    `${optimizerState.currentIndex + 1} / ${optimizerState.suggestions.length}`;
+
+  // Update navigation buttons
+  document.getElementById('prev-suggestion-btn').disabled = optimizerState.currentIndex === 0;
+  document.getElementById('next-suggestion-btn').disabled =
+    optimizerState.currentIndex === optimizerState.suggestions.length - 1;
+
+  // Display suggestion details
+  const suggestionEl = document.getElementById('current-suggestion');
+  suggestionEl.innerHTML = `
+    <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 1rem;">
+      <div>
+        <h4 style="margin: 0 0 0.5rem 0; font-size: 1.25rem;">${suggestion.setName}</h4>
+        <div style="color: var(--text-secondary); font-size: 0.875rem;">
+          <strong>${suggestion.setCode}</strong> • Released ${new Date(suggestion.releaseDate).toLocaleDateString()}
+        </div>
+      </div>
+      <div style="text-align: right;">
+        <div style="font-size: 2rem; font-weight: 700; color: var(--accent);">${suggestion.percentage}%</div>
+        <div style="color: var(--text-secondary); font-size: 0.875rem;">${suggestion.cardCount} / ${suggestion.cards.length} cards</div>
+      </div>
+    </div>
+    <div style="padding: 0.75rem; background: var(--bg-secondary); border-radius: 0.5rem; border-left: 4px solid var(--accent);">
+      <i class="ph ph-info"></i>
+      ${suggestion.cardCount} cards in your deck have printings in this set. Apply this optimization to use ${suggestion.setName} versions for all available cards.
+    </div>
+  `;
+
+  // Display cards
+  renderSuggestionCards(suggestion.cards, 'suggestion-cards-list');
+
+  // Set current selection and enable apply button
+  optimizerState.currentSelection = suggestion;
+  document.getElementById('apply-optimization-btn').disabled = false;
+}
+
+function renderSuggestionCards(cards, containerId) {
+  const container = document.getElementById(containerId);
+
+  if (!cards || cards.length === 0) {
+    container.innerHTML = '<div style="text-align: center; padding: 2rem; color: var(--text-secondary);">No cards to display</div>';
+    return;
+  }
+
+  container.innerHTML = cards.map(card => `
+    <div style="display: flex; align-items: center; gap: 1rem; padding: 0.75rem; background: var(--bg-secondary); border-radius: 0.5rem; margin-bottom: 0.5rem;">
+      <img src="${card.imageUrl}" alt="${card.cardName}"
+        style="width: 60px; height: 84px; border-radius: 0.25rem; object-fit: cover;"
+        onerror="this.style.display='none'">
+      <div style="flex: 1;">
+        <div style="font-weight: 600; margin-bottom: 0.25rem;">${card.cardName}</div>
+        <div style="font-size: 0.875rem; color: var(--text-secondary);">
+          ${card.quantity > 1 ? `${card.quantity}x • ` : ''}
+          <span style="color: var(--text-muted);">Currently: ${card.currentSetName || card.currentSetCode}</span>
+        </div>
+        ${card.boardType && card.boardType !== 'mainboard' ?
+          `<span style="font-size: 0.75rem; padding: 0.125rem 0.5rem; background: var(--bg-tertiary); border-radius: 0.25rem; margin-top: 0.25rem; display: inline-block;">
+            ${card.boardType}
+          </span>` : ''}
+      </div>
+      <div style="display: flex; align-items: center; gap: 0.5rem;">
+        <i class="ph ph-arrow-right" style="color: var(--text-secondary);"></i>
+        <div style="text-align: right;">
+          <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">${card.rarity || 'Common'}</div>
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
+async function analyzeManualSet(setCode) {
+  try {
+    document.getElementById('analyze-manual-set-btn').disabled = true;
+    document.getElementById('analyze-manual-set-btn').innerHTML = '<i class="ph ph-spinner"></i> Analyzing...';
+
+    const result = await api.analyzeSpecificSet(currentDeckId, setCode);
+
+    if (!result || result.cardCount === 0) {
+      showToast('No cards in your deck have printings in this set', 'info');
+      document.getElementById('manual-result').classList.add('hidden');
+      optimizerState.currentSelection = null;
+      document.getElementById('apply-optimization-btn').disabled = true;
+      return;
+    }
+
+    // Display manual result
+    const manualSuggestionEl = document.getElementById('manual-suggestion');
+    manualSuggestionEl.innerHTML = `
+      <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 1rem;">
+        <div>
+          <h4 style="margin: 0 0 0.5rem 0; font-size: 1.25rem;">${result.setName}</h4>
+          <div style="color: var(--text-secondary); font-size: 0.875rem;">
+            <strong>${result.setCode}</strong> • Released ${new Date(result.releaseDate).toLocaleDateString()}
+          </div>
+        </div>
+        <div style="text-align: right;">
+          <div style="font-size: 2rem; font-weight: 700; color: var(--accent);">${result.percentage}%</div>
+          <div style="color: var(--text-secondary); font-size: 0.875rem;">${result.cardCount} / ${result.totalCards} cards</div>
+        </div>
+      </div>
+      <div style="padding: 0.75rem; background: var(--bg-secondary); border-radius: 0.5rem; border-left: 4px solid var(--accent);">
+        <i class="ph ph-info"></i>
+        ${result.cardCount} cards in your deck have printings in this set. Apply this optimization to use ${result.setName} versions for all available cards.
+      </div>
+    `;
+
+    // Display cards
+    renderSuggestionCards(result.cards, 'manual-cards-list');
+
+    // Show result
+    document.getElementById('manual-result').classList.remove('hidden');
+
+    // Set current selection and enable apply button
+    optimizerState.currentSelection = result;
+    document.getElementById('apply-optimization-btn').disabled = false;
+
+  } catch (error) {
+    console.error('Failed to analyze set:', error);
+    showToast('Failed to analyze set: ' + error.message, 'error');
+  } finally {
+    document.getElementById('analyze-manual-set-btn').disabled = false;
+    document.getElementById('analyze-manual-set-btn').innerHTML = '<i class="ph ph-magnifying-glass"></i> Analyze';
+  }
+}
+
+async function reloadOptimizerSuggestions() {
+  try {
+    // Show loading
+    document.getElementById('optimizer-loading').classList.remove('hidden');
+    document.getElementById('optimizer-suggestions').classList.add('hidden');
+    document.getElementById('optimizer-empty').classList.add('hidden');
+
+    // Reset current index
+    optimizerState.currentIndex = 0;
+
+    // Load auto suggestions with commander filter
+    const excludeCommander = document.getElementById('exclude-commander-sets').checked;
+    const result = await api.analyzeDeckPrintings(currentDeckId, 5, excludeCommander);
+
+    optimizerState.suggestions = result.suggestions || [];
+
+    if (optimizerState.suggestions.length === 0) {
+      document.getElementById('optimizer-loading').classList.add('hidden');
+      document.getElementById('optimizer-empty').classList.remove('hidden');
+      document.getElementById('apply-optimization-btn').disabled = true;
+      return;
+    }
+
+    // Display first suggestion
+    document.getElementById('optimizer-loading').classList.add('hidden');
+    document.getElementById('optimizer-suggestions').classList.remove('hidden');
+    displayCurrentSuggestion();
+
+  } catch (error) {
+    console.error('Failed to reload suggestions:', error);
+    showToast('Failed to reload suggestions: ' + error.message, 'error');
+  }
+}
+
+async function applyOptimization() {
+  if (!optimizerState.currentSelection || !optimizerState.currentSelection.cards) {
+    showToast('No optimization selected', 'warning');
+    return;
+  }
+
+  try {
+    const applyBtn = document.getElementById('apply-optimization-btn');
+    applyBtn.disabled = true;
+    applyBtn.innerHTML = '<i class="ph ph-spinner"></i> Applying...';
+
+    // Build changes array
+    const changes = optimizerState.currentSelection.cards.map(card => ({
+      deckCardId: card.deckCardId,
+      newPrintingId: card.newPrintingId
+    }));
+
+    // Apply changes
+    const result = await api.applyPrintingOptimization(currentDeckId, changes);
+
+    showToast(result.message || `Updated ${result.updated} cards!`, 'success');
+
+    // Reload deck to show updated printings
+    await loadDeck(currentDeckId);
+
+    // Keep modal open and reset button state
+    applyBtn.disabled = false;
+    applyBtn.innerHTML = '<i class="ph ph-check"></i> Apply Optimization';
+
+    // Reload optimizer suggestions to reflect changes
+    await reloadOptimizerSuggestions();
+
+  } catch (error) {
+    console.error('Failed to apply optimization:', error);
+    showToast('Failed to apply optimization: ' + error.message, 'error');
+
+    const applyBtn = document.getElementById('apply-optimization-btn');
+    applyBtn.disabled = false;
+    applyBtn.innerHTML = '<i class="ph ph-check"></i> Apply Optimization';
+  }
 }

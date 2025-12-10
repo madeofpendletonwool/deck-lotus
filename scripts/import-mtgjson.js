@@ -625,7 +625,7 @@ async function main() {
       console.log('  📦 Creating safety backup before sync...');
 
       const deckCardsBackup = targetDb.prepare(`
-        SELECT dc.deck_id, dc.quantity, dc.is_sideboard, dc.is_commander, p.uuid
+        SELECT dc.deck_id, dc.quantity, dc.is_sideboard, dc.is_commander, dc.board_type, p.uuid
         FROM deck_cards dc
         JOIN printings p ON dc.printing_id = p.id
       `).all();
@@ -733,8 +733,8 @@ async function main() {
       const backup = targetDb._deckCardsBackup;
 
       const insertDeckCard = targetDb.prepare(`
-        INSERT INTO deck_cards (deck_id, printing_id, quantity, is_sideboard, is_commander)
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO deck_cards (deck_id, printing_id, quantity, is_sideboard, is_commander, board_type)
+        VALUES (?, ?, ?, ?, ?, ?)
       `);
 
       const getPrintingId = targetDb.prepare(`
@@ -754,7 +754,8 @@ async function main() {
                 printing.id,
                 entry.quantity,
                 entry.is_sideboard,
-                entry.is_commander
+                entry.is_commander,
+                entry.board_type || 'mainboard'
               );
               restored++;
             } catch (e) {

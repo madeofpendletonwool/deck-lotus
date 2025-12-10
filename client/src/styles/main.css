@@ -1397,6 +1397,25 @@ button.btn-icon.active {
     flex: 1;
   }
 
+  /* Make deck tabs scrollable on mobile */
+  .deck-tabs {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* IE/Edge */
+  }
+
+  .deck-tabs::-webkit-scrollbar {
+    display: none; /* Chrome/Safari */
+  }
+
+  .tab-btn {
+    padding: 0.75rem 1rem;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
   .deck-price-row {
     flex-direction: column;
     align-items: stretch;

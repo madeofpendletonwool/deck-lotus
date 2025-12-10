@@ -354,9 +354,15 @@
                                 id="deck-total-price"
                                 class="deck-price-display"
                             ></div>
-                            <button id="buy-deck-btn" class="btn btn-success">
-                                Buy Deck
-                            </button>
+                            <div style="display: flex; gap: 0.5rem;">
+                                <button id="optimize-printings-btn" class="btn btn-secondary">
+                                    <i class="ph ph-magic-wand btn-icon"></i>
+                                    <span class="btn-text">Optimize Printings</span>
+                                </button>
+                                <button id="buy-deck-btn" class="btn btn-success">
+                                    Buy Deck
+                                </button>
+                            </div>
                         </div>
                     </div>
 
@@ -1488,6 +1494,111 @@
                         style="margin-top: 2rem"
                     >
                         <!-- Results will be displayed here -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Printing Optimizer Modal -->
+            <div id="printing-optimizer-modal" class="modal hidden">
+                <div class="modal-content" style="max-width: 900px">
+                    <span class="modal-close" id="optimizer-modal-close"
+                        >&times;</span
+                    >
+                    <h2 style="margin-bottom: 1rem"><i class="ph ph-magic-wand"></i> Optimize Printings</h2>
+                    <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">
+                        Find sets with the most cards in common to create a cohesive deck with matching printings
+                    </p>
+
+                    <!-- Tabs: Auto suggestions vs Manual selection -->
+                    <div style="display: flex; gap: 0.5rem; margin-bottom: 1.5rem; border-bottom: 2px solid var(--border);">
+                        <button id="optimizer-tab-auto" class="tab-btn active" data-tab="auto">
+                            Auto Suggestions
+                        </button>
+                        <button id="optimizer-tab-manual" class="tab-btn" data-tab="manual">
+                            Manual Selection
+                        </button>
+                    </div>
+
+                    <!-- Auto Suggestions View -->
+                    <div id="optimizer-auto-view">
+                        <div style="margin-bottom: 1.5rem; padding: 1rem; background: var(--bg-tertiary); border-radius: 0.5rem;">
+                            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; user-select: none;">
+                                <input type="checkbox" id="exclude-commander-sets" style="width: 18px; height: 18px; cursor: pointer;">
+                                <span style="font-weight: 600;">Exclude Commander sets</span>
+                            </label>
+                            <p style="margin: 0.5rem 0 0 1.75rem; font-size: 0.875rem; color: var(--text-secondary);">
+                                Many LGS's don't have binders for Commander sets
+                            </p>
+                        </div>
+
+                        <div id="optimizer-loading" class="hidden" style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+                            <div class="spinner" style="margin: 0 auto 1rem;"></div>
+                            <p>Analyzing printings...</p>
+                        </div>
+
+                        <div id="optimizer-suggestions" class="hidden">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                                <h3 style="margin: 0;">Top Set Suggestions</h3>
+                                <div style="display: flex; gap: 0.5rem; align-items: center;">
+                                    <button id="prev-suggestion-btn" class="btn-icon" title="Previous suggestion">
+                                        <i class="ph ph-caret-left"></i>
+                                    </button>
+                                    <span id="suggestion-counter" style="font-weight: 600; min-width: 60px; text-align: center;">1 / 5</span>
+                                    <button id="next-suggestion-btn" class="btn-icon" title="Next suggestion">
+                                        <i class="ph ph-caret-right"></i>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div id="current-suggestion" style="background: var(--bg-tertiary); padding: 1.5rem; border-radius: 0.75rem; margin-bottom: 1.5rem;">
+                                <!-- Suggestion details will be populated here -->
+                            </div>
+
+                            <div id="suggestion-cards-list" style="max-height: 400px; overflow-y: auto;">
+                                <!-- Cards will be populated here -->
+                            </div>
+                        </div>
+
+                        <div id="optimizer-empty" class="hidden" style="text-align: center; padding: 3rem; color: var(--text-secondary);">
+                            <i class="ph ph-cards" style="font-size: 3rem; display: block; margin-bottom: 1rem;"></i>
+                            <p>No printings available for optimization.</p>
+                            <p style="font-size: 0.875rem;">Add some cards to your deck first!</p>
+                        </div>
+                    </div>
+
+                    <!-- Manual Selection View -->
+                    <div id="optimizer-manual-view" class="hidden">
+                        <div style="margin-bottom: 1.5rem;">
+                            <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Select a Set</label>
+                            <div style="display: flex; gap: 0.5rem;">
+                                <select id="manual-set-select" style="flex: 1; padding: 0.75rem; border-radius: 0.5rem; border: 1px solid var(--border); background: var(--bg-tertiary); color: var(--text);">
+                                    <option value="">Choose a set...</option>
+                                </select>
+                                <button id="analyze-manual-set-btn" class="btn btn-primary">
+                                    <i class="ph ph-magnifying-glass"></i> Analyze
+                                </button>
+                            </div>
+                        </div>
+
+                        <div id="manual-result" class="hidden">
+                            <div id="manual-suggestion" style="background: var(--bg-tertiary); padding: 1.5rem; border-radius: 0.75rem; margin-bottom: 1.5rem;">
+                                <!-- Manual selection details will be populated here -->
+                            </div>
+
+                            <div id="manual-cards-list" style="max-height: 400px; overflow-y: auto;">
+                                <!-- Cards will be populated here -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Actions -->
+                    <div style="display: flex; gap: 0.5rem; margin-top: 1.5rem; padding-top: 1.5rem; border-top: 2px solid var(--border);">
+                        <button id="apply-optimization-btn" class="btn btn-success" style="flex: 1;" disabled>
+                            <i class="ph ph-check"></i> Apply Optimization
+                        </button>
+                        <button id="cancel-optimization-btn" class="btn btn-secondary">
+                            Cancel
+                        </button>
                     </div>
                 </div>
             </div>

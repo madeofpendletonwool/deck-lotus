@@ -230,6 +230,29 @@ class ApiClient {
     return this.request(`/decks/${deckId}/legality/${format}`);
   }
 
+  // Printing optimization methods
+  async analyzeDeckPrintings(deckId, topN = 5, excludeCommander = false) {
+    return this.request(`/decks/${deckId}/optimize-printings?topN=${topN}&excludeCommander=${excludeCommander}`);
+  }
+
+  async getOptimizationSets(deckId) {
+    return this.request(`/decks/${deckId}/optimize-printings/sets`);
+  }
+
+  async analyzeSpecificSet(deckId, setCode) {
+    return this.request(`/decks/${deckId}/optimize-printings/analyze-set`, {
+      method: 'POST',
+      body: JSON.stringify({ setCode }),
+    });
+  }
+
+  async applyPrintingOptimization(deckId, changes) {
+    return this.request(`/decks/${deckId}/optimize-printings/apply`, {
+      method: 'POST',
+      body: JSON.stringify({ changes }),
+    });
+  }
+
   // Set methods
   async getSets() {
     return this.request('/sets');

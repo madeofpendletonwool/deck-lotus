@@ -17,6 +17,12 @@ import {
 } from '../services/deckService.js';
 import { getDeckPrice } from '../services/pricingService.js';
 import { parseDeckList, importDeck } from '../services/importService.js';
+import {
+  analyzeDeckPrintings,
+  analyzeSpecificSet,
+  applyPrintingOptimization,
+  getAvailableSets
+} from '../services/printingOptimizerService.js';
 import { authenticate, optionalAuthenticate } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -334,6 +340,84 @@ router.get('/:id/legality/:format', authenticate, (req, res, next) => {
     const { format } = req.params;
 
     const result = checkDeckLegality(deckId, req.user.id, format);
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * GET /api/decks/:id/optimize-printings
+ * Analyze deck and get printing optimization suggestions
+ */
+router.get('/:id/optimize-printings', authenticate, (req, res, next) => {
+  try {
+    const deckId = parseInt(req.params.id);
+    const topN = parseInt(req.query.topN) || 5;
+    const excludeCommander = req.query.excludeCommander === 'true';
+
+    const result = analyzeDeckPrintings(deckId, req.user.id, topN, excludeCommander);
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * GET /api/decks/:id/optimize-printings/sets
+ * Get all available sets for the deck
+ */
+router.get('/:id/optimize-printings/sets', authenticate, (req, res, next) => {
+  try {
+    const deckId = parseInt(req.params.id);
+
+    const sets = getAvailableSets(deckId, req.user.id);
+    res.json({ sets });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /api/decks/:id/optimize-printings/analyze-set
+ * Analyze a specific set for optimization
+ */
+router.post('/:id/optimize-printings/analyze-set', authenticate, (req, res, next) => {
+  try {
+    const deckId = parseInt(req.params.id);
+    const { setCode } = req.body;
+
+    if (!setCode) {
+      return res.status(400).json({ error: 'setCode is required' });
+    }
+
+    const result = analyzeSpecificSet(deckId, req.user.id, setCode);
+
+    if (!result) {
+      return res.status(404).json({ error: 'No cards found for this set' });
+    }
+
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /api/decks/:id/optimize-printings/apply
+ * Apply printing optimization changes to deck
+ */
+router.post('/:id/optimize-printings/apply', authenticate, (req, res, next) => {
+  try {
+    const deckId = parseInt(req.params.id);
+    const { changes } = req.body;
+
+    if (!changes || !Array.isArray(changes) || changes.length === 0) {
+      return res.status(400).json({ error: 'changes array is required' });
+    }
+
+    const result = applyPrintingOptimization(deckId, req.user.id, changes);
+
     res.json(result);
   } catch (error) {
     next(error);

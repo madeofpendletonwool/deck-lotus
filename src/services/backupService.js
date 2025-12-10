@@ -92,7 +92,7 @@ export function createBackup(userId = null) {
     // Backup deck_cards with UUIDs (stable across imports)
     backup.data.deck_cards = db.prepare(`
       SELECT dc.id, dc.deck_id, dc.quantity, dc.is_sideboard, dc.is_commander,
-             dc.added_at, p.uuid as printing_uuid
+             dc.board_type, dc.added_at, p.uuid as printing_uuid
       FROM deck_cards dc
       JOIN printings p ON dc.printing_id = p.id
       WHERE dc.deck_id IN (${deckIdsStr})
@@ -289,8 +289,8 @@ export function restoreBackup(backupData, options = {}) {
     `);
 
     const insertDeckCard = db.prepare(`
-      INSERT OR REPLACE INTO deck_cards (deck_id, printing_id, quantity, is_sideboard, is_commander, added_at)
-      VALUES (?, ?, ?, ?, ?, ?)
+      INSERT OR REPLACE INTO deck_cards (deck_id, printing_id, quantity, is_sideboard, is_commander, board_type, added_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
     `);
 
     for (const deckCard of deckCards) {
@@ -303,6 +303,7 @@ export function restoreBackup(backupData, options = {}) {
             deckCard.quantity,
             deckCard.is_sideboard,
             deckCard.is_commander,
+            deckCard.board_type || 'mainboard',
             deckCard.added_at
           );
           results.deck_cards++;

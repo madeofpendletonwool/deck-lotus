@@ -19,26 +19,28 @@ function generateImageUrls(uuid) {
 
 /**
  * Search cards by name (for autocomplete)
+ * Supports both English names and foreign language names
  */
 export function searchCards(query, limit = 20) {
   const searchTerm = `%${query}%`;
 
-  // Update the query to include image_url
+  // Search both English and foreign card names
   const cards = db.all(
-    `SELECT c.id, c.name, c.mana_cost, c.cmc, c.colors, c.type_line, c.oracle_text,
+    `SELECT DISTINCT c.id, c.name, c.mana_cost, c.cmc, c.colors, c.type_line, c.oracle_text,
             p.image_url,
-            (SELECT p.uuid FROM printings p WHERE p.card_id = c.id LIMIT 1) as sample_uuid
+            (SELECT p.uuid FROM printings p WHERE p.card_id = c.id LIMIT 1) as sample_uuid,
+            CASE
+              WHEN c.name LIKE ? THEN 0
+              WHEN f.foreign_name LIKE ? THEN 1
+              ELSE 2
+            END as match_priority
      FROM cards c
      LEFT JOIN printings p ON p.card_id = c.id
-     WHERE c.name LIKE ?
-     ORDER BY
-       CASE
-         WHEN c.name LIKE ? THEN 0
-         ELSE 1
-       END,
-       c.name
+     LEFT JOIN card_foreign_data f ON f.card_name = c.name
+     WHERE c.name LIKE ? OR f.foreign_name LIKE ?
+     ORDER BY match_priority, c.name
      LIMIT ?`,
-    [searchTerm, `${query}%`, limit]
+    [`${query}%`, `${query}%`, searchTerm, searchTerm, limit]
   );
 
   // Add image URLs from database

@@ -444,7 +444,7 @@ async function importCards(sourceDb, targetDb) {
   // Import foreign data
   console.log('Importing foreign card data...');
   const foreignData = srcDb.prepare(`
-    SELECT c.name, fd.language, fd.faceName, fd.text, fd.type, fd.flavorText
+    SELECT c.name, fd.language, fd.name as faceName, fd.text, fd.type, fd.flavorText
     FROM cardForeignData fd
     JOIN cards c ON fd.uuid = c.uuid
     WHERE c.name IS NOT NULL AND fd.language IS NOT NULL

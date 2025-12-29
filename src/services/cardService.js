@@ -18,21 +18,21 @@ function generateImageUrls(uuid) {
 }
 
 /**
- * Search cards by name (for autocomplete)
- * Supports both English names and foreign language names
- * Also matches second part of split cards (e.g., "Tear" in "Wear // Tear")
- * Works for both English and foreign split cards (e.g., "Borbotear" in "Alquimista de agua // Borbotear")
+ * Search cards by name (autocomplete) - returns individual printings
+ * Supports English and foreign names, plus second parts of split cards.
  */
 export function searchCards(query, limit = 20) {
   const prefix = `${query}%`;
   const infix = `%${query}%`;
 
-  // Fallback: Use subqueries and EXISTS to avoid joining printings and foreign data
-  // Prefix matching on card names, infix for split card second parts, and foreign data
-  const cards = db.all(
+  const rows = db.all(
     `SELECT c.id, c.name, c.mana_cost, c.cmc, c.colors, c.type_line, c.oracle_text,
-            (SELECT p.image_url FROM printings p WHERE p.card_id = c.id AND p.image_url IS NOT NULL LIMIT 1) as image_url,
-            (SELECT p.uuid FROM printings p WHERE p.card_id = c.id LIMIT 1) as sample_uuid,
+            p.image_url,
+            p.set_code,
+            s.name as set_name,
+            p.collector_number,
+            p.rarity,
+            p.uuid as sample_uuid,
             CASE
               WHEN c.name LIKE ? THEN 0
               WHEN c.name LIKE '%//%' AND c.name LIKE ? THEN 1
@@ -41,21 +41,22 @@ export function searchCards(query, limit = 20) {
               ELSE 4
             END as match_priority
      FROM cards c
+     LEFT JOIN printings p ON p.card_id = c.id
+     LEFT JOIN sets s ON p.set_code = s.code
      WHERE c.name LIKE ?
-       OR (c.name LIKE '%//%' AND c.name LIKE ?)    -- Second part of split cards
-       OR EXISTS(SELECT 1 FROM card_foreign_data f WHERE f.card_name = c.name AND f.foreign_name LIKE ? LIMIT 1)
-       OR EXISTS(SELECT 1 FROM card_foreign_data f WHERE f.card_name = c.name AND f.foreign_name LIKE '%//%' AND f.foreign_name LIKE ? LIMIT 1)
-     ORDER BY match_priority, c.name
+        OR (c.name LIKE '%//%' AND c.name LIKE ?)
+        OR EXISTS(SELECT 1 FROM card_foreign_data f WHERE f.card_name = c.name AND f.foreign_name LIKE ? LIMIT 1)
+        OR EXISTS(SELECT 1 FROM card_foreign_data f WHERE f.card_name = c.name AND f.foreign_name LIKE '%//%' AND f.foreign_name LIKE ? LIMIT 1)
+     ORDER BY match_priority, c.name, p.set_code, p.collector_number
      LIMIT ?`,
     [prefix, infix, prefix, infix, prefix, infix, prefix, infix, limit]
   );
 
-  // Add image URLs from database
-  return cards.map(card => ({
-    ...card,
-    image_url: card.image_url,
-    large_image_url: card.image_url ? card.image_url.replace('/normal/', '/large/') : null,
-    art_crop_url: card.image_url ? card.image_url.replace('/normal/', '/art_crop/') : null
+  return rows.map(row => ({
+    ...row,
+    image_url: row.image_url,
+    large_image_url: row.image_url ? row.image_url.replace('/normal/', '/large/') : null,
+    art_crop_url: row.image_url ? row.image_url.replace('/normal/', '/art_crop/') : null
   }));
 }
 

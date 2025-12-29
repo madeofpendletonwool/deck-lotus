@@ -24,44 +24,8 @@ function generateImageUrls(uuid) {
 export function searchCards(query, limit = 20) {
   const prefix = `${query}%`;
 
-  // Try fast path using FTS5 if available (populated during import)
-  const ftsQuery = query.replace(/"/g, '').trim();
-  if (ftsQuery) {
-    try {
-      const ftsParam = `${ftsQuery}*`;
-      const cards = db.all(
-        `SELECT c.id, c.name, c.mana_cost, c.cmc, c.colors, c.type_line, c.oracle_text,
-                (SELECT p.image_url FROM printings p WHERE p.card_id = c.id AND p.image_url IS NOT NULL LIMIT 1) as image_url,
-                (SELECT p.uuid FROM printings p WHERE p.card_id = c.id LIMIT 1) as sample_uuid,
-                cs.foreign_names,
-                CASE
-                  WHEN c.name LIKE ? THEN 0
-                  WHEN cs.foreign_names LIKE ? THEN 1
-                  ELSE 2
-                END as match_priority
-         FROM card_search cs
-         JOIN cards c ON c.id = cs.card_id
-         WHERE cs MATCH ?
-         ORDER BY match_priority, c.name
-         LIMIT ?`,
-        [prefix, prefix, ftsParam, limit]
-      );
-
-      return cards.map(card => ({
-        ...card,
-        image_url: card.image_url,
-        large_image_url: card.image_url ? card.image_url.replace('/normal/', '/large/') : null,
-        art_crop_url: card.image_url ? card.image_url.replace('/normal/', '/art_crop/') : null
-      }));
-    } catch (e) {
-      // FTS unavailable or query failed; fall through to indexed prefix/exist strategy
-      console.log('FTS search failed, falling back to indexed LIKE/EXISTS:', e.message);
-    }
-  }
-
   // Fallback: Use subqueries and EXISTS to avoid joining printings and foreign data
-  // which can multiply rows and slow searches. Use prefix matching so
-  // indexes on `cards.name` and `card_foreign_data(foreign_name)` can be used.
+  // Prefix matching so indexes on `cards.name` and `card_foreign_data(foreign_name)` can be used.
   const cards = db.all(
     `SELECT c.id, c.name, c.mana_cost, c.cmc, c.colors, c.type_line, c.oracle_text,
             (SELECT p.image_url FROM printings p WHERE p.card_id = c.id AND p.image_url IS NOT NULL LIMIT 1) as image_url,

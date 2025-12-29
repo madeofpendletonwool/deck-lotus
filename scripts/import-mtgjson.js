@@ -479,6 +479,27 @@ async function importCards(sourceDb, targetDb) {
   const insertedCount = insertForeignMany(foreignData);
   console.log(`✓ Imported ${insertedCount} foreign card translations`);
 
+  // Populate FTS5 search table if it exists
+  try {
+    console.log('Populating card_search FTS5 table...');
+    const cardsToIndex = targetDb.prepare(`SELECT id, name FROM cards`).all();
+    const getForeignNames = targetDb.prepare(`SELECT GROUP_CONCAT(foreign_name, ' || ') as foreign_names FROM card_foreign_data WHERE card_name = ?`);
+    const insertSearch = targetDb.prepare(`INSERT OR REPLACE INTO card_search (name, foreign_names, card_id) VALUES (?, ?, ?)`);
+
+    const populateMany = targetDb.transaction((rows) => {
+      for (const r of rows) {
+        const fn = getForeignNames.get(r.name);
+        insertSearch.run(r.name, fn ? fn.foreign_names : null, r.id);
+      }
+    });
+
+    populateMany(cardsToIndex);
+    console.log(`✓ Populated card_search for ${cardsToIndex.length} cards`);
+  } catch (e) {
+    // If the FTS5 table or extension is not available, skip gracefully
+    console.log('Skipping card_search population (FTS5 unavailable):', e.message);
+  }
+
   srcDb.close();
   console.log('✓ Import complete');
 }

@@ -20,27 +20,34 @@ function generateImageUrls(uuid) {
 /**
  * Search cards by name (for autocomplete)
  * Supports both English names and foreign language names
+ * Also matches second part of split cards (e.g., "Tear" in "Wear // Tear")
+ * Works for both English and foreign split cards (e.g., "Borbotear" in "Alquimista de agua // Borbotear")
  */
 export function searchCards(query, limit = 20) {
   const prefix = `${query}%`;
+  const infix = `%${query}%`;
 
   // Fallback: Use subqueries and EXISTS to avoid joining printings and foreign data
-  // Prefix matching so indexes on `cards.name` and `card_foreign_data(foreign_name)` can be used.
+  // Prefix matching on card names, infix for split card second parts, and foreign data
   const cards = db.all(
     `SELECT c.id, c.name, c.mana_cost, c.cmc, c.colors, c.type_line, c.oracle_text,
             (SELECT p.image_url FROM printings p WHERE p.card_id = c.id AND p.image_url IS NOT NULL LIMIT 1) as image_url,
             (SELECT p.uuid FROM printings p WHERE p.card_id = c.id LIMIT 1) as sample_uuid,
             CASE
               WHEN c.name LIKE ? THEN 0
-              WHEN EXISTS(SELECT 1 FROM card_foreign_data f WHERE f.card_name = c.name AND f.foreign_name LIKE ? LIMIT 1) THEN 1
-              ELSE 2
+              WHEN c.name LIKE '%//%' AND c.name LIKE ? THEN 1
+              WHEN EXISTS(SELECT 1 FROM card_foreign_data f WHERE f.card_name = c.name AND f.foreign_name LIKE ? LIMIT 1) THEN 2
+              WHEN EXISTS(SELECT 1 FROM card_foreign_data f WHERE f.card_name = c.name AND f.foreign_name LIKE '%//%' AND f.foreign_name LIKE ? LIMIT 1) THEN 3
+              ELSE 4
             END as match_priority
      FROM cards c
      WHERE c.name LIKE ?
+       OR (c.name LIKE '%//%' AND c.name LIKE ?)    -- Second part of split cards
        OR EXISTS(SELECT 1 FROM card_foreign_data f WHERE f.card_name = c.name AND f.foreign_name LIKE ? LIMIT 1)
+       OR EXISTS(SELECT 1 FROM card_foreign_data f WHERE f.card_name = c.name AND f.foreign_name LIKE '%//%' AND f.foreign_name LIKE ? LIMIT 1)
      ORDER BY match_priority, c.name
      LIMIT ?`,
-    [prefix, prefix, prefix, prefix, limit]
+    [prefix, infix, prefix, infix, prefix, infix, prefix, infix, limit]
   );
 
   // Add image URLs from database

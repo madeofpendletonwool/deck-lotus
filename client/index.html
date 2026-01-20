@@ -72,6 +72,10 @@
                             <i class="ph ph-shopping-cart nav-icon"></i>
                             <span class="nav-text">Shopping</span>
                         </a>
+                        <a href="#" data-page="inventory" class="nav-link">
+                            <i class="ph ph-archive nav-icon"></i>
+                            <span class="nav-text">Inventory</span>
+                        </a>
                         <a href="#" data-page="settings" class="nav-link">
                             <i class="ph ph-gear nav-icon"></i>
                             <span class="nav-text">Settings</span>
@@ -832,6 +836,181 @@
                     <div class="shopping-section">
                         <div id="shopping-list-container"></div>
                     </div>
+                </div>
+            </div>
+
+            <!-- Inventory Page -->
+            <div id="inventory-page" class="page hidden">
+                <div class="page-header">
+                    <h2>My Inventory</h2>
+                    <div class="page-header-actions">
+                        <button id="inventory-select-toggle" class="btn btn-secondary" title="Select multiple cards">
+                            <i class="ph ph-selection btn-icon"></i>
+                            <span class="btn-text">Select</span>
+                        </button>
+                        <button id="inventory-bulk-add-btn" class="btn btn-primary">
+                            <i class="ph ph-plus-circle btn-icon"></i>
+                            <span class="btn-text">Bulk Add</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Bulk Actions Bar (hidden by default) -->
+                <div id="inventory-bulk-actions" class="inventory-bulk-actions hidden">
+                    <div class="bulk-actions-left">
+                        <span id="inventory-selected-count">0 selected</span>
+                        <button id="inventory-select-all" class="btn btn-sm btn-secondary">Select All</button>
+                        <button id="inventory-clear-selection" class="btn btn-sm btn-secondary">Clear</button>
+                    </div>
+                    <div class="bulk-actions-right">
+                        <button id="inventory-add-to-deck" class="btn btn-sm btn-primary">
+                            <i class="ph ph-folder-plus"></i> Add to Deck
+                        </button>
+                        <button id="inventory-remove-selected" class="btn btn-sm btn-danger">
+                            <i class="ph ph-trash"></i> Remove
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Stats row -->
+                <div id="inventory-stats" class="inventory-stats"></div>
+
+                <!-- Quick Add search bar -->
+                <div class="inventory-quick-add">
+                    <div class="quick-add-wrapper">
+                        <input
+                            type="text"
+                            id="inventory-quick-search"
+                            placeholder="Quick add: type card name..."
+                            autocomplete="off"
+                        />
+                        <div id="inventory-quick-results" class="inventory-quick-results hidden"></div>
+                    </div>
+                </div>
+
+                <!-- Filters -->
+                <div class="inventory-filters">
+                    <div class="inventory-filter-row">
+                        <div class="filter-group">
+                            <label>Search</label>
+                            <input
+                                type="text"
+                                id="inventory-search"
+                                placeholder="Filter by name..."
+                                class="filter-input"
+                            />
+                        </div>
+                        <div class="filter-group">
+                            <label>Sort By</label>
+                            <select id="inventory-sort" class="filter-select">
+                                <option value="name">Name</option>
+                                <option value="quantity">Quantity</option>
+                                <option value="cmc">Mana Value</option>
+                                <option value="color">Color</option>
+                                <option value="type">Type</option>
+                            </select>
+                        </div>
+                        <div class="filter-group">
+                            <label>Card Type</label>
+                            <select id="inventory-type" class="filter-select">
+                                <option value="all">All Types</option>
+                                <option value="Creature">Creature</option>
+                                <option value="Instant">Instant</option>
+                                <option value="Sorcery">Sorcery</option>
+                                <option value="Enchantment">Enchantment</option>
+                                <option value="Artifact">Artifact</option>
+                                <option value="Planeswalker">Planeswalker</option>
+                                <option value="Land">Land</option>
+                            </select>
+                        </div>
+                        <div class="filter-group">
+                            <label>Availability</label>
+                            <select id="inventory-availability" class="filter-select">
+                                <option value="all">All Cards</option>
+                                <option value="available">Available Only</option>
+                                <option value="in_decks">In Decks Only</option>
+                            </select>
+                        </div>
+                        <div class="filter-group">
+                            <label>Colors</label>
+                            <div id="inventory-colors" class="color-filter-group">
+                                <label class="color-checkbox">
+                                    <input type="checkbox" value="W" />
+                                    <span class="color-checkbox-box"><i class="ms ms-w ms-cost"></i></span>
+                                </label>
+                                <label class="color-checkbox">
+                                    <input type="checkbox" value="U" />
+                                    <span class="color-checkbox-box"><i class="ms ms-u ms-cost"></i></span>
+                                </label>
+                                <label class="color-checkbox">
+                                    <input type="checkbox" value="B" />
+                                    <span class="color-checkbox-box"><i class="ms ms-b ms-cost"></i></span>
+                                </label>
+                                <label class="color-checkbox">
+                                    <input type="checkbox" value="R" />
+                                    <span class="color-checkbox-box"><i class="ms ms-r ms-cost"></i></span>
+                                </label>
+                                <label class="color-checkbox">
+                                    <input type="checkbox" value="G" />
+                                    <span class="color-checkbox-box"><i class="ms ms-g ms-cost"></i></span>
+                                </label>
+                                <label class="color-checkbox">
+                                    <input type="checkbox" value="C" />
+                                    <span class="color-checkbox-box"><i class="ms ms-c ms-cost"></i></span>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="filter-group">
+                            <label>View</label>
+                            <div class="view-toggle">
+                                <button id="inventory-grid-view-btn" class="btn-icon active" title="Grid view">
+                                    <i class="ph ph-squares-four"></i>
+                                </button>
+                                <button id="inventory-list-view-btn" class="btn-icon" title="List view">
+                                    <i class="ph ph-list"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Card Grid/List -->
+                <div id="inventory-grid" class="inventory-grid"></div>
+
+                <!-- Pagination -->
+                <div id="inventory-pagination" class="pagination">
+                    <button id="inventory-prev-page" class="btn btn-secondary" disabled>Previous</button>
+                    <span id="inventory-page-info" style="font-weight: 600">Page 1 of 1</span>
+                    <button id="inventory-next-page" class="btn btn-secondary" disabled>Next</button>
+                </div>
+            </div>
+
+            <!-- Bulk Add Modal -->
+            <div id="bulk-add-modal" class="modal hidden">
+                <div class="modal-content" style="max-width: 700px">
+                    <span class="modal-close" id="bulk-add-modal-close">&times;</span>
+                    <h2 style="margin-bottom: 1rem">Bulk Add Cards</h2>
+                    <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">
+                        Paste a list of cards to add to your inventory. Format: "4 Lightning Bolt" or "4 Lightning Bolt [M21]"
+                    </p>
+                    <div class="form-group">
+                        <label for="bulk-add-text">Card List</label>
+                        <textarea
+                            id="bulk-add-text"
+                            rows="12"
+                            placeholder="4 Lightning Bolt&#10;2 Counterspell [DMR]&#10;1 Black Lotus&#10;3 Sol Ring"
+                            style="font-family: monospace; font-size: 0.875rem; width: 100%;"
+                        ></textarea>
+                    </div>
+                    <div id="bulk-add-preview" class="hidden" style="margin-bottom: 1rem;">
+                        <h4 style="margin-bottom: 0.5rem;">Preview</h4>
+                        <div id="bulk-add-preview-content" style="background: var(--bg-tertiary); padding: 1rem; border-radius: 0.5rem; max-height: 200px; overflow-y: auto;"></div>
+                    </div>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <button id="bulk-add-preview-btn" class="btn btn-secondary" style="flex: 1">Preview</button>
+                        <button id="bulk-add-submit-btn" class="btn btn-primary" style="flex: 1">Add to Inventory</button>
+                    </div>
+                    <div id="bulk-add-result" class="hidden" style="margin-top: 1rem; padding: 1rem; background: var(--bg-tertiary); border-radius: 0.5rem;"></div>
                 </div>
             </div>
 

@@ -357,6 +357,48 @@ class ApiClient {
     }
     return this.request(`/shopping?${params}`);
   }
+
+  // Inventory methods
+  async getInventory(filters = {}) {
+    const params = new URLSearchParams();
+    if (filters.name) params.append('name', filters.name);
+    if (filters.colors && filters.colors.length > 0) params.append('colors', filters.colors.join(','));
+    if (filters.type && filters.type !== 'all') params.append('type', filters.type);
+    if (filters.sets && filters.sets.length > 0) params.append('sets', filters.sets.join(','));
+    if (filters.sort) params.append('sort', filters.sort);
+    if (filters.availability) params.append('availability', filters.availability);
+    if (filters.page) params.append('page', filters.page);
+    if (filters.limit) params.append('limit', filters.limit);
+
+    const queryString = params.toString();
+    return this.request(`/inventory${queryString ? '?' + queryString : ''}`);
+  }
+
+  async getInventoryStats() {
+    return this.request('/inventory/stats');
+  }
+
+  async searchForInventoryAdd(query) {
+    return this.request(`/inventory/search?q=${encodeURIComponent(query)}`);
+  }
+
+  async getInventorySets() {
+    return this.request('/inventory/sets');
+  }
+
+  async bulkAddToInventory(items) {
+    return this.request('/inventory/bulk-add', {
+      method: 'POST',
+      body: JSON.stringify({ items }),
+    });
+  }
+
+  async quickAddToInventory(printingId, quantity = 1) {
+    return this.request('/inventory/quick-add', {
+      method: 'POST',
+      body: JSON.stringify({ printingId, quantity }),
+    });
+  }
 }
 
 export default new ApiClient();

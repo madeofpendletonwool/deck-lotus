@@ -753,14 +753,19 @@ export async function showCardDetail(cardId) {
                   ${ownership.ownedPrintings.map(op => `
                     <div class="owned-printing-item" data-printing-id="${op.printing_id}" style="padding: 0.75rem; background: var(--bg-secondary); border-radius: 8px; display: flex; align-items: center; gap: 0.75rem; border: 1px solid var(--border-color);">
                       <img src="${op.image_url}" alt="${op.set_code}" class="printing-preview" data-image-url="${op.image_url}" data-fallback="${op.image_url}" style="width: 50px; height: 70px; border-radius: 4px; object-fit: cover; flex-shrink: 0; cursor: pointer;" onerror="this.style.display='none'">
-                      <div style="flex: 1; min-width: 0; cursor: pointer;" class="printing-preview" data-image-url="${op.image_url}" data-fallback="${op.image_url}">
-                        <div style="font-weight: 500;">
-                          ${op.set_code.toUpperCase()}
-                          <span style="margin-left: 0.5rem; color: var(--text-secondary); font-size: 0.875rem;">#${op.collector_number || '?'}</span>
+                      <div style="flex: 1; min-width: 0;">
+                        <div style="cursor: pointer;" class="printing-preview" data-image-url="${op.image_url}" data-fallback="${op.image_url}">
+                          <div style="font-weight: 500;">
+                            ${op.set_code.toUpperCase()}
+                            <span style="margin-left: 0.5rem; color: var(--text-secondary); font-size: 0.875rem;">#${op.collector_number || '?'}</span>
+                          </div>
+                          <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.25rem;">
+                            ${op.set_name || op.set_code.toUpperCase()}${op.rarity ? ` • ${op.rarity}` : ''}
+                          </div>
                         </div>
-                        <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.25rem;">
-                          ${op.set_name || op.set_code.toUpperCase()}${op.rarity ? ` • ${op.rarity}` : ''}
-                        </div>
+                        <button class="swap-printing-btn" data-printing-id="${op.printing_id}" data-quantity="${op.quantity}" style="margin-top: 0.5rem; padding: 0.25rem 0.5rem; font-size: 0.75rem; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 4px; cursor: pointer; color: var(--text-secondary); display: flex; align-items: center; gap: 0.25rem;" onmouseenter="this.style.borderColor='var(--accent-color)'; this.style.color='var(--text-primary)';" onmouseleave="this.style.borderColor='var(--border-color)'; this.style.color='var(--text-secondary)';">
+                          <i class="ph ph-swap"></i> Change Printing
+                        </button>
                       </div>
                       <div style="display: flex; align-items: center; gap: 0.75rem;">
                         <div style="display: flex; align-items: center; gap: 0.5rem; background: var(--bg-tertiary); border-radius: 6px; padding: 0.25rem;">
@@ -1166,6 +1171,16 @@ export async function showCardDetail(cardId) {
       });
     });
 
+    // Swap printing buttons
+    document.querySelectorAll('.swap-printing-btn').forEach(btn => {
+      btn.addEventListener('click', async function(e) {
+        e.stopPropagation();
+        const fromPrintingId = parseInt(this.dataset.printingId);
+        const quantity = parseInt(this.dataset.quantity);
+        await showSwapPrintingModal(card, fromPrintingId, quantity, cardId, ownership);
+      });
+    });
+
     // Deck usage items - click to navigate to deck
     document.querySelectorAll('.deck-usage-item').forEach(item => {
       item.addEventListener('click', function() {
@@ -1335,6 +1350,103 @@ async function updateOwnedPrintingQuantity(printingId, newQuantity, cardId) {
     showToast('Failed to update quantity', 'error');
     console.error('Update quantity error:', error);
   }
+}
+
+async function showSwapPrintingModal(card, fromPrintingId, quantity, cardId, ownership) {
+  // Find the current printing info
+  const currentPrinting = ownership.ownedPrintings.find(op => op.printing_id === fromPrintingId);
+  if (!currentPrinting) return;
+
+  // Create the swap modal
+  const modal = document.createElement('div');
+  modal.className = 'modal';
+  modal.id = 'swap-printing-modal';
+  modal.style.cssText = 'z-index: 10002;';
+  modal.innerHTML = `
+    <div class="modal-content" style="max-width: 500px; max-height: 80vh; display: flex; flex-direction: column;">
+      <span class="modal-close" id="swap-modal-close">&times;</span>
+      <h2 style="margin-bottom: 0.5rem;">Change Printing</h2>
+      <p style="color: var(--text-secondary); margin-bottom: 1rem; font-size: 0.9rem;">
+        Swap ${quantity} cop${quantity === 1 ? 'y' : 'ies'} from <strong>${currentPrinting.set_code.toUpperCase()}</strong> to a different printing
+      </p>
+      <div style="margin-bottom: 1rem;">
+        <input type="text" id="swap-printing-search" placeholder="Search by set code or name..." style="width: 100%; padding: 0.75rem; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-size: 0.9rem;" autocomplete="off">
+      </div>
+      <div id="swap-printing-list" style="flex: 1; overflow-y: auto; display: grid; gap: 0.5rem;">
+        ${card.printings.filter(p => p.id !== fromPrintingId).map(p => {
+          const isAlreadyOwned = ownership.ownedPrintings.find(op => op.printing_id === p.id);
+          return `
+            <div class="swap-printing-option" data-printing-id="${p.id}" data-set-code="${p.set_code.toLowerCase()}" data-set-name="${(p.set_name || '').toLowerCase()}" style="padding: 0.75rem; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 0.75rem; transition: all 0.2s;" onmouseenter="this.style.borderColor='var(--accent-color)'; this.style.background='var(--bg-tertiary)';" onmouseleave="this.style.borderColor='var(--border-color)'; this.style.background='var(--bg-secondary)';">
+              <img src="${p.image_url}" alt="${p.set_code}" style="width: 40px; height: 56px; border-radius: 4px; object-fit: cover; flex-shrink: 0;" onerror="this.style.display='none'">
+              <div style="flex: 1; min-width: 0;">
+                <div style="font-weight: 500;">
+                  ${p.set_code.toUpperCase()}
+                  <span style="margin-left: 0.5rem; color: var(--text-secondary); font-size: 0.875rem;">#${p.collector_number || '?'}</span>
+                  ${isAlreadyOwned ? `<span style="margin-left: 0.5rem; color: #10b981; font-size: 0.75rem;">+${isAlreadyOwned.quantity} owned</span>` : ''}
+                </div>
+                <div style="font-size: 0.8rem; color: var(--text-secondary);">
+                  ${p.set_name || p.set_code.toUpperCase()}${p.rarity ? ` • ${p.rarity}` : ''}
+                </div>
+              </div>
+              <i class="ph ph-arrow-right" style="color: var(--text-secondary);"></i>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+
+  // Close handlers
+  const closeModal = () => modal.remove();
+
+  document.getElementById('swap-modal-close').addEventListener('click', closeModal);
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) closeModal();
+  });
+
+  // Search filter
+  const searchInput = document.getElementById('swap-printing-search');
+  searchInput.addEventListener('input', (e) => {
+    const query = e.target.value.toLowerCase().trim();
+    document.querySelectorAll('.swap-printing-option').forEach(item => {
+      const setCode = item.dataset.setCode || '';
+      const setName = item.dataset.setName || '';
+      const matches = !query || setCode.includes(query) || setName.includes(query);
+      item.style.display = matches ? 'flex' : 'none';
+    });
+  });
+
+  // Focus search
+  setTimeout(() => searchInput.focus(), 50);
+
+  // Swap handlers
+  document.querySelectorAll('.swap-printing-option').forEach(option => {
+    option.addEventListener('click', async () => {
+      const toPrintingId = parseInt(option.dataset.printingId);
+      closeModal();
+
+      try {
+        showLoading();
+        // Remove from old printing
+        await api.setOwnedPrintingQuantity(fromPrintingId, 0);
+        // Add to new printing (will add to existing if already owned)
+        const existingOwned = ownership.ownedPrintings.find(op => op.printing_id === toPrintingId);
+        const newQuantity = (existingOwned ? existingOwned.quantity : 0) + quantity;
+        await api.setOwnedPrintingQuantity(toPrintingId, newQuantity);
+
+        showToast('Printing changed!', 'success', 2000);
+        // Reload card detail
+        await showCardDetail(cardId);
+        hideLoading();
+      } catch (error) {
+        hideLoading();
+        showToast('Failed to change printing', 'error');
+        console.error('Swap printing error:', error);
+      }
+    });
+  });
 }
 
 /**

@@ -636,6 +636,12 @@ async function main() {
         JOIN cards c ON oc.card_id = c.id
       `).all();
 
+      const ownedPrintingsBackup = targetDb.prepare(`
+        SELECT op.user_id, op.quantity, p.uuid as printing_uuid
+        FROM owned_printings op
+        JOIN printings p ON op.printing_id = p.id
+      `).all();
+
       // Create backup directory if it doesn't exist
       const BACKUP_DIR = path.join(DATA_DIR, 'backups');
       if (!fs.existsSync(BACKUP_DIR)) {
@@ -652,7 +658,8 @@ async function main() {
         type: 'pre-sync-safety',
         data: {
           deck_cards: deckCardsBackup,
-          owned_cards: ownedCardsBackup
+          owned_cards: ownedCardsBackup,
+          owned_printings: ownedPrintingsBackup
         }
       };
 
@@ -660,6 +667,7 @@ async function main() {
       console.log(`  ✓ Safety backup saved to: ${path.basename(safetyBackupPath)}`);
       console.log(`  ✓ Backed up ${deckCardsBackup.length} deck card entries`);
       console.log(`  ✓ Backed up ${ownedCardsBackup.length} owned card entries`);
+      console.log(`  ✓ Backed up ${ownedPrintingsBackup.length} owned printing entries`);
 
       // Delete stale MTGJSON source files to force fresh download
       if (fs.existsSync(EXTRACTED_PATH)) {
@@ -704,6 +712,7 @@ async function main() {
       // Keep in memory for immediate use AND save path for recovery
       targetDb._deckCardsBackup = deckCardsBackup;
       targetDb._ownedCardsBackup = ownedCardsBackup;
+      targetDb._ownedPrintingsBackup = ownedPrintingsBackup;
       targetDb._safetyBackupPath = safetyBackupPath;
     }
 
@@ -823,6 +832,54 @@ async function main() {
       console.log(`✓ Restored ${ownedResult.restored} owned card entries`);
       if (ownedResult.notFound > 0) {
         console.log(`  ⚠️  ${ownedResult.notFound} cards not found in new import (may have been removed from MTGJSON)`);
+      }
+    }
+
+    // STEP 6: Restore owned printings data if we backed it up
+    if (targetDb._ownedPrintingsBackup && targetDb._ownedPrintingsBackup.length > 0) {
+      console.log('\n🔄 Restoring owned printings data...');
+      const backup = targetDb._ownedPrintingsBackup;
+
+      const insertOwnedPrinting = targetDb.prepare(`
+        INSERT OR IGNORE INTO owned_printings (user_id, printing_id, quantity)
+        VALUES (?, ?, ?)
+      `);
+
+      const getPrintingIdByUuid = targetDb.prepare(`
+        SELECT id FROM printings WHERE uuid = ? LIMIT 1
+      `);
+
+      const restoreOwnedPrintingsMany = targetDb.transaction((entries) => {
+        let restored = 0;
+        let notFound = 0;
+
+        for (const entry of entries) {
+          const printing = getPrintingIdByUuid.get(entry.printing_uuid);
+          if (printing) {
+            try {
+              insertOwnedPrinting.run(
+                entry.user_id,
+                printing.id,
+                entry.quantity
+              );
+              restored++;
+            } catch (e) {
+              // Might fail if user was deleted, that's ok
+              notFound++;
+            }
+          } else {
+            // Printing doesn't exist in new import (rare but possible)
+            notFound++;
+          }
+        }
+
+        return { restored, notFound };
+      });
+
+      const ownedPrintingsResult = restoreOwnedPrintingsMany(backup);
+      console.log(`✓ Restored ${ownedPrintingsResult.restored} owned printing entries`);
+      if (ownedPrintingsResult.notFound > 0) {
+        console.log(`  ⚠️  ${ownedPrintingsResult.notFound} printings not found in new import (may have been removed from MTGJSON)`);
       }
     }
 

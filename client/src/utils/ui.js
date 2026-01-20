@@ -35,7 +35,7 @@ export function hideModal() {
 }
 
 // Setup modal close handlers
-document.querySelector('.modal-close')?.addEventListener('click', hideModal);
+document.querySelector('#modal .modal-close')?.addEventListener('click', hideModal);
 document.getElementById('modal')?.addEventListener('click', (e) => {
   if (e.target.id === 'modal') {
     hideModal();

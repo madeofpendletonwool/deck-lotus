@@ -1561,6 +1561,18 @@ button.btn-icon.active {
   filter: brightness(1.2) drop-shadow(0 0 4px rgba(255, 255, 255, 0.5));
 }
 
+/* Rarity Checkboxes */
+.rarity-checkbox input[type="checkbox"]:checked + .rarity-checkbox-box {
+  border-color: var(--primary) !important;
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.3);
+  transform: translateY(-1px);
+}
+
+.rarity-checkbox:hover .rarity-checkbox-box {
+  transform: translateY(-1px);
+  opacity: 0.9;
+}
+
 /* Set Selection Items */
 .set-item {
   display: flex;

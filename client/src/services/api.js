@@ -90,6 +90,7 @@ class ApiClient {
     if (filters.name) params.append('name', filters.name);
     if (filters.colors) params.append('colors', filters.colors); // Already a string from frontend
     if (filters.type) params.append('type', filters.type);
+    if (filters.rarities) params.append('rarities', filters.rarities);
     if (filters.sort) params.append('sort', filters.sort);
     if (filters.sets) params.append('sets', filters.sets); // Already a string from frontend
     if (filters.subtypes) params.append('subtypes', filters.subtypes); // Already a string from frontend

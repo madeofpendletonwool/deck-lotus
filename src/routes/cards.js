@@ -26,13 +26,14 @@ const router = express.Router();
  */
 router.get('/browse', authenticate, (req, res, next) => {
   try {
-    const { name, colors, type, sort, sets, subtypes, cmcMin, cmcMax, page = 1, limit = 50, onlyOwned } = req.query;
+    const { name, colors, type, rarities, sort, sets, subtypes, cmcMin, cmcMax, page = 1, limit = 50, onlyOwned } = req.query;
     const offset = (parseInt(page) - 1) * parseInt(limit);
 
     const result = browseCards({
       name,
       colors: colors ? colors.split(',') : [],
       type,
+      rarities: rarities ? rarities.split(',') : [],
       sort: sort || 'random',
       sets: sets ? sets.split(',') : [],
       subtypes: subtypes ? subtypes.split(',') : [],

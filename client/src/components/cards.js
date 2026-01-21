@@ -6,6 +6,7 @@ let currentFilters = {
   name: '',
   colors: [],
   type: 'all',
+  rarities: [],
   sort: 'random',
   sets: [],
   subtypes: [],
@@ -21,6 +22,7 @@ export function setupCards() {
   const clearBtn = document.getElementById('cards-browse-clear');
   const sortSelect = document.getElementById('filter-sort');
   const typeSelect = document.getElementById('filter-types');
+  const rarityCheckboxes = document.querySelectorAll('#filter-rarity input[type="checkbox"]');
   const setsBtn = document.getElementById('filter-sets-btn');
   const subtypesBtn = document.getElementById('filter-subtypes-btn');
   const cmcMinInput = document.getElementById('filter-cmc-min');
@@ -76,6 +78,20 @@ export function setupCards() {
     currentFilters.type = typeSelect.value;
     currentPage = 1;
     await loadCards();
+  });
+
+  // Rarity filter changes
+  rarityCheckboxes.forEach(checkbox => {
+    checkbox.addEventListener('change', async () => {
+      currentFilters.rarities = Array.from(rarityCheckboxes)
+        .filter(cb => cb.checked)
+        .map(cb => cb.value);
+      // Update visual state
+      checkbox.closest('label').querySelector('.rarity-checkbox-box').style.border =
+        checkbox.checked ? '2px solid var(--primary)' : '2px solid transparent';
+      currentPage = 1;
+      await loadCards();
+    });
   });
 
   // CMC filters
@@ -358,6 +374,7 @@ async function loadCards() {
       name: currentFilters.name && currentFilters.name.trim() ? currentFilters.name : undefined,
       colors: currentFilters.colors.length > 0 ? currentFilters.colors.join(',') : undefined,
       type: currentFilters.type !== 'all' ? currentFilters.type : undefined,
+      rarities: currentFilters.rarities.length > 0 ? currentFilters.rarities.join(',') : undefined,
       sort: currentFilters.sort,
       sets: currentFilters.sets.length > 0 ? currentFilters.sets.join(',') : undefined,
       subtypes: currentFilters.subtypes.length > 0 ? currentFilters.subtypes.join(',') : undefined,
@@ -692,6 +709,21 @@ export async function showCardDetail(cardId) {
           <div style="margin-bottom: 1rem;">
             <strong>Mana Value:</strong> ${card.cmc || 0}
           </div>
+          ${firstPrinting && firstPrinting.rarity ? `
+            <div style="margin-bottom: 1rem;">
+              <strong>Rarity:</strong> <span style="
+                display: inline-block;
+                padding: 0.2rem 0.6rem;
+                border-radius: 4px;
+                font-weight: 600;
+                font-size: 0.875rem;
+                ${firstPrinting.rarity.toLowerCase() === 'mythic' ? 'background: linear-gradient(135deg, #ea580c, #dc2626); color: white;' : ''}
+                ${firstPrinting.rarity.toLowerCase() === 'rare' ? 'background: linear-gradient(135deg, #ca8a04, #a16207); color: white;' : ''}
+                ${firstPrinting.rarity.toLowerCase() === 'uncommon' ? 'background: linear-gradient(135deg, #71717a, #52525b); color: white;' : ''}
+                ${firstPrinting.rarity.toLowerCase() === 'common' ? 'background: var(--bg-tertiary); color: var(--text-secondary);' : ''}
+              ">${firstPrinting.rarity}</span>
+            </div>
+          ` : ''}
 
           <!-- Ownership & Deck Usage Section -->
           <div style="margin: 2rem 0; padding: 1.25rem; background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(5, 150, 105, 0.05)); border-radius: 12px; border: 1px solid rgba(16, 185, 129, 0.3);">

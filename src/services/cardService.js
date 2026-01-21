@@ -186,6 +186,7 @@ export function browseCards(filters = {}) {
     name,
     colors = [],
     type,
+    rarities = [],
     sort = 'random',
     sets = [],
     subtypes = [],
@@ -202,11 +203,14 @@ export function browseCards(filters = {}) {
   const setsArray = Array.isArray(sets) ? sets : [];
   const subtypesArray = Array.isArray(subtypes) ? subtypes : [];
 
-  console.log('Browse cards filters:', { name, colors: colorsArray, type, sort, sets: setsArray, subtypes: subtypesArray, cmcMin, cmcMax, limit, offset });
+  const raritiesArray = Array.isArray(rarities) ? rarities : [];
+
+  console.log('Browse cards filters:', { name, colors: colorsArray, type, rarities: raritiesArray, sort, sets: setsArray, subtypes: subtypesArray, cmcMin, cmcMax, limit, offset });
 
   // Need LEFT JOIN for price sorting
   const needsPriceJoin = sort === 'price';
-  const needsSetJoin = setsArray && setsArray.length > 0;
+  const needsRarityJoin = raritiesArray && raritiesArray.length > 0;
+  const needsSetJoin = (setsArray && setsArray.length > 0) || needsRarityJoin;
   const needsOwnedJoin = onlyOwned && userId;
 
   let sql = `SELECT DISTINCT c.id, c.name, c.mana_cost, c.cmc, c.colors, c.type_line, c.oracle_text,
@@ -292,6 +296,13 @@ export function browseCards(filters = {}) {
     params.push(`%${type}%`);
   }
 
+  // Rarity filter - cards that have printings with any of the selected rarities
+  if (raritiesArray && raritiesArray.length > 0) {
+    const placeholders = raritiesArray.map(() => '?').join(',');
+    sql += ` AND LOWER(p.rarity) IN (${placeholders})`;
+    params.push(...raritiesArray.map(r => r.toLowerCase()));
+  }
+
   // Set filter - cards that have printings in any of the selected sets
   if (setsArray && setsArray.length > 0) {
     const placeholders = setsArray.map(() => '?').join(',');
@@ -372,6 +383,13 @@ export function browseCards(filters = {}) {
   if (type && type.trim() && type !== 'all') {
     countSql += ` AND c.type_line LIKE ?`;
     countParams.push(`%${type}%`);
+  }
+
+  // Rarity filter for count query
+  if (raritiesArray && raritiesArray.length > 0) {
+    const placeholders = raritiesArray.map(() => '?').join(',');
+    countSql += ` AND LOWER(p.rarity) IN (${placeholders})`;
+    countParams.push(...raritiesArray.map(r => r.toLowerCase()));
   }
 
   if (setsArray && setsArray.length > 0) {

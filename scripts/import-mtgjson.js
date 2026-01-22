@@ -444,7 +444,7 @@ async function importCards(sourceDb, targetDb) {
   // Import foreign data
   console.log('Importing foreign card data...');
   const foreignData = srcDb.prepare(`
-    SELECT c.name, fd.language, fd.faceName, fd.text, fd.type, fd.flavorText
+    SELECT c.name as english_name, fd.language, fd.name as faceName, fd.text, fd.type, fd.flavorText
     FROM cardForeignData fd
     JOIN cards c ON fd.uuid = c.uuid
     WHERE c.name IS NOT NULL AND fd.language IS NOT NULL
@@ -460,12 +460,12 @@ async function importCards(sourceDb, targetDb) {
     let inserted = 0;
     for (const fd of data) {
       // Only insert if the card exists in our target database
-      const cardExists = targetDb.prepare('SELECT 1 FROM cards WHERE name = ? LIMIT 1').get(fd.name);
+      const cardExists = targetDb.prepare('SELECT 1 FROM cards WHERE name = ? LIMIT 1').get(fd.english_name);
       if (cardExists) {
         insertForeign.run(
-          fd.name,
+          fd.english_name,  // card_name: English card name
           fd.language,
-          fd.faceName,
+          fd.faceName,      // foreign_name: translated name
           fd.text,
           fd.type,
           fd.flavorText

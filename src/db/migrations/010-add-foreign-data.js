@@ -12,6 +12,7 @@ export function up(db) {
     );
     CREATE INDEX idx_foreign_card_name ON card_foreign_data(card_name);
     CREATE INDEX idx_foreign_language ON card_foreign_data(language);
+    CREATE INDEX idx_foreign_name ON card_foreign_data(foreign_name);
   `);
   console.log('✓ Created card_foreign_data table');
 }

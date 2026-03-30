@@ -350,6 +350,13 @@ class ApiClient {
     });
   }
 
+  async resetUserPassword(userId, password) {
+    return this.request(`/admin/users/${userId}/reset-password`, {
+      method: 'POST',
+      body: JSON.stringify({ password }),
+    });
+  }
+
   // Shopping methods
   async getShoppingList(deckIds) {
     const params = new URLSearchParams();

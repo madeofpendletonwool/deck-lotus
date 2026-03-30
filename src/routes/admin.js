@@ -10,7 +10,7 @@ import {
   configureScheduledBackups,
   getBackupConfig
 } from '../services/backupService.js';
-import { getAllUsers, updateUser, deleteUser } from '../services/authService.js';
+import { getAllUsers, updateUser, deleteUser, resetUserPassword } from '../services/authService.js';
 import { authenticate } from '../middleware/auth.js';
 import { requireAdmin } from '../middleware/adminAuth.js';
 
@@ -282,6 +282,35 @@ router.delete('/users/:id', authenticate, requireAdmin, (req, res, next) => {
 
     res.json({ message: 'User deleted successfully' });
   } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /api/admin/users/:id/reset-password
+ * Reset user password (admin only)
+ * Body: { password: string }
+ */
+router.post('/users/:id/reset-password', authenticate, requireAdmin, async (req, res, next) => {
+  try {
+    const userId = parseInt(req.params.id);
+    const { password } = req.body;
+
+    if (!password) {
+      return res.status(400).json({ error: 'Password is required' });
+    }
+
+    const success = await resetUserPassword(userId, password);
+
+    if (!success) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    res.json({ message: 'Password reset successfully' });
+  } catch (error) {
+    if (error.message.includes('Password must be')) {
+      return res.status(400).json({ error: error.message });
+    }
     next(error);
   }
 });

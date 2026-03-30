@@ -271,6 +271,7 @@ function renderUsers(users) {
           `<button class="btn btn-secondary btn-sm" onclick="toggleAdminStatus(${user.id}, false)">Remove Admin</button>` :
           `<button class="btn btn-secondary btn-sm" onclick="toggleAdminStatus(${user.id}, true)">Make Admin</button>`
         }
+        <button class="btn btn-secondary btn-sm" onclick="resetUserPassword(${user.id}, '${user.username}')">Reset Password</button>
         <button class="btn btn-danger btn-sm" onclick="deleteUserConfirm(${user.id}, '${user.username}')">Delete</button>
       </div>
     </div>
@@ -309,6 +310,28 @@ window.deleteUserConfirm = async function(userId, username) {
   } catch (error) {
     hideLoading();
     showToast('Failed to delete user: ' + error.message, 'error');
+  }
+};
+
+window.resetUserPassword = async function(userId, username) {
+  const newPassword = prompt(`Enter new password for user "${username}" (minimum 8 characters):`);
+  if (!newPassword) {
+    return;
+  }
+
+  if (newPassword.length < 8) {
+    showToast('Password must be at least 8 characters long', 'error');
+    return;
+  }
+
+  try {
+    showLoading();
+    await api.resetUserPassword(userId, newPassword);
+    hideLoading();
+    showToast(`Password reset successfully for ${username}`, 'success');
+  } catch (error) {
+    hideLoading();
+    showToast('Failed to reset password: ' + error.message, 'error');
   }
 };
 

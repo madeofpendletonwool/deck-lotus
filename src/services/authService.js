@@ -242,3 +242,21 @@ export function deleteUser(userId) {
   const result = db.run('DELETE FROM users WHERE id = ?', [userId]);
   return result.changes > 0;
 }
+
+/**
+ * Reset user password (admin only)
+ */
+export async function resetUserPassword(userId, newPassword) {
+  if (!isValidPassword(newPassword)) {
+    throw new Error('Password must be at least 8 characters long.');
+  }
+
+  const passwordHash = await bcrypt.hash(newPassword, SALT_ROUNDS);
+
+  const result = db.run(
+    'UPDATE users SET password_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+    [passwordHash, userId]
+  );
+
+  return result.changes > 0;
+}

@@ -18,35 +18,45 @@ function generateImageUrls(uuid) {
 }
 
 /**
- * Search cards by name (for autocomplete)
+ * Search cards by name (autocomplete) - returns individual printings
+ * Supports English and foreign names, plus second parts of split cards.
  */
 export function searchCards(query, limit = 20) {
-  const searchTerm = `%${query}%`;
+  const prefix = `${query}%`;
+  const infix = `%${query}%`;
 
-  // Update the query to include image_url
-  const cards = db.all(
+  const rows = db.all(
     `SELECT c.id, c.name, c.mana_cost, c.cmc, c.colors, c.type_line, c.oracle_text,
             p.image_url,
-            (SELECT p.uuid FROM printings p WHERE p.card_id = c.id LIMIT 1) as sample_uuid
+            p.set_code,
+            s.name as set_name,
+            p.collector_number,
+            p.rarity,
+            p.uuid as sample_uuid,
+            CASE
+              WHEN c.name LIKE ? THEN 0
+              WHEN c.name LIKE '%//%' AND c.name LIKE ? THEN 1
+              WHEN EXISTS(SELECT 1 FROM card_foreign_data f WHERE f.card_name = c.name AND f.foreign_name LIKE ? LIMIT 1) THEN 2
+              WHEN EXISTS(SELECT 1 FROM card_foreign_data f WHERE f.card_name = c.name AND f.foreign_name LIKE '%//%' AND f.foreign_name LIKE ? LIMIT 1) THEN 3
+              ELSE 4
+            END as match_priority
      FROM cards c
      LEFT JOIN printings p ON p.card_id = c.id
+     LEFT JOIN sets s ON p.set_code = s.code
      WHERE c.name LIKE ?
-     ORDER BY
-       CASE
-         WHEN c.name LIKE ? THEN 0
-         ELSE 1
-       END,
-       c.name
+        OR (c.name LIKE '%//%' AND c.name LIKE ?)
+        OR EXISTS(SELECT 1 FROM card_foreign_data f WHERE f.card_name = c.name AND f.foreign_name LIKE ? LIMIT 1)
+        OR EXISTS(SELECT 1 FROM card_foreign_data f WHERE f.card_name = c.name AND f.foreign_name LIKE '%//%' AND f.foreign_name LIKE ? LIMIT 1)
+     ORDER BY match_priority, c.name, p.set_code, p.collector_number
      LIMIT ?`,
-    [searchTerm, `${query}%`, limit]
+    [prefix, infix, prefix, infix, prefix, infix, prefix, infix, limit]
   );
 
-  // Add image URLs from database
-  return cards.map(card => ({
-    ...card,
-    image_url: card.image_url,
-    large_image_url: card.image_url ? card.image_url.replace('/normal/', '/large/') : null,
-    art_crop_url: card.image_url ? card.image_url.replace('/normal/', '/art_crop/') : null
+  return rows.map(row => ({
+    ...row,
+    image_url: row.image_url,
+    large_image_url: row.image_url ? row.image_url.replace('/normal/', '/large/') : null,
+    art_crop_url: row.image_url ? row.image_url.replace('/normal/', '/art_crop/') : null
   }));
 }
 

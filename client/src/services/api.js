@@ -407,6 +407,77 @@ class ApiClient {
       body: JSON.stringify({ printingId, quantity }),
     });
   }
+
+  // Price monitoring methods
+  async getPriceMonitoringStatus() {
+    return this.request('/price-monitoring/status');
+  }
+
+  async getPriceWatches() {
+    return this.request('/price-monitoring');
+  }
+
+  async createPriceWatch(data) {
+    return this.request('/price-monitoring', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updatePriceWatch(id, data) {
+    return this.request(`/price-monitoring/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deletePriceWatch(id) {
+    return this.request(`/price-monitoring/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async getPriceWatchHistory(id) {
+    return this.request(`/price-monitoring/${id}/history`);
+  }
+
+  async runPriceChecksNow() {
+    return this.request('/price-monitoring/check-now', { method: 'POST' });
+  }
+
+  async getPriceCheckSchedule() {
+    return this.request('/price-monitoring/schedule');
+  }
+
+  async setPriceCheckSchedule(schedule) {
+    return this.request('/price-monitoring/schedule', { method: 'POST', body: JSON.stringify({ schedule }) });
+  }
+
+  // Mana Pool methods
+  async manaPoolStatus() {
+    return this.request('/manapool/status');
+  }
+
+  async manaPoolOptimize(items, model = 'lowest_price') {
+    return this.request('/manapool/optimize', {
+      method: 'POST',
+      body: JSON.stringify({ items, model }),
+    });
+  }
+
+  async manaPoolValidateDeck(decklist, format = 'commander') {
+    return this.request('/manapool/validate-deck', {
+      method: 'POST',
+      body: JSON.stringify({ decklist, format }),
+    });
+  }
+
+  async manaPoolCardInfo(names) {
+    return this.request('/manapool/card-info', {
+      method: 'POST',
+      body: JSON.stringify({ names }),
+    });
+  }
 }
 
 export default new ApiClient();

@@ -199,12 +199,52 @@ export function setupSettings() {
     await loadBackups();
   });
 
+  // Price check schedule
+  const priceSchedulePreset = document.getElementById('price-schedule-preset');
+  const priceScheduleCustomWrap = document.getElementById('price-schedule-custom-wrap');
+  const priceScheduleCustom = document.getElementById('price-schedule-custom');
+
+  priceSchedulePreset.addEventListener('change', () => {
+    priceScheduleCustomWrap.style.display = priceSchedulePreset.value === 'custom' ? '' : 'none';
+  });
+
+  document.getElementById('save-price-schedule-btn').addEventListener('click', async () => {
+    const schedule = priceSchedulePreset.value === 'custom'
+      ? priceScheduleCustom.value.trim()
+      : priceSchedulePreset.value;
+    if (!schedule) return showToast('Enter a cron expression', 'error');
+    try {
+      await api.setPriceCheckSchedule(schedule);
+      document.getElementById('price-schedule-current').textContent = `Active: ${schedule}`;
+      showToast('Price check schedule updated', 'success');
+    } catch (err) {
+      showToast(err.message || 'Failed to update schedule', 'error');
+    }
+  });
+
+  async function loadPriceSchedule() {
+    try {
+      const { schedule } = await api.getPriceCheckSchedule();
+      const knownPresets = ['0 * * * *', '0 */3 * * *', '0 */6 * * *', '0 */12 * * *', '0 3 * * *'];
+      if (knownPresets.includes(schedule)) {
+        priceSchedulePreset.value = schedule;
+        priceScheduleCustomWrap.style.display = 'none';
+      } else {
+        priceSchedulePreset.value = 'custom';
+        priceScheduleCustom.value = schedule;
+        priceScheduleCustomWrap.style.display = '';
+      }
+      document.getElementById('price-schedule-current').textContent = `Active: ${schedule}`;
+    } catch {}
+  }
+
   window.addEventListener('page:settings', async () => {
     await loadApiKeys();
     await loadSyncStatus();
     await checkAdminAndLoadUsers();
     await loadBackupConfig();
     await loadBackups();
+    await loadPriceSchedule();
   });
 }
 

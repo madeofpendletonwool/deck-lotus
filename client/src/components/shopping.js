@@ -20,8 +20,102 @@ let sessionState = {
 };
 
 export function setupShopping() {
-  // Load shopping data when page is shown
   window.addEventListener('page:shopping', loadShoppingData);
+
+  document.getElementById('shopping-optimize-btn')?.addEventListener('click', runShoppingOptimizer);
+}
+
+async function runShoppingOptimizer() {
+  if (!shoppingData?.sets?.length) {
+    showToast('Load your shopping list first', 'warning');
+    return;
+  }
+
+  // Gather all needed cards (not marked found/skipped)
+  const items = [];
+  for (const set of shoppingData.sets) {
+    for (const card of set.cards) {
+      const key = `${card.printingId}`;
+      if (sessionState.found.has(key) || sessionState.skipped.has(key)) continue;
+      const existing = items.find(i => i.name === card.name);
+      if (existing) {
+        existing.quantity += card.quantity ?? 1;
+      } else {
+        items.push({ name: card.name, quantity: card.quantity ?? 1 });
+      }
+    }
+  }
+
+  if (!items.length) {
+    showToast('No cards to optimize', 'warning');
+    return;
+  }
+
+  const model = document.getElementById('shopping-optimizer-strategy')?.value || 'lowest_price';
+  const btn = document.getElementById('shopping-optimize-btn');
+  const resultsEl = document.getElementById('shopping-optimizer-results');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="ph ph-spinner"></i> Optimizing…';
+  resultsEl.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--text-secondary);">Finding best deals across Mana Pool sellers…</div>';
+
+  try {
+    const result = await api.manaPoolOptimize(items, model);
+    renderShoppingOptimizerResults(result, resultsEl);
+  } catch (err) {
+    resultsEl.innerHTML = `<div style="color:#f87171;padding:1rem;border-radius:6px;background:rgba(248,113,113,0.1);">
+      <i class="ph ph-warning"></i> ${err.message}
+      ${!err.message.includes('token') ? '' : '<br><small>Set MANAPOOL_API_TOKEN in your server .env to use the optimizer.</small>'}
+    </div>`;
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="ph ph-magic-wand"></i> Optimize Cart';
+  }
+}
+
+function renderShoppingOptimizerResults(result, el) {
+  // API response: { cart: [{ inventory_id, quantity_selected }], totals: { subtotal_cents, shipping_cents, buyer_fee_cents, total_cents, seller_count } }
+  const totals = result.totals;
+  const cart = result.cart ?? [];
+
+  if (!totals && !cart.length) {
+    el.innerHTML = '<div style="color:var(--text-secondary);padding:1rem;">No results returned from Mana Pool optimizer.</div>';
+    return;
+  }
+
+  const fmt = cents => `$${(cents / 100).toFixed(2)}`;
+  const sellerCount = totals?.seller_count ?? '?';
+  const totalCents = totals?.total_cents ?? 0;
+
+  el.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;flex-wrap:wrap;gap:0.5rem;">
+      <span style="font-size:1rem;font-weight:700;color:#16a34a;">
+        <i class="ph ph-check-circle"></i> ${fmt(totalCents)} total across ${sellerCount} seller${sellerCount !== 1 ? 's' : ''}
+      </span>
+      <a href="https://manapool.com/cart" target="_blank" rel="noopener" class="btn btn-primary btn-sm">
+        Complete on Mana Pool <i class="ph ph-arrow-square-out"></i>
+      </a>
+    </div>
+    ${totals ? `
+      <div style="background:var(--bg-tertiary);border-radius:8px;padding:0.75rem;margin-bottom:0.75rem;">
+        <div style="display:flex;justify-content:space-between;padding:0.2rem 0;font-size:0.85rem;">
+          <span>Subtotal</span><span>${fmt(totals.subtotal_cents ?? 0)}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;padding:0.2rem 0;font-size:0.85rem;">
+          <span>Shipping</span><span>${fmt(totals.shipping_cents ?? 0)}</span>
+        </div>
+        ${totals.buyer_fee_cents ? `
+        <div style="display:flex;justify-content:space-between;padding:0.2rem 0;font-size:0.85rem;">
+          <span>Buyer fee</span><span>${fmt(totals.buyer_fee_cents)}</span>
+        </div>` : ''}
+        <div style="display:flex;justify-content:space-between;padding:0.3rem 0 0;font-size:0.95rem;font-weight:700;border-top:1px solid var(--border-color);margin-top:0.25rem;">
+          <span>Total</span><span style="color:var(--primary);">${fmt(totalCents)}</span>
+        </div>
+      </div>
+    ` : ''}
+    <div style="font-size:0.8rem;color:var(--text-secondary);text-align:center;">
+      ${cart.length} item${cart.length !== 1 ? 's' : ''} selected — click "Complete on Mana Pool" to review and checkout.
+    </div>
+  `;
 }
 
 async function loadShoppingData() {
@@ -417,6 +511,13 @@ function renderShoppingList() {
     </div>
   `;
 
+  // Show optimizer section when there are cards to buy
+  const optimizerSection = document.getElementById('shopping-optimizer-section');
+  if (optimizerSection) {
+    optimizerSection.style.display = filteredData.totalCards > 0 ? '' : 'none';
+    document.getElementById('shopping-optimizer-results').innerHTML = '';
+  }
+
   // Render expand/collapse all buttons + sets
   container.innerHTML = `
     <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap;">
@@ -510,6 +611,9 @@ function renderSetCards(cards) {
                   <button class="btn-icon skip-btn" data-card-key="${cardKey}" title="Skip">
                     <i class="ph ph-x"></i>
                   </button>
+                  <a href="https://manapool.com/search?q=${encodeURIComponent(card.name)}" target="_blank" rel="noopener" class="btn-icon" title="Buy on Mana Pool" style="text-decoration:none;color:inherit;">
+                    <i class="ph ph-shopping-cart-simple"></i>
+                  </a>
                 </div>
               </div>
             </div>
@@ -582,6 +686,9 @@ function renderSetCards(cards) {
                 <button class="btn btn-sm btn-secondary skip-btn" data-card-key="${cardKey}">
                   <i class="ph ph-x"></i> Skip
                 </button>
+                <a href="https://manapool.com/search?q=${encodeURIComponent(card.name)}" target="_blank" rel="noopener" class="btn btn-sm btn-secondary" title="Buy on Mana Pool" style="text-decoration:none;">
+                  <i class="ph ph-shopping-cart-simple"></i> Mana Pool
+                </a>
               </div>
             </div>
           </div>

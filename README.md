@@ -1,101 +1,89 @@
 <div align="center">
   <img src="assets/decklotus-icon.png" alt="Deck Lotus" width="200">
   <h1>Deck Lotus</h1>
-  <p>A modern, self-hosted Magic: The Gathering deck builder with multi-user support, API key authentication, and a beautiful web interface.</p>
+  <p>A modern, self-hosted Magic: The Gathering deck builder with Mana Pool integration, price monitoring, cart optimization, and multi-user support.</p>
 </div>
 
 ## Features
 
-### User Management & Authentication
-- **Multi-User Support**: Secure user registration and authentication with JWT tokens
-- **Admin System**: Role-based access control with admin user management
-- **API Key Authentication**: Generate and manage API keys for external integrations
-- **User Profiles**: Gravatar integration with fallback to colorful initials
-- **User Statistics**: Track deck count, card count, API keys, and shared decks
+### Deck Building
+- **Intuitive Deck Builder** — real-time search with autocomplete as you type
+- **Multiple Boards** — mainboard, sideboard, and maybeboard support
+- **Commander Support** — mark commanders, color identity displayed automatically
+- **Multiple Printings** — choose specific card art, set, and foil version per card
+- **Printing Optimizer** — automatically find the cheapest or most thematic set for your entire deck
+- **Deck Statistics** — live mana curve, type distribution, color breakdown, and estimated value
+- **Format Support** — Commander, Standard, Modern, Pioneer, Legacy, Vintage, Pauper
+- **Drag & Drop** — reorder cards between boards
+- **Layout Views** — full card, compact, and ultra-compact views
 
-### Deck Building & Management
-- **Deck Builder**: Intuitive drag-and-drop interface for building decks
-- **Multiple Printings**: Choose specific card art, set, and foil versions
-- **Mainboard & Sideboard**: Full support for mainboard and sideboard management
-- **Commander Support**: Mark commanders for Commander format decks
-- **Deck Statistics**: Real-time visual mana curve, type distribution, and color analysis
-- **Format Support**: Standard, Modern, Commander, Legacy, Vintage, Pauper
-- **Deck Import/Export**: Import and export decks in multiple formats:
-  - Moxfield format with set codes
-  - MTG Arena format
-  - MTGO format
-  - Plain text format
+### Mana Pool Integration
+- **Cart Optimizer** — find the cheapest combination of sellers for your deck or shopping list across four strategies:
+  - **Lowest Total Price** — minimize spend
+  - **Fewest Packages** — minimize shipping costs
+  - **Balanced** — balance between price and convenience
+  - **Gathered Shipping Only** — sellers offering combined shipping
+- **Deck Validator** — check any deck for format legality via Mana Pool (Commander, Standard, Modern, Pioneer, Legacy, Vintage, Pauper)
+- **Buy Links** — every card in the deck builder and shopping list has a direct "Buy on Mana Pool" link
+- **Price Monitoring** — watch card prices and get notified when they hit your target
 
-### Card Browsing & Search
-- **Fast Card Search**: Real-time autocomplete search as you type
-- **Advanced Filtering**: Filter by colors, card types, CMC range, and sets
-- **Smart Sorting**: Sort by name, mana value, color, price, or random
-- **Set Browser**: Browse cards by specific Magic sets
-- **Price Tracking**: TCGplayer pricing with low/mid/market values
-- **Card Preview**: Hover to see full card images
+### Price Monitoring & Alerts
+- **Price Watches** — set a target price and condition (NM/LP/MP/HP/DM) for any card
+- **Automated Checks** — prices polled on a configurable schedule (default: every 6 hours)
+- **Push Notifications** — instant alerts via [ntfy](https://ntfy.sh) when a card hits your target price
+- **Price History Charts** — beautiful Chart.js line graphs showing price over time with your target threshold overlaid
+- **Smart Alerting** — won't re-notify more than once per 24 hours for the same watch
+- **Watch Management** — pause, resume, expire, and delete watches from a single dashboard
+- **Card Autocomplete** — instant card name search when adding a watch
 
-### Enhanced Card Data (MTGJSON)
-- **Scryfall Integration**: Scryfall IDs for all printings
-- **Type Arrays**: Separate supertypes, types, and subtypes
-- **Related Cards**: Track card relationships (tokens, meld pairs, etc.)
-- **Commander Data**: Leadership skills for Commander format
-- **Identifiers**: Multiple card identifiers (MTGO, TCGplayer, etc.)
-- **Foreign Data**: Multi-language card names and text
-- **EDHREC Metadata**: Commander popularity and ranking data
+### Shopping List
+- **Cross-Deck Aggregation** — see every card you need across all your decks in one list, organized by set
+- **Mana Pool Optimizer** — run the optimizer directly from the shopping list to get a ready-to-buy cart
+- **Per-Card Buy Links** — one-click links to Mana Pool search for every card
+- **Filters** — price range, rarity, color, set search, and budget mode
+- **Session Tracking** — mark cards as "found" or "skip" during an LGS visit
+- **Export** — export the full shopping list as formatted text
 
-### Deck Sharing & Collaboration
-- **Public Sharing**: Share decks with unique public URLs
-- **Import Shared Decks**: One-click import of shared decks
-- **Read-Only Views**: Public viewers can see deck lists and stats
+### Card Browsing & Inventory
+- **Advanced Card Browser** — filter by color, type, CMC range, set, subtype, and rarity
+- **Inventory Management** — track cards you own with quantity per printing
+- **Owned Card Badges** — see which cards in your decks you already own
+- **Card Detail Modal** — all printings with prices, artist, set, legality, and rulings
+- **Hover Previews** — full card image on hover throughout the app
 
-### TCGplayer Integration
-- **Price Display**: Real-time pricing for each card and total deck value
-- **Mass Entry**: Export decks directly to TCGplayer with set codes
-- **Copy Deck Lists**: Format deck lists for manual paste
+### Deck Import & Export
+- **Import from** Moxfield, MTG Arena, MTGO, and plain text formats
+- **Export to** Moxfield (with set codes), Arena, MTGO, and plain text
+- **Smart Parser** — auto-detects set codes in brackets or parentheses
+- **Shared Deck Import** — one-click import of any publicly shared deck
+
+### Deck Sharing
+- **Public Links** — generate a unique read-only URL for any deck
+- **No Account Required** — anyone with the link can view the deck
+- **Import Shared Decks** — viewers can save a copy to their own account
+
+### User Management
+- **Multi-User** — each user has their own decks, inventory, and price watches
+- **JWT Authentication** — secure token-based auth with refresh tokens
+- **API Keys** — generate named API keys for external integrations
+- **Gravatar Support** — profile pictures via Gravatar with colorful initials fallback
+- **User Statistics** — deck count, card count, shared decks, and API keys at a glance
 
 ### Admin Tools
-- **User Management**: View, edit, promote/demote, and delete users
-- **Backup & Restore**: Export and import all user data (decks, cards, API keys)
-- **Database Sync**: Manual refresh of MTGJSON card data and pricing
-- **Safe Reimport**: FORCE_REIMPORT preserves user decks using UUIDs
+- **User Management** — view, promote/demote, and delete users
+- **Backup & Restore** — export and restore all user data as JSON
+- **Database Sync** — manually trigger MTGJSON card data and pricing refresh
+- **Auto-Sync** — card data updated daily at 3 AM automatically
+- **Safe Reimport** — `FORCE_REIMPORT` clears card data but preserves all user decks via UUIDs
 
-### Deployment & Self-Hosting
-- **Self-Hosted**: Own your data with SQLite database
-- **Dockerized**: Easy deployment with Docker and docker-compose
-- **Database Flexibility**: Built with abstraction layer for future database options
-- **Auto-Sync**: Daily automatic card data and pricing updates at 3 AM
-
-## Tech Stack
-
-### Backend
-- Node.js + Express
-- SQLite with better-sqlite3
-- JWT authentication + API key support
-- bcrypt password hashing
-- Compression, rate limiting, security headers
-
-### Frontend
-- Vanilla JavaScript (ES6+)
-- Vite for build and dev server
-- Modern CSS with custom properties
-- Responsive design
-- Real-time search with debouncing
-
-### Data
-- MTGJSON for comprehensive Magic card data
-- All card printings with artist info and set details
+---
 
 ## Quick Start with Docker
 
-The fastest way to get Deck Lotus running is to use our pre-built Docker image:
-
 ```bash
-# Create a directory for your data
 mkdir -p deck-lotus-data
 
-# Create a docker-compose.yml file
 cat > docker-compose.yml << 'EOF'
-version: '3.8'
 services:
   deck-lotus:
     image: ghcr.io/madeofpendletonwool/deck-lotus:latest
@@ -103,707 +91,102 @@ services:
       - "3000:3000"
     environment:
       - NODE_ENV=production
-      - JWT_SECRET=your-super-secret-random-string-here-at-least-64-characters-long
+      - JWT_SECRET=replace-with-a-long-random-secret
       - ADMIN_USERNAME=admin
       - ADMIN_EMAIL=admin@example.com
       - ADMIN_PASSWORD=changeme123
+      # Optional but recommended — enables price monitoring & cart optimizer
+      - MANAPOOL_API_TOKEN=
+      # Optional — enables push notifications for price alerts
+      - NTFY_TOPIC=
     volumes:
       - ./deck-lotus-data:/app/data
     restart: unless-stopped
 EOF
 
-# Edit docker-compose.yml and set a secure JWT_SECRET
-nano docker-compose.yml
-
-# Start Deck Lotus
-docker-compose up -d
+docker compose up -d
 ```
 
-The app will be available at `http://localhost:3000`
+App runs at `http://localhost:3000`. Generate a secure JWT secret with:
 
-**Important**: Change the `JWT_SECRET` to a secure random string before starting! Generate one with:
 ```bash
 node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
 ```
 
+---
+
 ## Build from Source
 
-If you prefer to build the Docker image yourself from source:
-
 ```bash
-# Clone the repository
-git clone https://github.com/your-username/deck-lotus.git
+git clone https://github.com/madeofpendletonwool/deck-lotus.git
 cd deck-lotus
 
-# Copy environment file
 cp .env.example .env
+# Edit .env — set JWT_SECRET at minimum
 
-# Edit .env and set a secure JWT_SECRET
-nano .env
-
-# Build and run with Docker Compose
-docker-compose up -d
+docker compose up -d --build
 ```
 
-The app will be available at `http://localhost:3000`
-
-## Usage
-
-### Creating an Account
-
-1. Navigate to `http://localhost:3000`
-2. Click "Register" on the login page
-3. Enter username, email, and password (min 8 characters)
-4. You'll be automatically logged in
-
-### Building Decks
-
-1. Click "New Deck" on the My Decks page
-2. Enter a deck name and select a format (optional)
-3. Search for cards using the search box (autocomplete appears as you type)
-4. Click a card to add it to your deck
-5. Use +/- buttons to adjust quantities
-6. Toggle between Mainboard and Sideboard tabs
-7. View live statistics (mana curve, card types, colors)
-8. View real-time deck pricing with TCGplayer integration
-9. Click "Save" to save your changes
-
-### Importing Decks
-
-Import decks from other platforms:
-
-1. Click "Import Deck" on the My Decks page
-2. Enter a deck name and format
-3. Paste your deck list in any of these formats:
-   - `1 Lightning Bolt` (Arena/MTGO)
-   - `4 Counterspell [DMR]` (Moxfield with set codes)
-   - `1 Black Lotus (LEA)` (set codes in parentheses)
-4. Click "Import Deck"
-
-The importer intelligently detects format and matches cards to printings.
-
-### Exporting Decks
-
-Export decks to various formats:
-
-1. Open a deck
-2. Click the export icon (download button) in the deck tabs
-3. Choose your format:
-   - **Moxfield**: Includes set codes and collector numbers
-   - **Arena**: Simple format for MTG Arena
-   - **MTGO**: Compatible with Magic Online
-   - **Plain Text**: Simple quantity + name format
-4. Click "Copy to Clipboard" or manually copy the text
-
-### Sharing Decks
-
-Share decks with friends or the community:
-
-1. Open a deck
-2. Click "Share" button
-3. Copy the generated public URL
-4. Anyone with the link can view (read-only)
-5. Viewers can import shared decks to their account
-
-To stop sharing:
-1. Open the deck
-2. Click "Share" again
-3. Click "Delete Share Link"
-
-### Browsing Cards
-
-Explore the card database with advanced filtering:
-
-1. Go to "Browse Cards" page
-2. Use the search box for quick name search
-3. Apply filters:
-   - **Sort**: Alphabetical, mana value, color, price, random
-   - **Type**: Creature, Instant, Sorcery, Enchantment, etc.
-   - **CMC**: Set min/max mana value range
-   - **Colors**: Select color combinations (W, U, B, R, G, C)
-   - **Sets**: Filter by specific Magic sets
-4. Hover over cards to see full preview images
-5. Click cards to view all printings and prices
-
-### Buying Decks
-
-Purchase your decks via TCGplayer:
-
-1. Open a deck
-2. Click "Buy Deck" button
-3. Choose **TCGplayer Mass Entry** (recommended)
-4. Deck list with set codes opens in TCGplayer
-5. Review prices and add to cart
-
-Alternatively, use **Copy Deck List** to manually paste elsewhere.
-
-### User Profile & Stats
-
-Your user profile displays:
-- **Gravatar**: If you have a Gravatar associated with your email, it displays automatically
-- **Username & Email**: Your account details
-- **Statistics**:
-  - Total decks created
-  - Total cards across all decks
-  - API keys generated
-  - Shared decks (publicly accessible)
-
-Access your profile by clicking your avatar in the top-right corner.
-
-### API Keys
-
-Generate API keys for external integrations:
-
-1. Go to Settings page
-2. Click "Generate New API Key"
-3. Enter a name for the key
-4. Save the generated key (shown only once!)
-
-Use API keys in requests:
-```bash
-curl -H "X-API-Key: your-api-key-here" http://localhost:3000/api/cards/search?q=lightning
-```
-
-### Admin Features
-
-If you're an admin user, you have access to additional features in Settings:
-
-**User Management**:
-- View all registered users
-- Promote users to admin or demote from admin
-- Delete user accounts (removes all their decks and data)
-- Cannot remove your own admin status or delete your own account
-
-**Database Management**:
-- Manually trigger MTGJSON sync to update card data and pricing
-- View last sync timestamp
-- Auto-sync runs daily at 3:00 AM
-
-**Backup & Restore**:
-- Export all user data (users, decks, API keys, shares)
-- Import previously exported backups
-- Choose to overwrite or merge data
-- Backups preserve deck integrity using UUIDs
-
-## API Documentation
-
-### Authentication Endpoints
-
-#### Register
-```http
-POST /api/auth/register
-Content-Type: application/json
-
-{
-  "username": "player1",
-  "email": "player1@example.com",
-  "password": "securepass123"
-}
-```
-
-#### Login
-```http
-POST /api/auth/login
-Content-Type: application/json
-
-{
-  "username": "player1",
-  "password": "securepass123"
-}
-```
-
-#### Get Profile
-```http
-GET /api/auth/me
-Authorization: Bearer <jwt-token>
-```
-
-#### Get User Stats
-```http
-GET /api/auth/stats
-Authorization: Bearer <jwt-token>
-```
-
-Returns: `{ stats: { deckCount, cardCount, apiKeyCount, sharedDeckCount } }`
-
-#### Generate API Key
-```http
-POST /api/auth/api-keys
-Authorization: Bearer <jwt-token>
-Content-Type: application/json
-
-{
-  "name": "My Integration"
-}
-```
-
-#### Get API Keys
-```http
-GET /api/auth/api-keys
-Authorization: Bearer <jwt-token>
-```
-
-#### Revoke API Key
-```http
-DELETE /api/auth/api-keys/:id
-Authorization: Bearer <jwt-token>
-```
-
-### Card Endpoints
-
-All card endpoints require authentication (JWT or API Key).
-
-#### Search Cards
-```http
-GET /api/cards/search?q=lightning&limit=20
-Authorization: Bearer <jwt-token>
-```
-
-#### Browse Cards (with filters)
-```http
-GET /api/cards/browse?name=bolt&colors=R&type=Instant&cmcMin=1&cmcMax=3&sets=MH2&sort=name&page=1&limit=20
-Authorization: Bearer <jwt-token>
-```
-
-Query parameters:
-- `name`: Card name search
-- `colors`: Color filter (e.g., `W`, `UB`, `WUG`)
-- `type`: Card type filter
-- `cmcMin` / `cmcMax`: Mana value range
-- `sets`: Comma-separated set codes
-- `sort`: `name`, `cmc`, `color`, `price`, `random`
-- `page`: Page number (default: 1)
-- `limit`: Results per page (default: 20)
-
-#### Get Card Details
-```http
-GET /api/cards/:id
-Authorization: Bearer <jwt-token>
-```
-
-#### Get Card Printings
-```http
-GET /api/cards/:id/printings
-Authorization: Bearer <jwt-token>
-```
-
-Returns all printings of a card with set info, prices, and availability.
-
-### Deck Endpoints
-
-#### List Decks
-```http
-GET /api/decks
-Authorization: Bearer <jwt-token>
-```
-
-#### Create Deck
-```http
-POST /api/decks
-Authorization: Bearer <jwt-token>
-Content-Type: application/json
-
-{
-  "name": "My Red Deck",
-  "format": "standard",
-  "description": "Aggressive red deck"
-}
-```
-
-#### Get Deck
-```http
-GET /api/decks/:id
-Authorization: Bearer <jwt-token>
-```
-
-#### Update Deck
-```http
-PUT /api/decks/:id
-Authorization: Bearer <jwt-token>
-Content-Type: application/json
-
-{
-  "name": "Updated Name",
-  "format": "modern"
-}
-```
-
-#### Delete Deck
-```http
-DELETE /api/decks/:id
-Authorization: Bearer <jwt-token>
-```
-
-#### Add Card to Deck
-```http
-POST /api/decks/:id/cards
-Authorization: Bearer <jwt-token>
-Content-Type: application/json
-
-{
-  "printingId": 123,
-  "quantity": 4,
-  "isSideboard": false
-}
-```
-
-#### Update Card in Deck
-```http
-PUT /api/decks/:id/cards/:cardId
-Authorization: Bearer <jwt-token>
-Content-Type: application/json
-
-{
-  "quantity": 2
-}
-```
-
-#### Remove Card from Deck
-```http
-DELETE /api/decks/:id/cards/:cardId
-Authorization: Bearer <jwt-token>
-```
-
-#### Get Deck Statistics
-```http
-GET /api/decks/:id/stats
-Authorization: Bearer <jwt-token>
-```
-
-Returns mana curve, type distribution, and color breakdown.
-
-#### Get Deck Price
-```http
-GET /api/decks/:id/price
-Authorization: Bearer <jwt-token>
-```
-
-Returns TCGplayer pricing for the entire deck (low, mid, market).
-
-#### Import Deck
-```http
-POST /api/decks/import
-Authorization: Bearer <jwt-token>
-Content-Type: application/json
-
-{
-  "name": "Imported Deck",
-  "format": "commander",
-  "deckList": "1 Lightning Bolt\n4 Counterspell [DMR]\n..."
-}
-```
-
-Supports multiple formats: Arena, MTGO, Moxfield (with set codes).
-
-#### Create Deck Share
-```http
-POST /api/decks/:id/share
-Authorization: Bearer <jwt-token>
-```
-
-Returns: `{ token: "uuid", shareUrl: "http://..." }`
-
-#### Delete Deck Share
-```http
-DELETE /api/decks/:id/share
-Authorization: Bearer <jwt-token>
-```
-
-#### Get Shared Deck (Public)
-```http
-GET /api/decks/share/:token
-```
-
-No authentication required. Returns deck details, cards, and statistics.
-
-#### Import Shared Deck
-```http
-POST /api/decks/share/:token/import
-Authorization: Bearer <jwt-token>
-```
-
-Creates a copy of the shared deck in your account.
-
-### Set Endpoints
-
-#### Get All Sets
-```http
-GET /api/sets
-Authorization: Bearer <jwt-token>
-```
-
-Returns all Magic sets with metadata (name, code, release date, type).
-
-#### Get Set Details
-```http
-GET /api/sets/:code
-Authorization: Bearer <jwt-token>
-```
-
-#### Get Set Cards
-```http
-GET /api/sets/:code/cards?page=1
-Authorization: Bearer <jwt-token>
-```
-
-Returns paginated cards from a specific set.
-
-### Admin Endpoints
-
-All admin endpoints require authentication AND admin privileges.
-
-#### Get All Users
-```http
-GET /api/admin/users
-Authorization: Bearer <jwt-token>
-```
-
-Admin only. Returns all registered users with their roles.
-
-#### Update User
-```http
-PUT /api/admin/users/:id
-Authorization: Bearer <jwt-token>
-Content-Type: application/json
-
-{
-  "is_admin": 1
-}
-```
-
-Admin only. Update user details or admin status. Cannot remove own admin status.
-
-#### Delete User
-```http
-DELETE /api/admin/users/:id
-Authorization: Bearer <jwt-token>
-```
-
-Admin only. Delete user and all their data (decks, cards, API keys). Cannot delete own account.
-
-#### Create Backup
-```http
-POST /api/admin/backup
-Authorization: Bearer <jwt-token>
-```
-
-Admin only. Creates JSON backup of all user data (users, decks, cards, API keys, shares).
-
-#### Restore Backup
-```http
-POST /api/admin/restore
-Authorization: Bearer <jwt-token>
-Content-Type: application/json
-
-{
-  "backup": { ... },
-  "overwrite": false
-}
-```
-
-Admin only. Restores data from backup. `overwrite: true` replaces all data, `false` merges.
-
-#### Sync Database
-```http
-POST /api/admin/sync
-Authorization: Bearer <jwt-token>
-```
-
-Admin only. Manually trigger MTGJSON sync to update card data and pricing.
-
-#### Get Sync Status
-```http
-GET /api/admin/sync-status
-Authorization: Bearer <jwt-token>
-```
-
-Admin only. Returns last sync timestamp and current sync status.
-
-## Project Structure
-
-```
-deck-lotus/
-├── src/
-│   ├── db/
-│   │   ├── migrations/       # Database migrations
-│   │   ├── connection.js     # Database abstraction layer
-│   │   └── index.js
-│   ├── middleware/
-│   │   ├── auth.js           # JWT + API key authentication
-│   │   └── errorHandler.js
-│   ├── services/
-│   │   ├── authService.js    # User authentication logic
-│   │   ├── cardService.js    # Card search and retrieval
-│   │   └── deckService.js    # Deck management
-│   ├── routes/
-│   │   ├── auth.js           # Auth endpoints
-│   │   ├── cards.js          # Card endpoints
-│   │   └── decks.js          # Deck endpoints
-│   ├── utils/
-│   │   ├── jwt.js            # JWT utilities
-│   │   └── validators.js     # Input validation
-│   └── server.js             # Express server
-├── client/
-│   ├── src/
-│   │   ├── components/       # UI components
-│   │   ├── services/         # API client
-│   │   ├── styles/           # CSS
-│   │   ├── utils/            # Helper functions
-│   │   └── main.js           # App entry point
-│   ├── index.html
-│   ├── vite.config.js
-│   └── package.json
-├── scripts/
-│   ├── import-mtgjson.js     # Import card data
-│   └── init-db.js            # Initialize database
-├── data/                     # SQLite database (gitignored)
-├── Dockerfile                # Multi-stage Docker build
-├── docker-compose.yml        # Docker Compose configuration
-├── .dockerignore
-├── .env.example
-└── package.json
-```
-
-## Database Schema
-
-### Users
-- Authentication and user management
-- Hashed passwords with bcrypt (10 rounds)
-- Admin flag for role-based access control
-- Email for Gravatar integration
-- Created timestamp
-
-### API Keys
-- API key generation and management
-- SHA-256 hashed keys with prefixes
-- Named keys for easy identification
-- Last used tracking
-- User ownership
-
-### Cards
-- Atomic card data (shared across all printings)
-- Name, mana cost, colors, types, rules text
-- **Enhanced fields**:
-  - `supertypes`, `types`, `subtypes` (JSON arrays)
-  - `leadership` (JSON object for Commander skills)
-  - Power/toughness, loyalty
-  - Keywords and abilities
-  - EDHREC rank and salt score
-
-### Printings
-- Set-specific card data
-- Artist, collector number, set code, rarity
-- Multiple printings per card
-- **Enhanced fields**:
-  - `uuid` (stable MTGJSON identifier)
-  - `scryfallId` for Scryfall integration
-  - `identifiers` (JSON: mtgoId, tcgplayerId, etc.)
-  - `availability` (paper, arena, mtgo)
-  - `foreignData` (JSON array of translations)
-  - `relatedCards` (JSON: tokens, meld pairs, etc.)
-  - `isFoil`, `isNonFoil`, `isPromo`
-  - `frameVersion`, `borderColor`
-
-### Prices
-- TCGplayer pricing data (low, mid, market)
-- Foil and non-foil prices
-- Updated daily via auto-sync
-- Historical tracking ready
-
-### Sets
-- Magic set information
-- Set name, code, release date
-- Type (core, expansion, masters, etc.)
-- Block information
-
-### Decks
-- User's deck metadata
-- Format, name, description
-- Foreign key to users (CASCADE delete)
-- Created/updated timestamps
-
-### Deck Cards
-- Junction table for deck composition
-- Quantity, mainboard/sideboard flag
-- Commander flag for Commander format
-- References specific printing by UUID-mapped ID
-- Foreign key CASCADE ensures data integrity
-
-### Deck Shares
-- Public sharing tokens (UUID v4)
-- Active/inactive status
-- Created timestamp
-- Foreign key to decks
-
-### Migrations Applied
-The database includes 12 migrations:
-1. Initial schema (users, cards, printings, decks, deck_cards, api_keys)
-2. Pricing and sets tables
-3. Rulings table
-4. Deck sharing functionality
-5. Scryfall IDs
-6. Type arrays (supertypes, types, subtypes)
-7. Related cards (tokens, transforms, etc.)
-8. Leadership skills (Commander)
-9. Identifiers (MTGO, TCGplayer, etc.)
-10. Foreign data (translations)
-11. EDHREC metadata
-12. Admin users flag
-
-All migrations are idempotent and tracked in `schema_migrations` table.
-
-## Development
-
-### Adding New Features
-
-1. **Backend**: Add routes in `src/routes/`, services in `src/services/`
-2. **Frontend**: Add components in `client/src/components/`
-3. **Database**: Create migration in `src/db/migrations/`
-
-### Running Tests
-
-```bash
-# Backend tests (when available)
-npm test
-
-# Frontend tests (when available)
-cd client && npm test
-```
-
-## Docker Build Optimization
-
-The Dockerfile uses multi-stage builds to minimize image size:
-
-1. **Frontend Builder**: Builds the Vite frontend
-2. **Backend Builder**: Installs production dependencies
-3. **Final Image**: Alpine-based Node.js with only runtime files
-
-Final image size: ~150MB (compared to ~800MB without optimization)
+---
+
+## Environment Variables
+
+| Variable | Default | Required | Description |
+|---|---|---|---|
+| `JWT_SECRET` | — | **Yes** | Secret for signing JWT tokens. Use a long random string. |
+| `PORT` | `3000` | No | Port the server listens on |
+| `NODE_ENV` | `development` | No | `production` or `development` |
+| `DATABASE_PATH` | `./data/deck-lotus.db` | No | Path to the SQLite database |
+| `MANAPOOL_USER_EMAIL` | — | No | Your Mana Pool account email address. Required alongside the token. |
+| `MANAPOOL_API_TOKEN` | — | No | Enables price monitoring, cart optimizer, and deck validator. Generate at [manapool.com/seller/settings/integrations](https://manapool.com/seller/settings/integrations) |
+| `TCGPLAYER_CLIENT_ID` | — | No | TCGPlayer API fallback (keys no longer publicly issued) |
+| `TCGPLAYER_CLIENT_SECRET` | — | No | TCGPlayer API fallback |
+| `NTFY_URL` | `https://ntfy.sh` | No | ntfy server URL for push notifications |
+| `NTFY_TOPIC` | — | No | ntfy topic name for price alert push notifications |
+| `PRICE_CHECK_SCHEDULE` | `0 */6 * * *` | No | Cron expression for price check frequency |
+| `ADMIN_USERNAME` | — | No | Username for initial admin account |
+| `ADMIN_EMAIL` | — | No | Email for initial admin account |
+| `ADMIN_PASSWORD` | — | No | Password for initial admin account |
+| `JWT_EXPIRES_IN` | `7d` | No | Access token lifetime |
+| `JWT_REFRESH_EXPIRES_IN` | `30d` | No | Refresh token lifetime |
+| `MTGJSON_URL` | (auto) | No | Custom MTGJSON download URL |
+| `FORCE_REIMPORT` | `false` | No | Set `true` to clear and reimport all card data on next startup. User decks are preserved. |
+
+### Mana Pool setup
+
+Mana Pool is the preferred price source and unlocks the most powerful features. To enable it:
+
+1. Create a Mana Pool account at [manapool.com](https://manapool.com)
+2. Go to **Seller Settings → Integrations**
+3. Generate an API access token
+4. Set both `MANAPOOL_USER_EMAIL` (your account email) and `MANAPOOL_API_TOKEN` in your `.env` or `docker-compose.yml`
+
+With the token set you get:
+- Price monitoring that actually works
+- Cart optimizer in the buy modal and shopping list
+- Deck legality validator
+- Per-card buy links throughout the app
+
+### Price alert notifications (ntfy)
+
+1. Install the [ntfy app](https://ntfy.sh) on your phone, or use the web UI
+2. Pick a unique topic name (e.g. `deck-lotus-alerts-abc123`)
+3. Set `NTFY_TOPIC` to that name
+4. Subscribe to the same topic in the ntfy app
+
+You'll receive a push notification whenever a watched card price drops to or below your target.
+
+---
 
 ## Admin User Setup
 
-**Deck Lotus automatically ensures there's always at least one admin user.**
+On every startup, Deck Lotus checks whether an admin user exists:
 
-### How it works:
+- **Admin exists** → nothing happens, server starts normally
+- **No admin exists + env vars set** → creates or promotes `ADMIN_USERNAME` to admin
+- **No admin exists + no env vars** → auto-generates credentials and prints them to the console **once**
 
-On every startup, the system checks:
-1. **If an admin user exists**: Nothing happens, server starts normally
-2. **If NO admin user exists**:
-   - **With environment variables set**: Creates admin from `ADMIN_USERNAME`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`
-   - **Without environment variables**: Auto-generates random credentials and displays them in the terminal
-
-### Setting up via environment variables:
-
-```bash
-# Set these in docker-compose.yml or .env
-ADMIN_USERNAME=admin
-ADMIN_EMAIL=admin@example.com
-ADMIN_PASSWORD=changeme123
-```
-
-### Auto-generated credentials:
-
-If you don't set the environment variables and no admin exists, you'll see:
+Auto-generated credentials look like this:
 
 ```
 ╔════════════════════════════════════════════════════════════╗
@@ -811,235 +194,337 @@ If you don't set the environment variables and no admin exists, you'll see:
 ╠════════════════════════════════════════════════════════════╣
 ║  Username: admin                                           ║
 ║  Email:    admin@localhost                                 ║
-║  Password: a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6                ║
+║  Password: a1b2c3d4e5f6...                                 ║
 ╠════════════════════════════════════════════════════════════╣
 ║  ⚠️  SAVE THESE CREDENTIALS NOW!                           ║
 ║  They will not be shown again.                             ║
-║  Change the password after first login!                    ║
 ╚════════════════════════════════════════════════════════════╝
 ```
 
-**Important**: The password is randomly generated and shown ONLY ONCE. Save it immediately!
+**Change the password immediately after first login.**
 
-### Upgrading existing installations:
+---
 
-If you're upgrading from a version before admin functionality:
-- Set `ADMIN_USERNAME` to your existing username in docker-compose.yml
-- The system will automatically promote that user to admin on next startup
-- If the user doesn't exist, it will be created with the specified credentials
+## Usage Guide
 
-### After logging in as admin:
+### Building a Deck
 
-1. Go to **Settings** > **User Management**
-2. View all users, promote/demote admins, delete accounts
-3. Use **Backup & Restore** to export/import all user data
-4. **Change the admin password immediately!**
+1. Go to **My Decks** → **New Deck**
+2. Name your deck and optionally set a format
+3. Search for cards — autocomplete shows results as you type
+4. Click a card to select a printing and add it
+5. Use **+/-** or the quantity field to adjust counts
+6. Switch between **Mainboard**, **Sideboard**, and **Maybeboard** tabs
+7. Right-click any card for the actions menu (move board, set as commander, buy on Mana Pool, remove)
+8. Click **Save**
 
-**Security Note**: Always change default or auto-generated passwords on first login!
+### Buying a Deck
+
+1. Open a deck → click **Buy Deck**
+2. The **Mana Pool Optimizer** tab opens by default:
+   - Choose a strategy (Lowest Price, Fewest Packages, Balanced, or Gathered Shipping Only)
+   - Click **Optimize Cart** — results show a per-seller breakdown with prices
+   - Click **View on Mana Pool** to complete the purchase
+3. Switch to **Quick Export** to copy the deck list for Mana Pool or TCGplayer mass entry
+
+### Validating a Deck
+
+1. Open a deck → look for **Validate Deck** in the sidebar stats panel
+2. Select a format (Commander, Standard, Modern, etc.)
+3. Click **Validate** — results show legality status, your commander, color identity, and any violations
+
+### Setting Up Price Watches
+
+1. Go to **Price Watch** in the nav
+2. Click **Add Watch**
+3. Start typing a card name — autocomplete suggests matching cards
+4. Set a target price and condition
+5. Optionally set an expiry date and notes
+6. Click **Save Watch**
+
+Prices are checked on the configured schedule. When a price hits your target you get a push notification (if ntfy is configured) and the watch shows a green "Price Hit!" badge.
+
+Click the chart icon on any watch to see the full price history graph with your target threshold.
+
+### Shopping List
+
+1. Go to **Shopping List**
+2. Select the decks you want to shop for
+3. Use filters to narrow down by price, rarity, or color
+4. Click **Optimize Cart** to run the Mana Pool optimizer across your entire list
+5. Click the **Mana Pool** button on any individual card to search for it directly
+6. Mark cards as **Found** during an LGS visit to track progress
+
+### Importing Decks
+
+1. Go to **My Decks** → **Import Deck**
+2. Enter a deck name and format
+3. Paste your deck list — any of these formats work:
+   - `4 Lightning Bolt` (Arena / MTGO)
+   - `4 Counterspell [DMR]` (Moxfield with set code)
+   - `1 Black Lotus (LEA)` (set code in parentheses)
+4. Click **Import Deck**
+
+### API Keys
+
+Generate API keys for external integrations:
+
+1. Go to **Settings** → **Generate New API Key**
+2. Enter a name → save the key (shown once only)
+
+Use in requests:
+```bash
+curl -H "X-API-Key: your-api-key" http://localhost:3000/api/cards/search?q=lightning
+```
+
+---
+
+## API Reference
+
+All endpoints require authentication via `Authorization: Bearer <token>` or `X-API-Key: <key>` unless noted.
+
+### Auth
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/api/auth/register` | Register a new account |
+| `POST` | `/api/auth/login` | Login, returns JWT |
+| `GET` | `/api/auth/me` | Current user profile |
+| `GET` | `/api/auth/stats` | User statistics |
+| `GET` | `/api/auth/api-keys` | List API keys |
+| `POST` | `/api/auth/api-keys` | Create API key |
+| `DELETE` | `/api/auth/api-keys/:id` | Revoke API key |
+
+### Cards
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/cards/search?q=&limit=` | Autocomplete search |
+| `GET` | `/api/cards/browse` | Filtered card browser (name, colors, type, cmc, sets, sort, page) |
+| `GET` | `/api/cards/:id` | Card details |
+| `GET` | `/api/cards/:id/printings` | All printings with prices |
+| `POST` | `/api/cards/:id/owned` | Toggle card ownership |
+
+### Decks
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/decks` | List decks |
+| `POST` | `/api/decks` | Create deck |
+| `GET` | `/api/decks/:id` | Get deck |
+| `PUT` | `/api/decks/:id` | Update deck |
+| `DELETE` | `/api/decks/:id` | Delete deck |
+| `POST` | `/api/decks/:id/cards` | Add card |
+| `PUT` | `/api/decks/:id/cards/:cardId` | Update card quantity / board |
+| `DELETE` | `/api/decks/:id/cards/:cardId` | Remove card |
+| `GET` | `/api/decks/:id/stats` | Mana curve, type distribution, colors |
+| `GET` | `/api/decks/:id/price` | Deck total estimated value |
+| `POST` | `/api/decks/import` | Import from text |
+| `POST` | `/api/decks/:id/share` | Create public share link |
+| `DELETE` | `/api/decks/:id/share` | Remove share link |
+| `GET` | `/api/decks/share/:token` | View shared deck (public) |
+| `POST` | `/api/decks/share/:token/import` | Import shared deck |
+
+### Price Monitoring
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/price-monitoring/status` | Check if price source and ntfy are configured |
+| `GET` | `/api/price-monitoring` | List all price watches |
+| `POST` | `/api/price-monitoring` | Create price watch |
+| `PUT` | `/api/price-monitoring/:id` | Update watch (price, condition, active state) |
+| `DELETE` | `/api/price-monitoring/:id` | Delete watch |
+| `GET` | `/api/price-monitoring/:id/history` | Price check history |
+| `POST` | `/api/price-monitoring/check-now` | Trigger immediate check of all active watches |
+
+### Mana Pool
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/manapool/status` | Check if `MANAPOOL_API_TOKEN` is configured |
+| `POST` | `/api/manapool/optimize` | Cart optimizer — body: `{ items, model }` |
+| `POST` | `/api/manapool/validate-deck` | Deck validator — body: `{ decklist, format }` |
+| `POST` | `/api/manapool/card-info` | Card info lookup — body: `{ names }` |
+
+#### Optimizer models
+
+| Model | Description |
+|---|---|
+| `lowest_price` | Minimize total spend |
+| `fewest_packages` | Minimize number of sellers (saves shipping) |
+| `balanced` | Balance between price and packages |
+| `gathered_shipping_only` | Sellers offering combined shipping only |
+
+#### Example: optimize a cart
+
+```http
+POST /api/manapool/optimize
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "model": "fewest_packages",
+  "items": [
+    { "name": "Sol Ring", "quantity": 1 },
+    { "name": "Arcane Signet", "quantity": 1 },
+    { "name": "Command Tower", "quantity": 1 }
+  ]
+}
+```
+
+#### Example: validate a deck
+
+```http
+POST /api/manapool/validate-deck
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "format": "commander",
+  "decklist": "1 Atraxa, Praetors' Voice\n1 Sol Ring\n..."
+}
+```
+
+### Admin
+
+All admin endpoints require admin privileges.
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/admin/users` | List all users |
+| `PUT` | `/api/admin/users/:id` | Update user (promote/demote admin) |
+| `DELETE` | `/api/admin/users/:id` | Delete user and all their data |
+| `POST` | `/api/admin/users/:id/reset-password` | Reset user password |
+| `POST` | `/api/admin/sync` | Trigger MTGJSON sync |
+| `GET` | `/api/admin/sync-status` | Last sync timestamp |
+| `POST` | `/api/admin/backup` | Create data backup |
+| `POST` | `/api/admin/restore` | Restore from backup |
+| `GET` | `/api/admin/backups` | List saved backup files |
+
+---
+
+## Project Structure
+
+```
+deck-lotus/
+├── src/
+│   ├── db/
+│   │   ├── migrations/            # 017 database migrations
+│   │   ├── connection.js
+│   │   └── index.js
+│   ├── middleware/
+│   │   ├── auth.js                # JWT + API key auth
+│   │   └── errorHandler.js
+│   ├── routes/
+│   │   ├── auth.js
+│   │   ├── cards.js
+│   │   ├── decks.js
+│   │   ├── sets.js
+│   │   ├── shopping.js
+│   │   ├── inventory.js
+│   │   ├── priceMonitoring.js
+│   │   ├── manapool.js            # Mana Pool proxy routes
+│   │   └── admin.js
+│   └── services/
+│       ├── authService.js
+│       ├── cardService.js
+│       ├── deckService.js
+│       ├── pricingService.js      # Local deck price calculation
+│       ├── manaPoolService.js     # Mana Pool API integration
+│       ├── tcgplayerService.js    # TCGPlayer fallback
+│       ├── priceMonitoringService.js
+│       ├── notificationService.js # ntfy integration
+│       └── syncService.js
+├── client/
+│   ├── src/
+│   │   ├── components/
+│   │   │   ├── deckBuilder.js     # Deck builder + optimizer + validator
+│   │   │   ├── cards.js
+│   │   │   ├── shopping.js        # Shopping list + Mana Pool optimizer
+│   │   │   ├── inventory.js
+│   │   │   ├── priceMonitoring.js # Price watches + Chart.js history charts
+│   │   │   ├── settings.js
+│   │   │   └── auth.js
+│   │   ├── services/api.js        # API client
+│   │   ├── utils/
+│   │   └── main.js
+│   ├── index.html
+│   └── package.json
+├── scripts/
+│   └── import-mtgjson.js
+├── Dockerfile
+├── docker-compose.yml
+├── .env.example
+└── package.json
+```
+
+---
+
+## Tech Stack
+
+**Backend** — Node.js, Express, SQLite (better-sqlite3), JWT, bcrypt, node-cron
+
+**Frontend** — Vanilla JavaScript (ES6+), Vite, Chart.js (price history charts), Phosphor Icons
+
+**Data** — MTGJSON (card data, synced weekly), Mana Pool API (live prices, optimizer, validator)
+
+---
 
 ## Backup & Restore
 
-Admins can backup and restore all user data from the Settings page.
+Admins can export and restore all user data from Settings → Backup & Restore.
 
-### Creating a Backup
+Backups include: users, decks, deck cards, API keys, and share tokens. Card database data is excluded — it auto-imports from MTGJSON.
 
-1. Log in as an admin user
-2. Go to **Settings** > **Backup & Restore**
-3. Click **Download Backup**
-4. Save the JSON file to a safe location
+Restores can **merge** (keeps existing data, adds backup data) or **overwrite** (replaces everything). Deck integrity is maintained via stable UUIDs.
 
-Backups include:
-- All users and their credentials
-- All decks and deck cards (using stable UUIDs)
-- API keys
-- Deck sharing tokens
-- Admin status for each user
+---
 
-**Note**: Backups do NOT include card database (MTGJSON data) - that's auto-imported.
+## Docker Build
 
-### Restoring from Backup
+The Dockerfile uses a three-stage build to keep the final image small (~150 MB):
 
-1. Log in as an admin user
-2. Go to **Settings** > **Backup & Restore**
-3. Click **Restore from Backup**
-4. Select your backup JSON file
-5. Choose whether to:
-   - **Overwrite** existing data (replaces everything)
-   - **Merge** with existing data (may create duplicates)
-6. Review the restore results
+1. **Frontend builder** — runs `npm run build` in the client directory
+2. **Backend builder** — installs production dependencies only
+3. **Final image** — Alpine Node.js with runtime files only
 
-After restoration, decks will automatically link to the correct card printings using UUIDs.
-
-## Environment Variables
-
-Complete list of environment variables you can set in `.env` or `docker-compose.yml`:
-
-| Variable | Default | Required | Description |
-|----------|---------|----------|-------------|
-| `PORT` | `3000` | No | Port for the web server to listen on |
-| `NODE_ENV` | `development` | No | Environment mode (`development` or `production`) |
-| `DATABASE_PATH` | `./data/deck-lotus.db` | No | Path to SQLite database file |
-| `JWT_SECRET` | - | **Yes** | Secret key for signing JWT tokens (use a long random string) |
-| `JWT_EXPIRES_IN` | `7d` | No | How long JWT access tokens are valid (e.g., `7d`, `24h`) |
-| `JWT_REFRESH_EXPIRES_IN` | `30d` | No | How long refresh tokens are valid |
-| `MTGJSON_URL` | (auto-detected) | No | Custom MTGJSON download URL (rarely needed) |
-| `FORCE_REIMPORT` | `false` | No | Force complete database reimport on startup. Set to `true` to clear and reimport all MTGJSON data. **User decks are automatically preserved using UUIDs!** |
-| `ADMIN_USERNAME` | - | No | Username for admin account. If no admin exists, creates or promotes this user to admin. If not set and no admin exists, auto-generates credentials. |
-| `ADMIN_EMAIL` | - | No | Email for admin account (only used when creating new admin) |
-| `ADMIN_PASSWORD` | - | No | Password for admin account (only used when creating new admin). **Change immediately after first login!** |
-
-### Important Notes
-
-**JWT_SECRET**: This is the only **required** variable. Generate a secure random string:
 ```bash
-# Generate a secure JWT secret
-node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
+# Build and run locally
+docker compose up -d --build
+
+# Force a card data reimport (preserves user decks)
+FORCE_REIMPORT=true docker compose up -d
 ```
 
-**FORCE_REIMPORT**: When set to `true`, completely clears and reimports all card data from MTGJSON. This is useful for:
-- Getting the latest card data and pricing
-- Fixing corrupted card database
-- Updating to new MTGJSON schema versions
-
-**Important**: User decks, users, and API keys are automatically backed up and restored using stable UUIDs, so you won't lose your data!
-
-**Admin Credentials**: The system ensures at least one admin always exists:
-1. **On every startup**, checks if ANY admin user exists
-2. **If no admin exists**:
-   - If `ADMIN_USERNAME`, `ADMIN_EMAIL`, `ADMIN_PASSWORD` are set → Creates/promotes that user
-   - If variables not set → Auto-generates random credentials and displays them in terminal (ONCE only!)
-3. **If admin exists** → Skips admin creation
-
-This means you'll never be locked out - if you accidentally remove all admins, restart the container to create a new one.
-
-After first login with default/generated credentials, **immediately change the password** via Settings!
-
-### Example .env File
-
-```env
-# Server Configuration
-PORT=3000
-NODE_ENV=production
-
-# Database
-DATABASE_PATH=./data/deck-lotus.db
-
-# Security (REQUIRED - change this!)
-JWT_SECRET=your-super-secret-random-string-here-at-least-64-characters-long
-JWT_EXPIRES_IN=7d
-JWT_REFRESH_EXPIRES_IN=30d
-
-# Admin User (created on first startup)
-ADMIN_USERNAME=admin
-ADMIN_EMAIL=admin@example.com
-ADMIN_PASSWORD=changeme123
-
-# Database Import (optional)
-FORCE_REIMPORT=false
-```
-
-### Example docker-compose.yml
-
-```yaml
-version: '3.8'
-services:
-  deck-lotus:
-    image: deck-lotus:latest
-    build: .
-    ports:
-      - "3000:3000"
-    environment:
-      - NODE_ENV=production
-      - JWT_SECRET=${JWT_SECRET:-your-secret-key-here}
-      - ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
-      - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@example.com}
-      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-changeme123}
-      - FORCE_REIMPORT=${FORCE_REIMPORT:-false}
-    volumes:
-      - ./data:/app/data
-    restart: unless-stopped
-```
+---
 
 ## Contributing
-
-Contributions are welcome! Please:
 
 1. Fork the repository
 2. Create a feature branch
 3. Make your changes
 4. Submit a pull request
 
-## License
-
-MIT License - see LICENSE file for details
+---
 
 ## Credits
 
-- Card data provided by [MTGJSON](https://mtgjson.com/)
-- Built with Node.js, Express, and Vite
+- Card data: [MTGJSON](https://mtgjson.com/)
+- Prices & marketplace: [Mana Pool](https://manapool.com)
+- Push notifications: [ntfy](https://ntfy.sh)
+- Icons: [Phosphor Icons](https://phosphoricons.com)
+- Charts: [Chart.js](https://www.chartjs.org)
 
-### Latest Features
+---
 
-**User Experience**:
-- ✨ User profile with Gravatar support and colorful initials fallback
-- 📊 User statistics dashboard (deck count, card count, API keys, shared decks)
-- 🎨 Modern animated dropdown menu for user profile
-- 🔄 Real-time stats updates
+## License
 
-**Deck Management**:
-- 📥 Import decks from Moxfield, Arena, MTGO, and plain text formats
-- 📤 Export decks to multiple formats with set codes
-- 🔗 Share decks publicly with unique URLs
-- 💰 TCGplayer integration for deck pricing and purchasing
-- ⚡ Improved deck builder performance
-
-**Card Browsing**:
-- 🔍 Advanced filtering system (colors, types, CMC, sets)
-- 📑 Smart sorting options (name, CMC, color, price, random)
-- 🖼️ Card preview on hover
-- 💵 Real-time price display for all printings
-
-**Enhanced Card Data** (MTGJSON):
-- 🆔 Scryfall IDs for all printings
-- 📋 Structured type arrays (supertypes, types, subtypes)
-- 🔗 Related cards tracking (tokens, transforms, meld pairs)
-- 👑 Commander leadership skills
-- 🌍 Foreign language data
-- 📈 EDHREC metadata (rank, salt score)
-- 🎮 Multiple identifiers (MTGO, TCGplayer, etc.)
-
-**Admin Features**:
-- 👥 User management (view, promote/demote, delete)
-- 💾 Backup & restore all user data
-- 🔄 Manual database sync trigger
-- 🔐 Protected admin endpoints
-
-**Technical Improvements**:
-- ✅ UUID-based deck preservation during FORCE_REIMPORT
-- 🏗️ 12 database migrations for enhanced functionality
-- 🔒 Admin middleware protection
-- 📦 Improved error handling
-- ⚡ Performance optimizations
-
-## Support
-
-For issues and questions:
-- Open an issue on GitHub
-- Check existing issues for solutions
-
-## Roadmap
-
-Planned features for future releases:
-- 🎯 Deck recommendations and suggestions
-- 📈 Price history tracking and alerts
-- 🏆 Tournament tracking
-- 📊 Advanced deck analytics
-- 🎲 Goldfish playtesting
+MIT — see LICENSE file for details.
 
 ---
 
 <div align="center">
-  <strong>Deck Lotus</strong> - Build decks with style!
+  <strong>Deck Lotus</strong> — Build decks with style.
   <br><br>
   Made with love for the Magic: The Gathering community.
 </div>

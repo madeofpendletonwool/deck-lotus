@@ -7,6 +7,7 @@ import { setupSettings } from './components/settings.js';
 import { setupShopping } from './components/shopping.js';
 import { setupInventory } from './components/inventory.js';
 import { setupSharedDeck, loadSharedDeck } from './components/sharedDeck.js';
+import { setupPriceMonitoring } from './components/priceMonitoring.js';
 import { setupUserMenu } from './components/userMenu.js';
 import { showLoading, hideLoading } from './utils/ui.js';
 
@@ -102,6 +103,9 @@ class App {
       case 'inventory':
         window.dispatchEvent(new CustomEvent('page:inventory'));
         break;
+      case 'price-monitoring':
+        window.dispatchEvent(new CustomEvent('page:price-monitoring'));
+        break;
       case 'settings':
         window.dispatchEvent(new CustomEvent('page:settings'));
         break;
@@ -129,6 +133,7 @@ class App {
     setupShopping();
     setupInventory();
     setupSettings();
+    setupPriceMonitoring();
     setupSharedDeck();
   }
 }

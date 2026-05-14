@@ -17,7 +17,10 @@ import setRoutes from './routes/sets.js';
 import adminRoutes from './routes/admin.js';
 import shoppingRoutes from './routes/shopping.js';
 import inventoryRoutes from './routes/inventory.js';
+import priceMonitoringRoutes from './routes/priceMonitoring.js';
+import manapoolRoutes from './routes/manapool.js';
 import { setupDailySync } from './services/syncService.js';
+import { setupPriceMonitoringSchedule } from './services/priceMonitoringService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -61,6 +64,8 @@ app.use('/api/decks', deckRoutes);
 app.use('/api/sets', setRoutes);
 app.use('/api/shopping', shoppingRoutes);
 app.use('/api/inventory', inventoryRoutes);
+app.use('/api/price-monitoring', priceMonitoringRoutes);
+app.use('/api/manapool', manapoolRoutes);
 app.use('/api/admin', adminRoutes);
 
 // SPA catch-all route (MUST be last)
@@ -186,6 +191,7 @@ async function start() {
 
     // Setup daily sync schedule
     setupDailySync();
+    setupPriceMonitoringSchedule();
 
     app.listen(PORT, '0.0.0.0', () => {
       console.log(`\n🚀 Deck Lotus server running on port ${PORT}`);

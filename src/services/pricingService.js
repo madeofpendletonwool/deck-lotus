@@ -28,19 +28,15 @@ export function getPrintingPrices(uuid) {
  * Get deck total price
  */
 export function getDeckPrice(deckId) {
-  // Get total price
+  // Prefer tcgplayer normal prices (sourced from MTGJSON weekly sync)
+  const priceSubquery = `COALESCE(
+    (SELECT price FROM prices WHERE printing_uuid = p.uuid AND provider = 'tcgplayer' AND price_type = 'normal' LIMIT 1),
+    (SELECT price FROM prices WHERE printing_uuid = p.uuid AND price_type = 'normal' LIMIT 1),
+    0
+  )`;
+
   const result = db.get(
-    `SELECT
-      SUM(
-        COALESCE(
-          (SELECT price FROM prices
-           WHERE printing_uuid = p.uuid
-           AND provider = 'tcgplayer'
-           AND price_type = 'normal'
-           LIMIT 1),
-          0
-        ) * dc.quantity
-      ) as total_price
+    `SELECT SUM((${priceSubquery}) * dc.quantity) as total_price
      FROM deck_cards dc
      JOIN printings p ON dc.printing_id = p.id
      WHERE dc.deck_id = ?`,
@@ -56,14 +52,7 @@ export function getDeckPrice(deckId) {
       c.name,
       p.image_url,
       dc.quantity,
-      COALESCE(
-        (SELECT price FROM prices
-         WHERE printing_uuid = p.uuid
-         AND provider = 'tcgplayer'
-         AND price_type = 'normal'
-         LIMIT 1),
-        0
-      ) as unit_price
+      ${priceSubquery} as unit_price
      FROM deck_cards dc
      JOIN printings p ON dc.printing_id = p.id
      JOIN cards c ON p.card_id = c.id
@@ -83,7 +72,7 @@ export function getDeckPrice(deckId) {
 
   return {
     total: result?.total_price || 0,
-    provider: 'tcgplayer',
+    provider: 'market',
     currency: 'USD',
     mostExpensive: mostExpensive ? {
       name: mostExpensive.name,

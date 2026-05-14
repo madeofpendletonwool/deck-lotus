@@ -46,6 +46,7 @@
             href="https://cdn.jsdelivr.net/npm/@phosphor-icons/web@2.1.1/src/fill/style.css"
         />
         <link rel="stylesheet" href="/src/styles/main.css" />
+        <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     </head>
     <body>
         <div id="app">
@@ -75,6 +76,10 @@
                         <a href="#" data-page="inventory" class="nav-link">
                             <i class="ph ph-archive nav-icon"></i>
                             <span class="nav-text">Inventory</span>
+                        </a>
+                        <a href="#" data-page="price-monitoring" class="nav-link">
+                            <i class="ph ph-bell-ringing nav-icon"></i>
+                            <span class="nav-text">Price Watch</span>
                         </a>
                         <a href="#" data-page="settings" class="nav-link">
                             <i class="ph ph-gear nav-icon"></i>
@@ -860,6 +865,25 @@
                     <!-- Statistics -->
                     <div id="shopping-stats" class="shopping-stats"></div>
 
+                    <!-- Mana Pool Optimizer -->
+                    <div class="shopping-section" id="shopping-optimizer-section" style="display: none;">
+                        <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 1rem;">
+                            <h3 style="margin: 0;"><i class="ph ph-magic-wand"></i> Mana Pool Optimizer</h3>
+                            <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+                                <select id="shopping-optimizer-strategy" class="form-control" style="font-size: 0.875rem;">
+                                    <option value="lowest_price">Lowest Total Price</option>
+                                    <option value="fewest_packages">Fewest Packages</option>
+                                    <option value="balanced">Balanced</option>
+                                    <option value="gathered_shipping_only">Gathered Shipping Only</option>
+                                </select>
+                                <button id="shopping-optimize-btn" class="btn btn-primary btn-sm">
+                                    <i class="ph ph-magic-wand"></i> Optimize Cart
+                                </button>
+                            </div>
+                        </div>
+                        <div id="shopping-optimizer-results"></div>
+                    </div>
+
                     <!-- Shopping List by Set -->
                     <div class="shopping-section">
                         <div id="shopping-list-container"></div>
@@ -1042,6 +1066,105 @@
                 </div>
             </div>
 
+            <!-- Price Monitoring Page -->
+            <div id="price-monitoring-page" class="page hidden">
+                <div class="page-header">
+                    <h2>Price Watch</h2>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <button id="pm-check-now-btn" class="btn btn-secondary">
+                            <i class="ph ph-arrows-clockwise btn-icon"></i>
+                            <span class="btn-text">Check Now</span>
+                        </button>
+                        <button id="pm-add-watch-btn" class="btn btn-primary">
+                            <i class="ph ph-plus btn-icon"></i>
+                            <span class="btn-text">Add Watch</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div id="pm-status-banner" class="hidden" style="margin-bottom: 1rem; padding: 0.75rem 1rem; background: var(--bg-tertiary); border-radius: 8px; font-size: 0.875rem; color: var(--text-secondary);"></div>
+
+                <div id="pm-watches-list" style="display: flex; flex-direction: column; gap: 0.75rem;"></div>
+
+                <div id="pm-empty" class="hidden" style="text-align: center; padding: 4rem 2rem; color: var(--text-secondary);">
+                    <i class="ph ph-bell-slash" style="font-size: 3rem; display: block; margin-bottom: 1rem;"></i>
+                    <p style="font-size: 1.1rem; font-weight: 600; margin-bottom: 0.5rem;">No price watches yet</p>
+                    <p>Click "Add Watch" to start monitoring a card's price.</p>
+                </div>
+            </div>
+
+            <!-- Add/Edit Price Watch Modal -->
+            <div id="pm-watch-modal" class="modal hidden">
+                <div class="modal-content" style="max-width: 500px;">
+                    <span class="modal-close" id="pm-watch-modal-close">&times;</span>
+                    <h2 id="pm-watch-modal-title" style="margin-bottom: 1.5rem;">Add Price Watch</h2>
+                    <form id="pm-watch-form">
+                        <div class="form-group">
+                            <label for="pm-card-name">Card Name</label>
+                            <div style="position: relative;">
+                                <input type="text" id="pm-card-name" placeholder="e.g. Meekstone" required autocomplete="off" style="width: 100%;" />
+                                <div id="pm-card-search-results" class="hidden" style="position: absolute; top: 100%; left: 0; right: 0; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 4px; max-height: 250px; overflow-y: auto; z-index: 1000; box-shadow: 0 4px 12px rgba(0,0,0,0.3);"></div>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="pm-condition">Condition</label>
+                            <select id="pm-condition">
+                                <option value="any">Any Condition</option>
+                                <option value="nm">Near Mint (NM)</option>
+                                <option value="lp">Lightly Played (LP)</option>
+                                <option value="mp">Moderately Played (MP)</option>
+                                <option value="hp">Heavily Played (HP)</option>
+                                <option value="dm">Damaged (DM)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="pm-max-price">Target Price ($) <span style="font-weight: 400; color: var(--text-secondary);">— optional</span></label>
+                            <input type="number" id="pm-max-price" placeholder="Leave blank to alert on any new low" min="0.01" step="0.01" />
+                            <p style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.35rem;">If left blank, you'll be alerted whenever the price drops lower than the previously recorded price.</p>
+                        </div>
+                        <div class="form-group">
+                            <label for="pm-expires-at">Expires (optional)</label>
+                            <input type="date" id="pm-expires-at" />
+                            <p style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">Watch auto-deactivates after this date</p>
+                        </div>
+                        <div class="form-group">
+                            <label for="pm-notes">Notes (optional)</label>
+                            <input type="text" id="pm-notes" placeholder="e.g. For Stax deck" />
+                        </div>
+                        <div class="form-group" id="pm-printing-section" style="display:none;">
+                            <label>Printing <span style="font-weight:400;color:var(--text-secondary);">— optional</span></label>
+                            <div id="pm-printing-selected" style="display:flex;align-items:center;gap:0.75rem;padding:0.5rem;background:var(--bg-tertiary);border-radius:6px;margin-bottom:0.5rem;">
+                                <span id="pm-printing-label" style="font-size:0.875rem;color:var(--text-secondary);">Any printing</span>
+                                <button type="button" id="pm-change-printing-btn" class="btn btn-secondary btn-sm" style="margin-left:auto;">Change</button>
+                            </div>
+                            <div id="pm-printing-grid" class="hidden" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:0.5rem;max-height:260px;overflow-y:auto;padding:0.25rem 0;"></div>
+                        </div>
+                        <input type="hidden" id="pm-watch-id" value="" />
+                        <input type="hidden" id="pm-card-id" value="" />
+                        <input type="hidden" id="pm-scryfall-id" value="" />
+                        <input type="hidden" id="pm-image-url" value="" />
+                        <input type="hidden" id="pm-set-code" value="" />
+                        <input type="hidden" id="pm-set-name" value="" />
+                        <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
+                            <button type="submit" class="btn btn-primary" style="flex: 1;">Save Watch</button>
+                            <button type="button" class="btn btn-secondary" id="pm-watch-cancel">Cancel</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Price Watch History Modal -->
+            <div id="pm-history-modal" class="modal hidden">
+                <div class="modal-content" style="max-width: 600px;">
+                    <span class="modal-close" id="pm-history-modal-close">&times;</span>
+                    <h2 id="pm-history-title" style="margin-bottom: 1.5rem;">Price History</h2>
+                    <div id="pm-history-chart-wrap" class="hidden" style="margin-bottom: 1.25rem; position: relative; height: 220px;">
+                        <canvas id="pm-history-chart"></canvas>
+                    </div>
+                    <div id="pm-history-list" style="max-height: 300px; overflow-y: auto;"></div>
+                </div>
+            </div>
+
             <!-- Settings Page -->
             <div id="settings-page" class="page hidden">
                 <div class="page-header">
@@ -1194,6 +1317,34 @@
                         </div>
                     </section>
 
+                    <section class="settings-section" style="margin-top: 2rem;">
+                        <h3>Price Check Schedule</h3>
+                        <p style="font-size:0.875rem;color:var(--text-secondary);margin-bottom:1rem;">
+                            How often the server checks price watches against Mana Pool. Changes take effect immediately without a restart.
+                        </p>
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;align-items:end;margin-bottom:1rem;">
+                            <div>
+                                <label style="display:block;margin-bottom:0.5rem;font-weight:600;">Frequency</label>
+                                <select id="price-schedule-preset" style="width:100%;padding:0.5rem;border-radius:6px;border:1px solid var(--border-color);background:var(--bg-secondary);">
+                                    <option value="0 * * * *">Every 1 hour</option>
+                                    <option value="0 */3 * * *">Every 3 hours</option>
+                                    <option value="0 */6 * * *">Every 6 hours (default)</option>
+                                    <option value="0 */12 * * *">Every 12 hours</option>
+                                    <option value="0 3 * * *">Once daily (3 AM)</option>
+                                    <option value="custom">Custom cron expression…</option>
+                                </select>
+                            </div>
+                            <div id="price-schedule-custom-wrap" style="display:none;">
+                                <label style="display:block;margin-bottom:0.5rem;font-weight:600;">Cron expression</label>
+                                <input type="text" id="price-schedule-custom" placeholder="e.g. 0 */4 * * *" style="width:100%;padding:0.5rem;border-radius:6px;border:1px solid var(--border-color);background:var(--bg-secondary);">
+                            </div>
+                        </div>
+                        <div style="display:flex;align-items:center;gap:1rem;">
+                            <button id="save-price-schedule-btn" class="btn btn-primary">Save Schedule</button>
+                            <span id="price-schedule-current" style="font-size:0.8rem;color:var(--text-secondary);"></span>
+                        </div>
+                    </section>
+
                     <section
                         id="user-management-section"
                         class="settings-section"
@@ -1219,82 +1370,108 @@
 
             <!-- Buy Deck Modal -->
             <div id="buy-deck-modal" class="modal hidden">
-                <div class="modal-content">
-                    <span class="modal-close" id="buy-modal-close"
-                        >&times;</span
-                    >
-                    <h2 style="margin-bottom: 1.5rem">Buy Deck</h2>
-                    <div style="margin-bottom: 1.5rem; padding: 1rem; background: var(--bg-tertiary); border-radius: 0.5rem;">
+                <div class="modal-content" style="max-width: 600px;">
+                    <span class="modal-close" id="buy-modal-close">&times;</span>
+                    <h2 style="margin-bottom: 1rem;">Buy Deck</h2>
+
+                    <!-- Non-owned only toggle -->
+                    <div style="margin-bottom: 1rem; padding: 0.75rem 1rem; background: var(--bg-tertiary); border-radius: 0.5rem;">
                         <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; user-select: none;">
                             <input type="checkbox" id="copy-non-owned-only" style="width: 18px; height: 18px; cursor: pointer;">
-                            <span style="font-weight: 600;">Copy only non-owned cards</span>
+                            <span style="font-weight: 600;">Non-owned cards only</span>
                         </label>
-                        <p style="margin: 0.5rem 0 0 1.75rem; font-size: 0.875rem; color: var(--text-secondary);">
-                            When enabled, only cards you don't own will be copied to clipboard
-                        </p>
                     </div>
-                    <div class="buy-options">
-                        <div class="buy-option" id="buy-tcgplayer">
-                            <div class="buy-option-header">
-                                <h3>TCGplayer Mass Entry</h3>
-                                <span class="buy-option-badge"
-                                    >Recommended</span
-                                >
-                            </div>
-                            <p>
-                                Import your deck to TCGplayer with set codes for
-                                accurate pricing
-                            </p>
-                            <button class="btn btn-primary btn-block">
-                                Open in TCGplayer
+
+                    <!-- Tabs -->
+                    <div style="display: flex; gap: 0; margin-bottom: 1.25rem; border-bottom: 2px solid var(--border-color);">
+                        <button class="buy-tab-btn active" data-buy-tab="optimizer" style="padding: 0.5rem 1rem; background: none; border: none; border-bottom: 2px solid var(--primary); margin-bottom: -2px; color: var(--primary); font-weight: 600; cursor: pointer; font-size: 0.875rem;">
+                            <i class="ph ph-magic-wand"></i> Mana Pool Optimizer
+                        </button>
+                        <button class="buy-tab-btn" data-buy-tab="export" style="padding: 0.5rem 1rem; background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 0.875rem;">
+                            <i class="ph ph-export"></i> Quick Export
+                        </button>
+                    </div>
+
+                    <!-- Optimizer tab -->
+                    <div id="buy-tab-optimizer">
+                        <div style="display: flex; gap: 0.75rem; align-items: center; margin-bottom: 1rem; flex-wrap: wrap;">
+                            <label style="font-size: 0.875rem; color: var(--text-secondary); white-space: nowrap;">Strategy:</label>
+                            <select id="optimizer-strategy" class="form-control" style="flex: 1; min-width: 160px;">
+                                <option value="lowest_price">Lowest Total Price</option>
+                                <option value="fewest_packages">Fewest Packages (saves shipping)</option>
+                                <option value="balanced">Balanced</option>
+                                <option value="gathered_shipping_only">Gathered Shipping Only</option>
+                            </select>
+                            <button id="run-optimizer-btn" class="btn btn-primary">
+                                <i class="ph ph-magic-wand"></i> Optimize Cart
                             </button>
                         </div>
-                        <div class="buy-option" id="buy-manapool">
-                            <div class="buy-option-header">
-                                <h3>Manapool Mass Entry</h3>
+                        <div id="optimizer-results" style="min-height: 80px;">
+                            <div style="text-align: center; padding: 2rem; color: var(--text-secondary); font-size: 0.875rem;">
+                                <i class="ph ph-magic-wand" style="font-size: 2rem; display: block; margin-bottom: 0.5rem; opacity: 0.4;"></i>
+                                Click "Optimize Cart" to find the best deal across Mana Pool sellers.
                             </div>
-                            <p>
-                                Import your deck to Manapool with set codes for
-                                accurate pricing
-                            </p>
-                            <button class="btn btn-primary btn-block">
-                                Open in Manapool
-                            </button>
-                        </div>
-                        <div class="buy-option">
-                            <div class="buy-option-header">
-                                <h3>Copy Deck List</h3>
-                            </div>
-                            <p>
-                                Copy formatted deck list with set codes to paste
-                                manually
-                            </p>
-                            <button
-                                class="btn btn-secondary btn-block"
-                                id="copy-decklist"
-                            >
-                                Copy to Clipboard
-                            </button>
                         </div>
                     </div>
-                    <div id="decklist-preview" class="decklist-preview hidden">
-                        <h4>Deck List Preview:</h4>
-                        <textarea
-                            id="decklist-text"
-                            readonly
-                            style="
-                                width: 100%;
-                                min-height: 200px;
-                                padding: 1rem;
-                                background: var(--bg-tertiary);
-                                border: 1px solid var(--border);
-                                border-radius: 0.5rem;
-                                color: var(--text);
-                                font-family: monospace;
-                                font-size: 0.875rem;
-                                margin-top: 0.5rem;
-                            "
-                        ></textarea>
+
+                    <!-- Export tab -->
+                    <div id="buy-tab-export" class="hidden">
+                        <div class="buy-options">
+                            <div class="buy-option" id="buy-manapool">
+                                <div class="buy-option-header">
+                                    <h3>Mana Pool Mass Entry</h3>
+                                    <span class="buy-option-badge">Recommended</span>
+                                </div>
+                                <p>Copy your deck list and paste it into Mana Pool for purchasing.</p>
+                                <button class="btn btn-primary btn-block">Open in Mana Pool</button>
+                            </div>
+                            <div class="buy-option" id="buy-tcgplayer">
+                                <div class="buy-option-header">
+                                    <h3>TCGplayer Mass Entry</h3>
+                                </div>
+                                <p>Copy your deck list and paste it into TCGplayer mass entry.</p>
+                                <button class="btn btn-secondary btn-block">Open in TCGplayer</button>
+                            </div>
+                            <div class="buy-option">
+                                <div class="buy-option-header">
+                                    <h3>Copy Deck List</h3>
+                                </div>
+                                <p>Copy the formatted deck list with set codes to paste anywhere.</p>
+                                <button class="btn btn-secondary btn-block" id="copy-decklist">Copy to Clipboard</button>
+                            </div>
+                        </div>
+                        <div id="decklist-preview" class="decklist-preview hidden">
+                            <h4>Deck List Preview:</h4>
+                            <textarea id="decklist-text" readonly style="width: 100%; min-height: 200px; padding: 1rem; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 0.5rem; color: var(--text); font-family: monospace; font-size: 0.875rem; margin-top: 0.5rem;"></textarea>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Deck Validator Modal -->
+            <div id="deck-validator-modal" class="modal hidden">
+                <div class="modal-content" style="max-width: 520px;">
+                    <span class="modal-close" id="deck-validator-close">&times;</span>
+                    <h2 style="margin-bottom: 1.5rem;"><i class="ph ph-shield-check"></i> Deck Validator</h2>
+                    <div style="display: flex; gap: 0.75rem; margin-bottom: 1rem; align-items: center;">
+                        <select id="validator-format" class="form-control" style="flex: 1;">
+                            <option value="commander">Commander / EDH</option>
+                            <option value="standard">Standard</option>
+                            <option value="modern">Modern</option>
+                            <option value="pioneer">Pioneer</option>
+                            <option value="legacy">Legacy</option>
+                            <option value="vintage">Vintage</option>
+                            <option value="pauper">Pauper</option>
+                        </select>
+                        <button id="run-validator-btn" class="btn btn-primary">
+                            <i class="ph ph-shield-check"></i> Validate
+                        </button>
+                    </div>
+                    <div id="validator-results" style="min-height: 60px;">
+                        <div style="text-align: center; padding: 2rem; color: var(--text-secondary); font-size: 0.875rem;">
+                            <i class="ph ph-shield" style="font-size: 2rem; display: block; margin-bottom: 0.5rem; opacity: 0.4;"></i>
+                            Select a format and click Validate.
+                        </div>
                     </div>
                 </div>
             </div>

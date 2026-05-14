@@ -121,17 +121,97 @@ export function setupDeckBuilder() {
     openBuyDeckModal();
   });
 
-  // Modal close
   document.getElementById('buy-modal-close').addEventListener('click', () => {
     document.getElementById('buy-deck-modal').classList.add('hidden');
   });
 
-  // TCGPlayer button in modal
+  // Buy modal tab switching
+  document.querySelectorAll('.buy-tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.buy-tab-btn').forEach(b => {
+        b.classList.remove('active');
+        b.style.borderBottom = 'none';
+        b.style.color = 'var(--text-secondary)';
+        b.style.fontWeight = 'normal';
+      });
+      btn.classList.add('active');
+      btn.style.borderBottom = '2px solid var(--primary)';
+      btn.style.color = 'var(--primary)';
+      btn.style.fontWeight = '600';
+      const tab = btn.dataset.buyTab;
+      document.getElementById('buy-tab-optimizer').classList.toggle('hidden', tab !== 'optimizer');
+      document.getElementById('buy-tab-export').classList.toggle('hidden', tab !== 'export');
+    });
+  });
+
+  // Optimizer button
+  document.getElementById('run-optimizer-btn').addEventListener('click', async () => {
+    const nonOwnedOnly = document.getElementById('copy-non-owned-only')?.checked || false;
+    let cards = currentDeck?.cards || [];
+    if (nonOwnedOnly) cards = cards.filter(c => !c.is_owned);
+    if (!cards.length) { showToast('No cards to optimize', 'warning'); return; }
+
+    const model = document.getElementById('optimizer-strategy').value;
+    const btn = document.getElementById('run-optimizer-btn');
+    const resultsEl = document.getElementById('optimizer-results');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="ph ph-spinner"></i> Optimizing…';
+    resultsEl.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--text-secondary);">Finding best deals across Mana Pool sellers…</div>';
+
+    const items = cards.map(c => ({ name: c.name, quantity: c.quantity ?? 1 }));
+    try {
+      const result = await api.manaPoolOptimize(items, model);
+      renderOptimizerResults(result, resultsEl);
+    } catch (err) {
+      resultsEl.innerHTML = `<div style="color:#f87171;padding:1rem;border-radius:6px;background:rgba(248,113,113,0.1);">
+        <i class="ph ph-warning"></i> ${err.message}
+        ${!err.message.includes('token') ? '' : '<br><small>Set MANAPOOL_API_TOKEN in your server .env file.</small>'}
+      </div>`;
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="ph ph-magic-wand"></i> Optimize Cart';
+    }
+  });
+
+  // Deck Validator modal
+  document.getElementById('deck-validator-close').addEventListener('click', () => {
+    document.getElementById('deck-validator-modal').classList.add('hidden');
+  });
+
+  document.getElementById('run-validator-btn').addEventListener('click', async () => {
+    if (!currentDeck?.cards?.length) { showToast('No cards in deck', 'warning'); return; }
+    const format = document.getElementById('validator-format').value;
+    const resultsEl = document.getElementById('validator-results');
+    const btn = document.getElementById('run-validator-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="ph ph-spinner"></i> Validating…';
+    resultsEl.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--text-secondary);">Checking deck with Mana Pool…</div>';
+
+    const decklist = currentDeck.cards
+      .filter(c => !c.is_sideboard)
+      .map(c => `${c.quantity} ${c.name}`)
+      .join('\n');
+
+    try {
+      const result = await api.manaPoolValidateDeck(decklist, format);
+      renderValidatorResults(result, resultsEl);
+    } catch (err) {
+      resultsEl.innerHTML = `<div style="color:#f87171;padding:1rem;border-radius:6px;background:rgba(248,113,113,0.1);">
+        <i class="ph ph-warning"></i> ${err.message}
+        ${!err.message.includes('token') ? '' : '<br><small>Set MANAPOOL_API_TOKEN in your server .env file.</small>'}
+      </div>`;
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="ph ph-shield-check"></i> Validate';
+    }
+  });
+
+  // TCGPlayer export
   document.querySelector('#buy-tcgplayer .btn').addEventListener('click', () => {
     exportToTCGPlayer();
   });
 
-  // Manapool button in modal
+  // Mana Pool export
   document.querySelector('#buy-manapool .btn').addEventListener('click', () => {
     exportToManapool();
   });
@@ -715,6 +795,10 @@ function renderCardItem(card) {
                 ${card.board_type !== 'maybeboard' ? `<div class="move-submenu-item" data-deck-card-id="${card.deck_card_id}" data-board-type="maybeboard">Maybeboard</div>` : ''}
               </div>
             </div>
+            <a class="card-actions-menu-item" href="https://manapool.com/search?q=${encodeURIComponent(card.name)}" target="_blank" rel="noopener" style="text-decoration:none;color:inherit;">
+              <i class="ph ph-shopping-cart-simple"></i>
+              Buy on Mana Pool
+            </a>
             <div class="card-actions-menu-item remove-card-item danger" data-deck-card-id="${card.deck_card_id}">
               <i class="ph ph-trash"></i>
               Remove
@@ -1304,7 +1388,7 @@ function displayDeckPrice(price) {
   const priceEl = document.getElementById('deck-total-price');
   if (priceEl) {
     priceEl.innerHTML = `
-      <span style="color: var(--text-secondary);">Deck Total (TCGPlayer):</span>
+      <span style="color: var(--text-secondary);">Deck Est. Value:</span>
       <span style="margin-left: 0.5rem;">$${price.total.toFixed(2)}</span>
     `;
   }
@@ -1340,9 +1424,12 @@ function displayDeckPrice(price) {
         <i class="ph ${pricingMode ? 'ph-eye-slash' : 'ph-currency-dollar'}"></i>
         ${pricingMode ? 'Hide Pricing Mode' : 'Show Pricing Mode'}
       </button>
-      <button id="toggle-set-group-btn" class="btn btn-secondary btn-sm ${setGroupMode ? 'active' : ''}" style="width: 100%;">
+      <button id="toggle-set-group-btn" class="btn btn-secondary btn-sm ${setGroupMode ? 'active' : ''}" style="width: 100%; margin-bottom: 0.5rem;">
         <i class="ph ${setGroupMode ? 'ph-grid-four' : 'ph-stack'}"></i>
         ${setGroupMode ? 'Group by Type' : 'Group by Set'}
+      </button>
+      <button id="validate-deck-btn" class="btn btn-secondary btn-sm" style="width: 100%;">
+        <i class="ph ph-shield-check"></i> Validate Deck
       </button>
     </div>
   `;
@@ -1367,18 +1454,42 @@ function displayDeckPrice(price) {
     setGroupMode = !setGroupMode;
     renderDeckCards();
 
-    // Update button text and icon
     toggleSetGroupBtn.classList.toggle('active', setGroupMode);
     toggleSetGroupBtn.innerHTML = `
       <i class="ph ${setGroupMode ? 'ph-grid-four' : 'ph-stack'}"></i>
       ${setGroupMode ? 'Group by Type' : 'Group by Set'}
     `;
   });
+
+  // Open validator modal from sidebar
+  document.getElementById('validate-deck-btn').addEventListener('click', () => {
+    document.getElementById('deck-validator-modal').classList.remove('hidden');
+    document.getElementById('validator-results').innerHTML = `
+      <div style="text-align:center;padding:2rem;color:var(--text-secondary);font-size:0.875rem;">
+        <i class="ph ph-shield" style="font-size:2rem;display:block;margin-bottom:0.5rem;opacity:0.4;"></i>
+        Select a format and click Validate.
+      </div>`;
+  });
 }
 
 function openBuyDeckModal() {
   document.getElementById('buy-deck-modal').classList.remove('hidden');
   document.getElementById('decklist-preview').classList.add('hidden');
+  // Reset to optimizer tab
+  document.getElementById('buy-tab-optimizer').classList.remove('hidden');
+  document.getElementById('buy-tab-export').classList.add('hidden');
+  document.querySelectorAll('.buy-tab-btn').forEach((b, i) => {
+    const active = i === 0;
+    b.classList.toggle('active', active);
+    b.style.borderBottom = active ? '2px solid var(--primary)' : 'none';
+    b.style.color = active ? 'var(--primary)' : 'var(--text-secondary)';
+    b.style.fontWeight = active ? '600' : 'normal';
+  });
+  document.getElementById('optimizer-results').innerHTML = `
+    <div style="text-align:center;padding:2rem;color:var(--text-secondary);font-size:0.875rem;">
+      <i class="ph ph-magic-wand" style="font-size:2rem;display:block;margin-bottom:0.5rem;opacity:0.4;"></i>
+      Click "Optimize Cart" to find the best deal across Mana Pool sellers.
+    </div>`;
 }
 
 function generateDeckList() {
@@ -2659,4 +2770,98 @@ async function applyOptimization() {
     applyBtn.disabled = false;
     applyBtn.innerHTML = '<i class="ph ph-check"></i> Apply Optimization';
   }
+}
+
+function renderOptimizerResults(result, el) {
+  // API response: { cart: [{ inventory_id, quantity_selected }], totals: { subtotal_cents, shipping_cents, buyer_fee_cents, total_cents, seller_count } }
+  const totals = result.totals;
+  const cart = result.cart ?? [];
+
+  if (!totals && !cart.length) {
+    el.innerHTML = `<div style="color:var(--text-secondary);padding:1rem;text-align:center;">
+      No results returned. Check that your MANAPOOL_API_TOKEN is valid and cards are listed on Mana Pool.
+    </div>`;
+    return;
+  }
+
+  const fmt = cents => `$${(cents / 100).toFixed(2)}`;
+  const sellerCount = totals?.seller_count ?? '?';
+  const totalCents = totals?.total_cents ?? 0;
+
+  el.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;flex-wrap:wrap;gap:0.5rem;">
+      <span style="font-size:1.1rem;font-weight:700;color:#16a34a;">
+        <i class="ph ph-check-circle"></i> Optimized — ${fmt(totalCents)} across ${sellerCount} seller${sellerCount !== 1 ? 's' : ''}
+      </span>
+      <a href="https://manapool.com/cart" target="_blank" rel="noopener" class="btn btn-primary btn-sm">
+        Complete on Mana Pool <i class="ph ph-arrow-square-out"></i>
+      </a>
+    </div>
+    ${totals ? `
+      <div style="background:var(--bg-tertiary);border-radius:8px;padding:0.75rem;margin-bottom:0.75rem;">
+        <div style="display:flex;justify-content:space-between;padding:0.2rem 0;font-size:0.9rem;">
+          <span>Subtotal</span><span>${fmt(totals.subtotal_cents ?? 0)}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;padding:0.2rem 0;font-size:0.9rem;">
+          <span>Shipping</span><span>${fmt(totals.shipping_cents ?? 0)}</span>
+        </div>
+        ${totals.buyer_fee_cents ? `
+        <div style="display:flex;justify-content:space-between;padding:0.2rem 0;font-size:0.9rem;">
+          <span>Buyer fee</span><span>${fmt(totals.buyer_fee_cents)}</span>
+        </div>` : ''}
+        <div style="display:flex;justify-content:space-between;padding:0.35rem 0 0;font-size:1rem;font-weight:700;border-top:1px solid var(--border-color);margin-top:0.25rem;">
+          <span>Total</span><span style="color:var(--primary);">${fmt(totalCents)}</span>
+        </div>
+      </div>
+    ` : ''}
+    <div style="font-size:0.8rem;color:var(--text-secondary);text-align:center;">
+      ${cart.length} item${cart.length !== 1 ? 's' : ''} selected — click "Complete on Mana Pool" to review and checkout.
+    </div>
+  `;
+}
+
+function renderValidatorResults(result, el) {
+  const valid = result.valid ?? result.is_valid ?? result.legal;
+  const violations = result.violations ?? result.errors ?? result.issues ?? [];
+  const commander = result.commander ?? result.commanders?.[0] ?? null;
+  const colorIdentity = result.color_identity ?? result.colors ?? [];
+  const cardCount = result.card_count ?? result.deck_size ?? null;
+
+  const colorMap = { W: '☀️', U: '💧', B: '💀', R: '🔥', G: '🌲' };
+
+  el.innerHTML = `
+    <div style="padding:1rem;border-radius:8px;background:${valid ? 'rgba(22,163,74,0.1)' : 'rgba(239,68,68,0.1)'};border:1px solid ${valid ? '#16a34a' : '#ef4444'};margin-bottom:1rem;">
+      <div style="font-size:1.1rem;font-weight:700;color:${valid ? '#16a34a' : '#ef4444'};">
+        <i class="ph ${valid ? 'ph-check-circle' : 'ph-x-circle'}"></i>
+        ${valid ? 'Deck is Legal' : 'Deck has Violations'}
+      </div>
+      ${cardCount != null ? `<div style="font-size:0.85rem;color:var(--text-secondary);margin-top:0.25rem;">${cardCount} cards</div>` : ''}
+    </div>
+    ${commander ? `
+      <div style="margin-bottom:0.75rem;">
+        <span style="font-size:0.75rem;text-transform:uppercase;color:var(--text-secondary);font-weight:600;">Commander</span>
+        <div style="font-weight:600;margin-top:0.2rem;">${Array.isArray(commander) ? commander.join(' // ') : commander}</div>
+      </div>
+    ` : ''}
+    ${colorIdentity.length ? `
+      <div style="margin-bottom:0.75rem;">
+        <span style="font-size:0.75rem;text-transform:uppercase;color:var(--text-secondary);font-weight:600;">Color Identity</span>
+        <div style="font-size:1.2rem;margin-top:0.2rem;">${colorIdentity.map(c => colorMap[c] || c).join(' ')}</div>
+      </div>
+    ` : ''}
+    ${violations.length ? `
+      <div>
+        <span style="font-size:0.75rem;text-transform:uppercase;color:#ef4444;font-weight:600;">Violations (${violations.length})</span>
+        <div style="margin-top:0.5rem;display:flex;flex-direction:column;gap:0.4rem;">
+          ${violations.map(v => {
+            const card = v.card ?? v.name ?? '';
+            const reason = v.reason ?? v.message ?? v.error ?? String(v);
+            return `<div style="font-size:0.85rem;padding:0.4rem 0.6rem;background:rgba(239,68,68,0.08);border-radius:4px;">
+              ${card ? `<strong>${card}</strong> — ` : ''}${reason}
+            </div>`;
+          }).join('')}
+        </div>
+      </div>
+    ` : (valid ? `<div style="font-size:0.875rem;color:var(--text-secondary);">No issues found.</div>` : '')}
+  `;
 }

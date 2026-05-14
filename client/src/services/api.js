@@ -81,8 +81,10 @@ class ApiClient {
   }
 
   // Card methods
-  async searchCards(query, limit = 20) {
-    return this.request(`/cards/search?q=${encodeURIComponent(query)}&limit=${limit}`);
+  async searchCards(query, limit = 20, type = null) {
+    const params = new URLSearchParams({ q: query, limit });
+    if (type) params.append('type', type);
+    return this.request(`/cards/search?${params}`);
   }
 
   async browseCards(filters = {}) {

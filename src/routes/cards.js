@@ -57,13 +57,13 @@ router.get('/browse', authenticate, (req, res, next) => {
  */
 router.get('/search', authenticate, (req, res, next) => {
   try {
-    const { q, limit } = req.query;
+    const { q, limit, type } = req.query;
 
     if (!q || q.length < 2) {
       return res.json({ cards: [] });
     }
 
-    const cards = searchCards(q, limit ? parseInt(limit) : 20);
+    const cards = searchCards(q, limit ? parseInt(limit) : 20, type || null);
     res.json({ cards });
   } catch (error) {
     next(error);

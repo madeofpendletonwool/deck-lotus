@@ -1101,9 +1101,23 @@
                     <form id="pm-watch-form">
                         <div class="form-group">
                             <label for="pm-card-name">Card Name</label>
-                            <div style="position: relative;">
-                                <input type="text" id="pm-card-name" placeholder="e.g. Meekstone" required autocomplete="off" style="width: 100%;" />
-                                <div id="pm-card-search-results" class="hidden" style="position: absolute; top: 100%; left: 0; right: 0; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 4px; max-height: 250px; overflow-y: auto; z-index: 1000; box-shadow: 0 4px 12px rgba(0,0,0,0.3);"></div>
+                            <div style="display:flex;gap:0.5rem;align-items:flex-start;">
+                                <div style="position: relative; flex: 1;">
+                                    <input type="text" id="pm-card-name" placeholder="e.g. Meekstone" required autocomplete="off" style="width: 100%;" />
+                                    <div id="pm-card-search-results" class="hidden" style="position: absolute; top: 100%; left: 0; right: 0; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 4px; max-height: 250px; overflow-y: auto; z-index: 1000; box-shadow: 0 4px 12px rgba(0,0,0,0.3);"></div>
+                                </div>
+                                <select id="pm-card-type-filter" title="Filter by card type" style="flex-shrink:0;width:140px;">
+                                    <option value="">All types</option>
+                                    <option value="Artifact">Artifact</option>
+                                    <option value="Creature">Creature</option>
+                                    <option value="Enchantment">Enchantment</option>
+                                    <option value="Instant">Instant</option>
+                                    <option value="Land">Land</option>
+                                    <option value="Planeswalker">Planeswalker</option>
+                                    <option value="Sorcery">Sorcery</option>
+                                    <option value="Battle">Battle</option>
+                                    <option value="Token">Token</option>
+                                </select>
                             </div>
                         </div>
                         <div class="form-group">

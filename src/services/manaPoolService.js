@@ -61,7 +61,7 @@ async function getAllSinglePrices() {
 // condition: 'nm' | 'lp' | 'mp' | 'hp' | 'dm' | 'any' | null
 // Uses /prices/singles which has per-printing prices for all in-stock items.
 // All prices from the API are in cents — divided by 100 here.
-export async function getLowestPrice(cardName, condition = 'nm') {
+export async function getLowestPrice(cardName, condition = 'nm', scryfallId = null) {
   if (!isConfigured()) {
     throw new Error('Mana Pool API token not configured (MANAPOOL_API_TOKEN missing)');
   }
@@ -71,10 +71,14 @@ export async function getLowestPrice(cardName, condition = 'nm') {
   const useLp = normalised === 'lp' || normalised === 'mp' || normalised === 'hp' || normalised === 'dm';
   // 'any' / null → use price_cents (cheapest available across all conditions)
 
-  // GET /prices/singles returns ALL in-stock singles with per-condition prices.
-  // Filter to all printings of this card, then take the minimum.
   const singles = await getAllSinglePrices();
-  const matches = singles.filter(s => s.name?.toLowerCase() === cardName.toLowerCase());
+  // When a specific printing is selected, only check that exact printing by scryfall_id
+  // to avoid picking up cheaper art cards or tokens with the same name.
+  const matches = singles.filter(s => {
+    if (!s.name || s.name.toLowerCase() !== cardName.toLowerCase()) return false;
+    if (scryfallId) return s.scryfall_id === scryfallId;
+    return true;
+  });
 
   if (!matches.length) {
     // Fallback: POST /card_info gives from_price_cents (cheapest overall, any condition)

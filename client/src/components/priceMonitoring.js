@@ -53,7 +53,7 @@ function renderWatches(watches) {
           <div style="flex:1;">
             <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem; flex-wrap:wrap;">
               <strong style="font-size: 1rem;">${w.card_name}</strong>
-              <a href="https://manapool.com/search?q=${encodeURIComponent(w.card_name)}" target="_blank" rel="noopener" class="btn btn-secondary btn-sm" title="View on Mana Pool" style="padding:0.15rem 0.4rem;"><i class="ph ph-arrow-square-out"></i></a>
+              <a href="https://manapool.com/card/${w.card_name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}" target="_blank" rel="noopener" class="btn btn-secondary btn-sm" title="View on Mana Pool" style="padding:0.15rem 0.4rem;"><i class="ph ph-arrow-square-out"></i></a>
               ${statusBadge(w)}
             </div>
             <div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.2rem;">
@@ -139,6 +139,7 @@ function closeWatchModal() {
   document.getElementById('pm-watch-modal').classList.add('hidden');
   document.getElementById('pm-watch-form').reset();
   document.getElementById('pm-card-name').disabled = false;
+  document.getElementById('pm-card-type-filter').value = '';
   const r = document.getElementById('pm-card-search-results');
   if (r) { r.classList.add('hidden'); r.innerHTML = ''; }
   document.getElementById('pm-printing-section').style.display = 'none';
@@ -307,7 +308,8 @@ export function setupPriceMonitoring() {
   const debouncedCardSearch = debounce(async (query) => {
     if (query.length < 2) { hidePmCardResults(); return; }
     try {
-      const result = await api.searchCards(query, 10);
+      const typeFilter = document.getElementById('pm-card-type-filter').value || null;
+      const result = await api.searchCards(query, 10, typeFilter);
       if (!result.cards.length) { hidePmCardResults(); return; }
       cardSearchResults.innerHTML = result.cards.map(card => `
         <div class="pm-card-result" data-name="${card.name}" data-card-id="${card.id ?? ''}" data-image-url="${card.image_url ?? ''}" style="padding: 0.5rem 0.75rem; cursor: pointer; display: flex; align-items: center; gap: 0.75rem; border-bottom: 1px solid var(--border-color);">
@@ -350,6 +352,11 @@ export function setupPriceMonitoring() {
 
   cardNameInput.addEventListener('input', (e) => {
     if (!cardNameInput.disabled) debouncedCardSearch(e.target.value.trim());
+  });
+
+  document.getElementById('pm-card-type-filter').addEventListener('change', () => {
+    const q = cardNameInput.value.trim();
+    if (!cardNameInput.disabled && q.length >= 2) debouncedCardSearch(q);
   });
 
   cardNameInput.addEventListener('blur', () => {

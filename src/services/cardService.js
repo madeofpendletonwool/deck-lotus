@@ -20,17 +20,22 @@ function generateImageUrls(uuid) {
 /**
  * Search cards by name (for autocomplete)
  */
-export function searchCards(query, limit = 20) {
+export function searchCards(query, limit = 20, typeFilter = null) {
   const searchTerm = `%${query}%`;
+  const typeClause = typeFilter ? 'AND c.type_line LIKE ?' : '';
+  // Param order must match SQL placeholder order:
+  // 1. WHERE c.name LIKE ?  2. [AND type_line LIKE ?]  3. WHEN c.name LIKE ?  4. LIMIT ?
+  const params = typeFilter
+    ? [searchTerm, `%${typeFilter}%`, `${query}%`, limit]
+    : [searchTerm, `${query}%`, limit];
 
-  // Update the query to include image_url
   const cards = db.all(
     `SELECT c.id, c.name, c.mana_cost, c.cmc, c.colors, c.type_line, c.oracle_text,
             p.image_url,
             (SELECT p.uuid FROM printings p WHERE p.card_id = c.id LIMIT 1) as sample_uuid
      FROM cards c
      LEFT JOIN printings p ON p.card_id = c.id
-     WHERE c.name LIKE ?
+     WHERE c.name LIKE ? ${typeClause}
      ORDER BY
        CASE
          WHEN c.name LIKE ? THEN 0
@@ -38,7 +43,7 @@ export function searchCards(query, limit = 20) {
        END,
        c.name
      LIMIT ?`,
-    [searchTerm, `${query}%`, limit]
+    params
   );
 
   // Add image URLs from database

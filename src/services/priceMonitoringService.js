@@ -4,8 +4,8 @@ import { getLowestPrice as manaPoolPrice, isConfigured as manaPoolConfigured } f
 import { getLowestPrice as tcgPlayerPrice, isConfigured as tcgConfigured } from './tcgplayerService.js';
 import { sendPriceAlert, isConfigured as ntfyConfigured } from './notificationService.js';
 
-async function getLowestPrice(cardName, condition) {
-  if (manaPoolConfigured()) return manaPoolPrice(cardName, condition);
+async function getLowestPrice(cardName, condition, scryfallId = null) {
+  if (manaPoolConfigured()) return manaPoolPrice(cardName, condition, scryfallId);
   if (tcgConfigured()) return tcgPlayerPrice(cardName, condition);
   throw new Error('No price source configured — set MANAPOOL_API_TOKEN or TCGPlayer credentials');
 }
@@ -100,9 +100,8 @@ async function checkWatch(watch) {
   const db = getDb();
 
   try {
-    // 'any' condition → fetch the cheapest price regardless of condition
     const conditionArg = watch.condition === 'any' ? null : watch.condition;
-    const result = await getLowestPrice(watch.card_name, conditionArg ?? 'nm');
+    const result = await getLowestPrice(watch.card_name, conditionArg ?? 'nm', watch.scryfall_id || null);
     const foundPrice = result?.lowPrice ?? null;
 
     let notified = 0;

@@ -1,5 +1,5 @@
 import api from '../services/api.js';
-import { showLoading, hideLoading, formatMana, showToast, showError } from '../utils/ui.js';
+import { showLoading, hideLoading, formatMana, showToast, showError, confirmDialog } from '../utils/ui.js';
 import { showCardDetail } from './cards.js';
 
 let inventoryData = null;
@@ -419,7 +419,13 @@ function setupBulkActions() {
     removeSelectedBtn.addEventListener('click', async () => {
       if (selectedCards.size === 0) return;
 
-      if (!confirm(`Remove ${selectedCards.size} card(s) from inventory?`)) return;
+      const ok = await confirmDialog({
+        title: 'Remove cards?',
+        message: `Remove ${selectedCards.size} card(s) from your inventory?`,
+        confirmText: 'Remove',
+        danger: true,
+      });
+      if (!ok) return;
 
       try {
         showLoading();

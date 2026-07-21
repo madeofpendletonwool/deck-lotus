@@ -11,10 +11,35 @@ import {
   getBackupConfig
 } from '../services/backupService.js';
 import { getAllUsers, updateUser, deleteUser, resetUserPassword } from '../services/authService.js';
+import { getSettings, updateSettings } from '../services/settingsService.js';
 import { authenticate } from '../middleware/auth.js';
 import { requireAdmin } from '../middleware/adminAuth.js';
 
 const router = express.Router();
+
+/**
+ * GET /api/admin/settings
+ * Read app settings (admin only)
+ */
+router.get('/settings', authenticate, requireAdmin, (req, res, next) => {
+  try {
+    res.json(getSettings());
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * PUT /api/admin/settings
+ * Update app settings (admin only)
+ */
+router.put('/settings', authenticate, requireAdmin, (req, res, next) => {
+  try {
+    res.json(updateSettings(req.body || {}));
+  } catch (error) {
+    next(error);
+  }
+});
 
 /**
  * POST /api/admin/sync

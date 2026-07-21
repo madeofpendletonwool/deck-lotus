@@ -1,5 +1,5 @@
 import api from '../services/api.js';
-import { showLoading, hideLoading, showModal, showToast } from '../utils/ui.js';
+import { showLoading, hideLoading, showModal, showToast, confirmDialog } from '../utils/ui.js';
 
 export function setupSettings() {
   const generateApiKeyBtn = document.getElementById('generate-api-key-btn');
@@ -51,11 +51,13 @@ export function setupSettings() {
       return;
     }
 
-    const overwrite = confirm(
-      'Do you want to overwrite existing data?\n\n' +
-      'YES: Replace all your current data with the backup\n' +
-      'NO: Merge the backup with your existing data (may create duplicates)'
-    );
+    const overwrite = await confirmDialog({
+      title: 'Restore backup',
+      message: 'Overwrite replaces all current data with the backup. Merge keeps your existing data and adds the backup (may create duplicates).',
+      confirmText: 'Overwrite',
+      cancelText: 'Merge',
+      danger: true,
+    });
 
     try {
       showLoading();
@@ -132,9 +134,12 @@ export function setupSettings() {
 
   // Refresh database
   refreshDbBtn.addEventListener('click', async () => {
-    if (!confirm('This will update all card data, prices, and sets. It may take several minutes. Continue?')) {
-      return;
-    }
+    const ok = await confirmDialog({
+      title: 'Refresh database?',
+      message: 'This updates all card data, prices, and sets. It may take several minutes.',
+      confirmText: 'Refresh',
+    });
+    if (!ok) return;
 
     try {
       refreshDbBtn.disabled = true;
@@ -252,6 +257,7 @@ async function checkAdminAndLoadUsers() {
   try {
     const profile = await api.getProfile();
     const userManagementSection = document.getElementById('user-management-section');
+    const accessControlSection = document.getElementById('access-control-section');
     const backupSection = document.getElementById('backup-section');
     const databaseSection = document.getElementById('database-section');
 
@@ -261,15 +267,49 @@ async function checkAdminAndLoadUsers() {
     if (profile.user.is_admin) {
       // User is an admin, show admin-only sections
       if (userManagementSection) userManagementSection.style.display = 'block';
+      if (accessControlSection) accessControlSection.style.display = 'block';
       if (databaseSection) databaseSection.style.display = 'block';
       await loadUsers();
+      await loadAccessControl();
     } else {
       // Hide admin-only sections for non-admins
       if (userManagementSection) userManagementSection.style.display = 'none';
+      if (accessControlSection) accessControlSection.style.display = 'none';
       if (databaseSection) databaseSection.style.display = 'none';
     }
   } catch (error) {
     console.error('Failed to check admin status:', error);
+  }
+}
+
+let accessControlWired = false;
+async function loadAccessControl() {
+  const toggle = document.getElementById('toggle-registration');
+  const lockedNote = document.getElementById('registration-locked-note');
+  if (!toggle) return;
+  try {
+    const settings = await api.getAdminSettings();
+    toggle.checked = settings.registrationEnabled !== false;
+    const locked = !!settings.registrationLockedByEnv;
+    toggle.disabled = locked;
+    if (lockedNote) lockedNote.classList.toggle('hidden', !locked);
+  } catch (error) {
+    console.error('Failed to load access settings:', error);
+  }
+
+  if (!accessControlWired) {
+    accessControlWired = true;
+    toggle.addEventListener('change', async () => {
+      const enabled = toggle.checked;
+      try {
+        const updated = await api.updateAdminSettings({ registrationEnabled: enabled });
+        toggle.checked = updated.registrationEnabled !== false;
+        showToast(enabled ? 'Public registration enabled' : 'Public registration disabled', 'success');
+      } catch (error) {
+        toggle.checked = !enabled; // revert on failure
+        showToast('Failed to update setting: ' + error.message, 'error');
+      }
+    });
   }
 }
 
@@ -320,9 +360,13 @@ function renderUsers(users) {
 
 window.toggleAdminStatus = async function(userId, makeAdmin) {
   const action = makeAdmin ? 'promote to admin' : 'remove admin status from';
-  if (!confirm(`Are you sure you want to ${action} this user?`)) {
-    return;
-  }
+  const ok = await confirmDialog({
+    title: makeAdmin ? 'Promote to admin?' : 'Remove admin status?',
+    message: `Are you sure you want to ${action} this user?`,
+    confirmText: makeAdmin ? 'Promote' : 'Remove',
+    danger: !makeAdmin,
+  });
+  if (!ok) return;
 
   try {
     showLoading();
@@ -337,9 +381,13 @@ window.toggleAdminStatus = async function(userId, makeAdmin) {
 };
 
 window.deleteUserConfirm = async function(userId, username) {
-  if (!confirm(`Are you sure you want to delete user "${username}"? This action cannot be undone and will delete all their decks and data.`)) {
-    return;
-  }
+  const ok = await confirmDialog({
+    title: 'Delete user?',
+    message: `Delete user "${username}"? This cannot be undone and removes all their decks and data.`,
+    confirmText: 'Delete user',
+    danger: true,
+  });
+  if (!ok) return;
 
   try {
     showLoading();
@@ -429,9 +477,13 @@ function renderApiKeys(apiKeys) {
 
 // Make this global so the onclick handler can access it
 window.revokeApiKey = async function(keyId) {
-  if (!confirm('Are you sure you want to revoke this API key? This action cannot be undone.')) {
-    return;
-  }
+  const ok = await confirmDialog({
+    title: 'Revoke API key?',
+    message: 'This cannot be undone. Any integration using this key will stop working.',
+    confirmText: 'Revoke',
+    danger: true,
+  });
+  if (!ok) return;
 
   try {
     showLoading();
@@ -547,12 +599,13 @@ window.downloadBackup = async function(filename) {
 };
 
 window.restoreFromBackup = async function(filename) {
-  const overwrite = confirm(
-    `Restore from "${filename}"?\n\n` +
-    'Do you want to overwrite existing data?\n\n' +
-    'YES: Replace all your current data with the backup\n' +
-    'NO: Merge the backup with your existing data (may create duplicates)'
-  );
+  const overwrite = await confirmDialog({
+    title: `Restore from "${filename}"?`,
+    message: 'Overwrite replaces all current data with the backup. Merge keeps your existing data and adds the backup (may create duplicates).',
+    confirmText: 'Overwrite',
+    cancelText: 'Merge',
+    danger: true,
+  });
 
   try {
     showLoading();
@@ -590,9 +643,13 @@ window.restoreFromBackup = async function(filename) {
 };
 
 window.deleteBackup = async function(filename) {
-  if (!confirm(`Are you sure you want to delete "${filename}"? This action cannot be undone.`)) {
-    return;
-  }
+  const ok = await confirmDialog({
+    title: 'Delete backup?',
+    message: `Delete "${filename}"? This cannot be undone.`,
+    confirmText: 'Delete',
+    danger: true,
+  });
+  if (!ok) return;
 
   try {
     showLoading();

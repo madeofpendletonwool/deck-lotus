@@ -34,11 +34,58 @@ export function hideModal() {
   document.getElementById('modal').classList.add('hidden');
 }
 
-// Setup modal close handlers
-document.querySelector('#modal .modal-close')?.addEventListener('click', hideModal);
-document.getElementById('modal')?.addEventListener('click', (e) => {
-  if (e.target.id === 'modal') {
-    hideModal();
+/**
+ * Generic show/hide for any modal or drawer element by id.
+ * Centralizes what components used to do ad-hoc with classList.
+ */
+export function openModal(id) {
+  const el = document.getElementById(id);
+  if (el) el.classList.remove('hidden');
+  return el;
+}
+
+export function closeModal(id) {
+  const el = document.getElementById(id);
+  if (el) el.classList.add('hidden');
+  return el;
+}
+
+export const openDrawer = openModal;
+export const closeDrawer = closeModal;
+
+/* ------------------------------------------------------------------
+   Global overlay behavior: Esc + backdrop click + close buttons.
+   Applies to every .modal and .drawer without per-component wiring.
+------------------------------------------------------------------ */
+function closeTopLayer() {
+  // Overlays without data-persist can be dismissed with Esc/backdrop.
+  const layers = document.querySelectorAll(
+    '.modal:not(.hidden):not([data-persist]), .drawer:not(.hidden):not([data-persist])'
+  );
+  const top = layers[layers.length - 1];
+  if (top) top.classList.add('hidden');
+}
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeTopLayer();
+});
+
+document.addEventListener('click', (e) => {
+  // Any close button inside an overlay closes its overlay (always allowed)
+  const closer = e.target.closest('.modal-close, .drawer-close, [data-close]');
+  if (closer) {
+    const layer = closer.closest('.modal, .drawer');
+    if (layer) {
+      layer.classList.add('hidden');
+      return;
+    }
+  }
+  // Backdrop click (the overlay element itself, not its content)
+  if (
+    (e.target.classList.contains('modal') || e.target.classList.contains('drawer')) &&
+    !e.target.hasAttribute('data-persist')
+  ) {
+    e.target.classList.add('hidden');
   }
 });
 
@@ -87,84 +134,123 @@ export function formatOracleText(text) {
 }
 
 /**
- * Show toast notification
+ * Show toast notification (styled via .toast CSS classes + Phosphor icon).
+ * Signature is unchanged so existing call sites keep working.
  */
 export function showToast(message, type = 'success', duration = 3000) {
-  // Create toast container if it doesn't exist
   let container = document.getElementById('toast-container');
   if (!container) {
     container = document.createElement('div');
     container.id = 'toast-container';
-    container.style.cssText = `
-      position: fixed;
-      top: 20px;
-      right: 20px;
-      z-index: 10000;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    `;
     document.body.appendChild(container);
   }
 
-  // Create toast
+  const icons = {
+    success: 'ph-check-circle',
+    error: 'ph-x-circle',
+    warning: 'ph-warning',
+    info: 'ph-info',
+  };
+
   const toast = document.createElement('div');
   toast.className = `toast toast-${type}`;
-  toast.style.cssText = `
-    padding: 12px 20px;
-    border-radius: 8px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-    color: white;
-    font-size: 14px;
-    font-weight: 500;
-    min-width: 200px;
-    max-width: 400px;
-    animation: slideIn 0.3s ease-out;
-    cursor: pointer;
-    transition: opacity 0.3s;
-  `;
 
-  // Set background color based on type
-  const colors = {
-    success: '#10b981',
-    error: '#ef4444',
-    warning: '#f59e0b',
-    info: '#3b82f6'
+  const icon = document.createElement('i');
+  icon.className = `ph-fill ${icons[type] || icons.info}`;
+  const text = document.createElement('span');
+  text.textContent = message;
+  toast.append(icon, text);
+
+  const dismiss = () => {
+    toast.classList.add('toast-out');
+    setTimeout(() => toast.remove(), 250);
   };
-  toast.style.backgroundColor = colors[type] || colors.info;
-
-  toast.textContent = message;
-
-  // Add click to dismiss
-  toast.addEventListener('click', () => {
-    toast.style.opacity = '0';
-    setTimeout(() => toast.remove(), 300);
-  });
-
-  // Add toast to container
+  toast.addEventListener('click', dismiss);
   container.appendChild(toast);
 
-  // Auto remove after duration
-  if (duration) {
-    setTimeout(() => {
-      toast.style.opacity = '0';
-      setTimeout(() => toast.remove(), 300);
-    }, duration);
-  }
+  if (duration) setTimeout(dismiss, duration);
 }
 
-// Add CSS animation
-const style = document.createElement('style');
-style.textContent = `
-  @keyframes slideIn {
-    from {
-      transform: translateX(400px);
-      opacity: 0;
-    }
-    to {
-      transform: translateX(0);
-      opacity: 1;
-    }
-  }
-`;
-document.head.appendChild(style);
+/**
+ * Styled confirmation dialog — a drop-in replacement for native confirm().
+ * Returns a Promise<boolean>.
+ */
+export function confirmDialog({
+  title = 'Are you sure?',
+  message = '',
+  confirmText = 'Confirm',
+  cancelText = 'Cancel',
+  danger = false,
+  icon,
+} = {}) {
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal';
+    const iconName = icon || (danger ? 'ph-warning' : 'ph-question');
+    overlay.innerHTML = `
+      <div class="modal-content modal-sm confirm-dialog ${danger ? 'confirm-danger' : ''}">
+        <div class="confirm-icon"><i class="ph-fill ${iconName}"></i></div>
+        <h2>${title}</h2>
+        ${message ? `<p>${message}</p>` : ''}
+        <div class="modal-footer">
+          <button class="btn btn-ghost" data-act="cancel">${cancelText}</button>
+          <button class="btn ${danger ? 'btn-danger' : 'btn-primary'}" data-act="ok">${confirmText}</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+
+    const done = (val) => {
+      overlay.remove();
+      document.removeEventListener('keydown', onKey);
+      resolve(val);
+    };
+    overlay.querySelector('[data-act="ok"]').addEventListener('click', () => done(true));
+    overlay.querySelector('[data-act="cancel"]').addEventListener('click', () => done(false));
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) done(false);
+    });
+    const onKey = (e) => {
+      if (e.key === 'Escape') done(false);
+      else if (e.key === 'Enter') done(true);
+    };
+    document.addEventListener('keydown', onKey);
+    overlay.querySelector('[data-act="ok"]').focus();
+  });
+}
+
+/**
+ * Anchored popover. Pass an anchor element and a content element; returns
+ * { el, close }. Closes on outside-click or Esc. Reuses .popover styling.
+ */
+export function popover(anchorEl, contentEl, { align = 'left', gap = 6 } = {}) {
+  const pop = document.createElement('div');
+  pop.className = 'popover';
+  pop.appendChild(contentEl);
+  document.body.appendChild(pop);
+
+  const r = anchorEl.getBoundingClientRect();
+  pop.style.top = `${r.bottom + window.scrollY + gap}px`;
+  const rawLeft = align === 'right'
+    ? r.right + window.scrollX - pop.offsetWidth
+    : r.left + window.scrollX;
+  const maxLeft = window.scrollX + document.documentElement.clientWidth - pop.offsetWidth - 8;
+  pop.style.left = `${Math.max(8, Math.min(rawLeft, maxLeft))}px`;
+
+  const close = () => {
+    pop.remove();
+    document.removeEventListener('mousedown', onDoc, true);
+    document.removeEventListener('keydown', onKey);
+  };
+  const onDoc = (e) => {
+    if (!pop.contains(e.target) && !anchorEl.contains(e.target)) close();
+  };
+  const onKey = (e) => {
+    if (e.key === 'Escape') close();
+  };
+  setTimeout(() => {
+    document.addEventListener('mousedown', onDoc, true);
+    document.addEventListener('keydown', onKey);
+  }, 0);
+
+  return { el: pop, close };
+}

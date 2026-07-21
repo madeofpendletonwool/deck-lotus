@@ -19,6 +19,16 @@ let optimizerState = {
   availableSets: []
 }; // Store printing optimizer state
 
+// Which board a deck card belongs to. board_type is authoritative; is_sideboard is
+// the legacy fallback for rows written before maybeboard existed. Note maybeboard rows
+// carry is_sideboard = 0, so `!is_sideboard` must never be used to mean "mainboard".
+function boardOf(card) {
+  return card.board_type || (card.is_sideboard ? 'sideboard' : 'mainboard');
+}
+const isMainboardCard = (c) => boardOf(c) === 'mainboard';
+const isSideboardCard = (c) => boardOf(c) === 'sideboard';
+const isMaybeboardCard = (c) => boardOf(c) === 'maybeboard';
+
 // Detect if device is touch-enabled (mobile/tablet)
 function isTouchDevice() {
   return ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || (navigator.msMaxTouchPoints > 0);
@@ -188,7 +198,7 @@ export function setupDeckBuilder() {
     resultsEl.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--text-secondary);">Checking deck with Mana Pool…</div>';
 
     const decklist = currentDeck.cards
-      .filter(c => !c.is_sideboard)
+      .filter(isMainboardCard)
       .map(c => `${c.quantity} ${c.name}`)
       .join('\n');
 
@@ -570,16 +580,10 @@ function renderDeckCards() {
   const sideboard = document.getElementById('sideboard');
   const maybeboard = document.getElementById('maybeboard');
 
-  // Filter cards by board type, using board_type if available, falling back to is_sideboard
-  let mainboardCards = currentDeck.cards.filter(c => {
-    if (c.board_type) return c.board_type === 'mainboard';
-    return !c.is_sideboard;
-  });
-  let sideboardCards = currentDeck.cards.filter(c => {
-    if (c.board_type) return c.board_type === 'sideboard';
-    return c.is_sideboard;
-  });
-  let maybeboardCards = currentDeck.cards.filter(c => c.board_type === 'maybeboard');
+  // Filter cards by board type (board_type authoritative, is_sideboard legacy fallback)
+  let mainboardCards = currentDeck.cards.filter(isMainboardCard);
+  let sideboardCards = currentDeck.cards.filter(isSideboardCard);
+  let maybeboardCards = currentDeck.cards.filter(isMaybeboardCard);
 
   // Apply filters
   const hasFilter = currentFilter.cmc !== null || currentFilter.color !== null || currentFilter.ownership !== null || deckFilterQuery;
@@ -757,12 +761,62 @@ function renderCardsList(cards) {
   return html;
 }
 
+// Commander eligibility. A legendary creature qualifies; so does any card whose rules
+// text says "... can be your commander" — which is how planeswalker commanders (Daretti,
+// Teferi, Freyalise, etc.) are printed, so those now get the "Set as Commander" toggle.
+// If MTGJSON leadership-skills data is present on the card it wins (also covers edge cases
+// like Grist that lack the printed text), but the oracle-text check is the reliable signal.
+function canBeCommander(card) {
+  if (card.leadership_skills) {
+    try {
+      const skills = typeof card.leadership_skills === 'string'
+        ? JSON.parse(card.leadership_skills)
+        : card.leadership_skills;
+      if (skills && skills.commander) return true;
+    } catch { /* fall through to heuristic */ }
+  }
+  const type = card.type_line || '';
+  const isLegendaryCreature = /legendary/i.test(type) && /creature/i.test(type);
+  if (isLegendaryCreature) return true;
+  // Backgrounds are commanders (paired with a "Choose a Background" legend).
+  if (/\bBackground\b/i.test(type)) return true;
+  if (card.oracle_text && /can be your commander/i.test(card.oracle_text)) return true;
+  return false;
+}
+
+// ---- Two-commander pairings (Partner / Backgrounds / Doctor's companion) ----
+const cmdrText = (c) => (c.oracle_text || '').replace(/\r/g, '');
+const hasPartner = (c) =>
+  /(^|\n)Partner\b(?!\s+with)/i.test(cmdrText(c)) ||
+  /have two commanders if both have partner/i.test(cmdrText(c).replace(/\n/g, ' '));
+const partnerWithName = (c) => {
+  const m = cmdrText(c).match(/Partner with ([^\n(.]+)/i);
+  return m ? m[1].trim().replace(/[.,]+$/, '') : null;
+};
+const hasFriendsForever = (c) => /friends forever/i.test(cmdrText(c));
+const hasChooseABackground = (c) => /choose a background/i.test(cmdrText(c));
+const isBackground = (c) => /\bBackground\b/i.test(c.type_line || '');
+const hasDoctorsCompanion = (c) => /doctor.?s companion/i.test(cmdrText(c));
+const isTimeLordDoctor = (c) => /Time Lord/i.test(c.type_line || '') && /Doctor/i.test(c.type_line || '');
+
+// May cards `a` and `b` legally be commanders together?
+function canPairCommanders(a, b) {
+  if (!a || !b || a.deck_card_id === b.deck_card_id) return false;
+  if (hasPartner(a) && hasPartner(b)) return true;
+  const aw = partnerWithName(a), bw = partnerWithName(b);
+  if (aw && (b.name || '').toLowerCase().includes(aw.toLowerCase())) return true;
+  if (bw && (a.name || '').toLowerCase().includes(bw.toLowerCase())) return true;
+  if (hasFriendsForever(a) && hasFriendsForever(b)) return true;
+  if (hasChooseABackground(a) && isBackground(b)) return true;
+  if (hasChooseABackground(b) && isBackground(a)) return true;
+  if (hasDoctorsCompanion(a) && isTimeLordDoctor(b)) return true;
+  if (hasDoctorsCompanion(b) && isTimeLordDoctor(a)) return true;
+  return false;
+}
+
 function renderCardItem(card) {
   const isCommanderDeck = currentDeck.format === 'commander';
-  const isLegendaryCreature = card.type_line &&
-    (card.type_line.includes('Legendary') || card.type_line.includes('legendary')) &&
-    (card.type_line.includes('Creature') || card.type_line.includes('creature'));
-  const showCommanderIcon = isCommanderDeck && isLegendaryCreature && !card.is_sideboard;
+  const showCommanderIcon = isCommanderDeck && canBeCommander(card) && isMainboardCard(card);
 
   // Ultra-compact view - minimal text-only with dropdown
   if (layoutView === 'ultra-compact') {
@@ -1297,12 +1351,21 @@ async function toggleCommander(deckCardId) {
     const card = currentDeck.cards.find(c => c.deck_card_id == deckCardId);
     const newCommanderStatus = !card.is_commander;
 
-    // If setting as commander, first unmark any existing commander
+    // When setting a commander, keep an existing commander only if the two form a
+    // valid pair (Partner / Partner with / Friends forever / Background / Doctor's
+    // companion). Otherwise the new pick replaces whatever was there.
+    let pairedWithPartner = false;
     if (newCommanderStatus) {
-      const currentCommander = currentDeck.cards.find(c => c.is_commander);
-      if (currentCommander && currentCommander.deck_card_id != deckCardId) {
-        // Unmark the current commander
-        await api.updateDeckCard(currentDeckId, currentCommander.deck_card_id, { isCommander: false });
+      const existing = currentDeck.cards.filter(
+        c => c.is_commander && c.deck_card_id != deckCardId
+      );
+      const partner = existing.find(c => canPairCommanders(c, card));
+      pairedWithPartner = !!partner;
+      const toUnmark = partner
+        ? existing.filter(c => c.deck_card_id != partner.deck_card_id)
+        : existing;
+      for (const c of toUnmark) {
+        await api.updateDeckCard(currentDeckId, c.deck_card_id, { isCommander: false });
       }
     }
 
@@ -1314,7 +1377,9 @@ async function toggleCommander(deckCardId) {
     hideLoading();
 
     showToast(
-      newCommanderStatus ? '⚔️ Commander set!' : 'Commander removed',
+      newCommanderStatus
+        ? (pairedWithPartner ? '⚔️ Partner commander set!' : '⚔️ Commander set!')
+        : 'Commander removed',
       'success',
       2000
     );
@@ -1497,8 +1562,8 @@ function generateDeckList() {
   const nonOwnedOnly = document.getElementById('copy-non-owned-only')?.checked || false;
 
   // Build deck list in TCGPlayer format with set codes
-  let mainboardCards = currentDeck.cards.filter(c => !c.is_sideboard);
-  let sideboardCards = currentDeck.cards.filter(c => c.is_sideboard);
+  let mainboardCards = currentDeck.cards.filter(isMainboardCard);
+  let sideboardCards = currentDeck.cards.filter(isSideboardCard);
 
   // Filter for non-owned cards if checkbox is checked
   if (nonOwnedOnly) {
@@ -1588,8 +1653,8 @@ function exportToManapool() {
 }
 
 function generateExport(format) {
-  const mainboard = currentDeck.cards.filter(c => !c.is_sideboard);
-  const sideboard = currentDeck.cards.filter(c => c.is_sideboard);
+  const mainboard = currentDeck.cards.filter(isMainboardCard);
+  const sideboard = currentDeck.cards.filter(isSideboardCard);
 
   let text = '';
 
@@ -1855,7 +1920,7 @@ function calculateActualCMC(card) {
 
 function renderStats(stats) {
   // Calculate statistics for mana values
-  const mainboardCards = currentDeck.cards.filter(c => !c.is_sideboard);
+  const mainboardCards = currentDeck.cards.filter(isMainboardCard);
   const totalCards = mainboardCards.reduce((sum, c) => sum + c.quantity, 0);
 
   // Calculate owned percentage
@@ -2334,7 +2399,7 @@ function dealExampleHand() {
   }
 
   // Get mainboard cards only
-  const mainboardCards = currentDeck.cards.filter(c => !c.is_sideboard);
+  const mainboardCards = currentDeck.cards.filter(isMainboardCard);
   if (mainboardCards.length === 0) {
     showToast('Add cards to your mainboard first', 'warning');
     return;
@@ -2363,7 +2428,7 @@ function drawCard() {
   }
 
   // Get mainboard cards only
-  const mainboardCards = currentDeck.cards.filter(c => !c.is_sideboard);
+  const mainboardCards = currentDeck.cards.filter(isMainboardCard);
   if (mainboardCards.length === 0) {
     showToast('Add cards to your mainboard first', 'warning');
     return;
@@ -2441,7 +2506,7 @@ function updateHandStats() {
   }
 
   // Get mainboard cards only
-  const mainboardCards = currentDeck.cards.filter(c => !c.is_sideboard);
+  const mainboardCards = currentDeck.cards.filter(isMainboardCard);
   if (mainboardCards.length === 0) {
     statsContainer.innerHTML = '';
     return;

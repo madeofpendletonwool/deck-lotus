@@ -1,5 +1,5 @@
 import api from '../services/api.js';
-import { showLoading, hideLoading, formatDate, showError, showToast } from '../utils/ui.js';
+import { showLoading, hideLoading, formatDate, showError, showToast, confirmDialog } from '../utils/ui.js';
 
 let decks = [];
 
@@ -145,7 +145,13 @@ function renderDecks() {
       e.stopPropagation();
       const deckId = btn.dataset.deckId;
 
-      if (confirm('Are you sure you want to delete this deck?')) {
+      const ok = await confirmDialog({
+        title: 'Delete deck?',
+        message: 'This permanently deletes the deck and its contents.',
+        confirmText: 'Delete',
+        danger: true,
+      });
+      if (ok) {
         try {
           showLoading();
           await api.deleteDeck(deckId);

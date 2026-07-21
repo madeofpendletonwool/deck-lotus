@@ -9,9 +9,18 @@ import {
 } from '../services/authService.js';
 import { authenticate } from '../middleware/auth.js';
 import { verifyToken, generateTokens } from '../utils/jwt.js';
+import { isRegistrationEnabled } from '../services/settingsService.js';
 import db from '../db/connection.js';
 
 const router = express.Router();
+
+/**
+ * GET /api/auth/config
+ * Public auth-related config (used by the client to hide the Register option).
+ */
+router.get('/config', (req, res) => {
+  res.json({ registrationEnabled: isRegistrationEnabled() });
+});
 
 /**
  * POST /api/auth/register
@@ -19,6 +28,10 @@ const router = express.Router();
  */
 router.post('/register', async (req, res, next) => {
   try {
+    if (!isRegistrationEnabled()) {
+      return res.status(403).json({ error: 'Registration is disabled on this server' });
+    }
+
     const { username, email, password } = req.body;
 
     if (!username || !email || !password) {

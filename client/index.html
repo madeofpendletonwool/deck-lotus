@@ -61,31 +61,32 @@
                         />
                     </div>
                     <div class="nav-links">
-                        <a href="#" data-page="decks" class="nav-link active">
+                        <a href="#" data-page="decks" class="nav-link active" title="My Decks">
                             <i class="ph ph-cards nav-icon"></i>
                             <span class="nav-text">My Decks</span>
                         </a>
-                        <a href="#" data-page="cards" class="nav-link">
+                        <a href="#" data-page="cards" class="nav-link" title="Browse Cards">
                             <i class="ph ph-magnifying-glass nav-icon"></i>
                             <span class="nav-text">Browse Cards</span>
                         </a>
-                        <a href="#" data-page="shopping" class="nav-link">
+                        <a href="#" data-page="shopping" class="nav-link" title="Shopping">
                             <i class="ph ph-shopping-cart nav-icon"></i>
                             <span class="nav-text">Shopping</span>
                         </a>
-                        <a href="#" data-page="inventory" class="nav-link">
+                        <a href="#" data-page="inventory" class="nav-link" title="Inventory">
                             <i class="ph ph-archive nav-icon"></i>
                             <span class="nav-text">Inventory</span>
                         </a>
-                        <a href="#" data-page="price-monitoring" class="nav-link">
+                        <a href="#" data-page="price-monitoring" class="nav-link" title="Price Watch">
                             <i class="ph ph-bell-ringing nav-icon"></i>
                             <span class="nav-text">Price Watch</span>
                         </a>
-                        <a href="#" data-page="settings" class="nav-link">
+                        <a href="#" data-page="settings" class="nav-link" title="Settings">
                             <i class="ph ph-gear nav-icon"></i>
                             <span class="nav-text">Settings</span>
                         </a>
-                        <div class="user-menu">
+                    </div>
+                    <div class="user-menu">
                             <button
                                 id="user-avatar-btn"
                                 class="user-avatar-btn"
@@ -195,7 +196,6 @@
                             </div>
                         </div>
                     </div>
-                </div>
             </nav>
 
             <!-- Auth Page -->
@@ -436,7 +436,7 @@
                                     id="deck-filter-search"
                                     placeholder="Filter cards in deck..."
                                     autocomplete="off"
-                                    style="width: 100%; padding: 0.5rem 2rem 0.5rem 0.75rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-secondary); font-size: 0.9rem;"
+                                    style="width: 100%; padding: 0.5rem 2rem 0.5rem 0.75rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-secondary); font-size: 0.9rem;"
                                 />
                                 <button
                                     id="deck-filter-clear"
@@ -555,40 +555,15 @@
                     />
                     <button
                         id="cards-browse-clear"
-                        class="hidden"
-                        style="position: absolute; right: 0.75rem; top: 50%; transform: translateY(-50%); background: none; border: none; color: var(--text-secondary); cursor: pointer; padding: 0.25rem; display: flex; align-items: center; justify-content: center; font-size: 1.25rem;"
+                        class="search-clear-btn hidden"
                         title="Clear search"
                     >
                         <i class="ph ph-x"></i>
                     </button>
-                    <div
-                        class="filters"
-                        style="
-                            display: flex;
-                            gap: 1rem;
-                            margin-top: 1rem;
-                            flex-wrap: wrap;
-                        "
-                    >
-                        <div>
-                            <label
-                                style="
-                                    display: block;
-                                    margin-bottom: 0.5rem;
-                                    font-weight: 600;
-                                "
-                                >Sort By</label
-                            >
-                            <select
-                                id="filter-sort"
-                                class="filter-select"
-                                style="
-                                    padding: 0.5rem;
-                                    border-radius: 6px;
-                                    border: 1px solid var(--border-color);
-                                    background: var(--bg-secondary);
-                                "
-                            >
+                    <div class="filter-bar">
+                        <div class="filter-field">
+                            <label class="field-label">Sort By</label>
+                            <select id="filter-sort" class="filter-select">
                                 <option value="random">Random</option>
                                 <option value="name">Alphabetical</option>
                                 <option value="cmc">Mana Value</option>
@@ -598,25 +573,9 @@
                                 </option>
                             </select>
                         </div>
-                        <div>
-                            <label
-                                style="
-                                    display: block;
-                                    margin-bottom: 0.5rem;
-                                    font-weight: 600;
-                                "
-                                >Card Type</label
-                            >
-                            <select
-                                id="filter-types"
-                                class="filter-select"
-                                style="
-                                    padding: 0.5rem;
-                                    border-radius: 6px;
-                                    border: 1px solid var(--border-color);
-                                    background: var(--bg-secondary);
-                                "
-                            >
+                        <div class="filter-field">
+                            <label class="field-label">Card Type</label>
+                            <select id="filter-types" class="filter-select">
                                 <option value="all">All Types</option>
                                 <option value="Creature">Creature</option>
                                 <option value="Instant">Instant</option>
@@ -629,90 +588,51 @@
                                 <option value="Land">Land</option>
                             </select>
                         </div>
-                        <div>
-                            <label
-                                style="
-                                    display: block;
-                                    margin-bottom: 0.5rem;
-                                    font-weight: 600;
-                                "
-                                >Rarity</label
-                            >
+                        <div class="filter-field">
+                            <label class="field-label">Rarity</label>
                             <div id="filter-rarity" class="rarity-filter-group" style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                                <label class="rarity-checkbox" style="cursor: pointer;">
-                                    <input type="checkbox" value="common" style="display: none;" />
-                                    <span class="rarity-checkbox-box" style="display: inline-block; padding: 0.3rem 0.6rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600; background: var(--bg-tertiary); color: var(--text-secondary); border: 2px solid transparent; transition: all 0.2s;">C</span>
+                                <label class="rarity-checkbox">
+                                    <input type="checkbox" value="common" />
+                                    <span class="rarity-checkbox-box rarity-c">C</span>
                                 </label>
-                                <label class="rarity-checkbox" style="cursor: pointer;">
-                                    <input type="checkbox" value="uncommon" style="display: none;" />
-                                    <span class="rarity-checkbox-box" style="display: inline-block; padding: 0.3rem 0.6rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600; background: #71717a; color: white; border: 2px solid transparent; transition: all 0.2s;">U</span>
+                                <label class="rarity-checkbox">
+                                    <input type="checkbox" value="uncommon" />
+                                    <span class="rarity-checkbox-box rarity-u">U</span>
                                 </label>
-                                <label class="rarity-checkbox" style="cursor: pointer;">
-                                    <input type="checkbox" value="rare" style="display: none;" />
-                                    <span class="rarity-checkbox-box" style="display: inline-block; padding: 0.3rem 0.6rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600; background: #ca8a04; color: white; border: 2px solid transparent; transition: all 0.2s;">R</span>
+                                <label class="rarity-checkbox">
+                                    <input type="checkbox" value="rare" />
+                                    <span class="rarity-checkbox-box rarity-r">R</span>
                                 </label>
-                                <label class="rarity-checkbox" style="cursor: pointer;">
-                                    <input type="checkbox" value="mythic" style="display: none;" />
-                                    <span class="rarity-checkbox-box" style="display: inline-block; padding: 0.3rem 0.6rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600; background: #ea580c; color: white; border: 2px solid transparent; transition: all 0.2s;">M</span>
+                                <label class="rarity-checkbox">
+                                    <input type="checkbox" value="mythic" />
+                                    <span class="rarity-checkbox-box rarity-m">M</span>
                                 </label>
                             </div>
                         </div>
-                        <div>
-                            <label
-                                style="
-                                    display: block;
-                                    margin-bottom: 0.5rem;
-                                    font-weight: 600;
-                                "
-                                >CMC</label
-                            >
-                            <div
-                                style="
-                                    display: flex;
-                                    gap: 0.5rem;
-                                    align-items: center;
-                                "
-                            >
+                        <div class="filter-field">
+                            <label class="field-label">CMC</label>
+                            <div class="cmc-range">
                                 <input
                                     type="number"
                                     id="filter-cmc-min"
+                                    class="input-narrow"
                                     placeholder="Min"
                                     min="0"
                                     max="20"
-                                    style="
-                                        width: 70px;
-                                        padding: 0.5rem;
-                                        border-radius: 6px;
-                                        border: 1px solid var(--border-color);
-                                        background: var(--bg-secondary);
-                                    "
                                 />
                                 <span>-</span>
                                 <input
                                     type="number"
                                     id="filter-cmc-max"
+                                    class="input-narrow"
                                     placeholder="Max"
                                     min="0"
                                     max="20"
-                                    style="
-                                        width: 70px;
-                                        padding: 0.5rem;
-                                        border-radius: 6px;
-                                        border: 1px solid var(--border-color);
-                                        background: var(--bg-secondary);
-                                    "
                                 />
                             </div>
                         </div>
-                        <div>
-                            <label
-                                style="
-                                    display: block;
-                                    margin-bottom: 0.5rem;
-                                    font-weight: 600;
-                                "
-                                >Colors</label
-                            >
+                        <div class="filter-field">
+                            <label class="field-label">Colors</label>
                             <div id="filter-colors" class="color-filter-group">
                                 <label class="color-checkbox">
                                     <input type="checkbox" value="W" />
@@ -752,49 +672,20 @@
                                 </label>
                             </div>
                         </div>
-                        <div>
-                            <label
-                                style="
-                                    display: block;
-                                    margin-bottom: 0.5rem;
-                                    font-weight: 600;
-                                "
-                                >Sets</label
-                            >
-                            <button
-                                id="filter-sets-btn"
-                                class="btn btn-secondary"
-                                style="padding: 0.5rem 1rem"
-                            >
+                        <div class="filter-field">
+                            <label class="field-label">Sets</label>
+                            <button id="filter-sets-btn" class="btn btn-secondary">
                                 <span id="selected-sets-count">All Sets</span>
                             </button>
                         </div>
-                        <div>
-                            <label
-                                style="
-                                    display: block;
-                                    margin-bottom: 0.5rem;
-                                    font-weight: 600;
-                                "
-                                >Subtypes</label
-                            >
-                            <button
-                                id="filter-subtypes-btn"
-                                class="btn btn-secondary"
-                                style="padding: 0.5rem 1rem"
-                            >
+                        <div class="filter-field">
+                            <label class="field-label">Subtypes</label>
+                            <button id="filter-subtypes-btn" class="btn btn-secondary">
                                 <span id="selected-subtypes-count">All Subtypes</span>
                             </button>
                         </div>
-                        <div>
-                            <label
-                                style="
-                                    display: block;
-                                    margin-bottom: 0.5rem;
-                                    font-weight: 600;
-                                "
-                                >Collection</label
-                            >
+                        <div class="filter-field">
+                            <label class="field-label">Collection</label>
                             <label class="color-checkbox">
                                 <input
                                     type="checkbox"
@@ -818,24 +709,11 @@
                     </div>
                 </div>
                 <div id="cards-grid" class="cards-grid"></div>
-                <div
-                    id="pagination"
-                    class="pagination"
-                    style="
-                        display: flex;
-                        justify-content: center;
-                        align-items: center;
-                        gap: 1rem;
-                        margin: 2rem 0;
-                        padding: 1rem;
-                    "
-                >
+                <div id="pagination" class="pagination">
                     <button id="prev-page" class="btn btn-secondary" disabled>
                         Previous
                     </button>
-                    <span id="page-info" style="font-weight: 600"
-                        >Page 1 of 1</span
-                    >
+                    <span id="page-info">Page 1 of 1</span>
                     <button id="next-page" class="btn btn-secondary" disabled>
                         Next
                     </button>
@@ -1094,8 +972,8 @@
             </div>
 
             <!-- Add/Edit Price Watch Modal -->
-            <div id="pm-watch-modal" class="modal hidden">
-                <div class="modal-content" style="max-width: 500px;">
+            <div id="pm-watch-modal" class="modal drawer-mode hidden" data-persist>
+                <div class="modal-content">
                     <span class="modal-close" id="pm-watch-modal-close">&times;</span>
                     <h2 id="pm-watch-modal-title" style="margin-bottom: 1.5rem;">Add Price Watch</h2>
                     <form id="pm-watch-form">
@@ -1104,7 +982,7 @@
                             <div style="display:flex;gap:0.5rem;align-items:flex-start;">
                                 <div style="position: relative; flex: 1;">
                                     <input type="text" id="pm-card-name" placeholder="e.g. Meekstone" required autocomplete="off" style="width: 100%;" />
-                                    <div id="pm-card-search-results" class="hidden" style="position: absolute; top: 100%; left: 0; right: 0; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 4px; max-height: 250px; overflow-y: auto; z-index: 1000; box-shadow: 0 4px 12px rgba(0,0,0,0.3);"></div>
+                                    <div id="pm-card-search-results" class="hidden" style="position: absolute; top: 100%; left: 0; right: 0; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 4px; max-height: 250px; overflow-y: auto; z-index: 1000; box-shadow: 0 4px 12px rgba(0,0,0,0.3);"></div>
                                 </div>
                                 <select id="pm-card-type-filter" title="Filter by card type" style="flex-shrink:0;width:140px;">
                                     <option value="">All types</option>
@@ -1283,7 +1161,7 @@
                                 </div>
                                 <div>
                                     <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Frequency</label>
-                                    <select id="backup-frequency" style="width: 100%; padding: 0.5rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-secondary);">
+                                    <select id="backup-frequency" style="width: 100%; padding: 0.5rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-secondary);">
                                         <option value="6hours">Every 6 Hours</option>
                                         <option value="12hours">Every 12 Hours</option>
                                         <option value="daily" selected>Daily (2 AM)</option>
@@ -1300,7 +1178,7 @@
                                     min="1"
                                     max="100"
                                     value="10"
-                                    style="width: 150px; padding: 0.5rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-secondary);"
+                                    style="width: 150px; padding: 0.5rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-secondary);"
                                 />
                                 <p style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">
                                     Older backups will be automatically deleted
@@ -1339,7 +1217,7 @@
                         <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;align-items:end;margin-bottom:1rem;">
                             <div>
                                 <label style="display:block;margin-bottom:0.5rem;font-weight:600;">Frequency</label>
-                                <select id="price-schedule-preset" style="width:100%;padding:0.5rem;border-radius:6px;border:1px solid var(--border-color);background:var(--bg-secondary);">
+                                <select id="price-schedule-preset" style="width:100%;padding:0.5rem;border-radius:6px;border:1px solid var(--border);background:var(--bg-secondary);">
                                     <option value="0 * * * *">Every 1 hour</option>
                                     <option value="0 */3 * * *">Every 3 hours</option>
                                     <option value="0 */6 * * *">Every 6 hours (default)</option>
@@ -1350,12 +1228,37 @@
                             </div>
                             <div id="price-schedule-custom-wrap" style="display:none;">
                                 <label style="display:block;margin-bottom:0.5rem;font-weight:600;">Cron expression</label>
-                                <input type="text" id="price-schedule-custom" placeholder="e.g. 0 */4 * * *" style="width:100%;padding:0.5rem;border-radius:6px;border:1px solid var(--border-color);background:var(--bg-secondary);">
+                                <input type="text" id="price-schedule-custom" placeholder="e.g. 0 */4 * * *" style="width:100%;padding:0.5rem;border-radius:6px;border:1px solid var(--border);background:var(--bg-secondary);">
                             </div>
                         </div>
                         <div style="display:flex;align-items:center;gap:1rem;">
                             <button id="save-price-schedule-btn" class="btn btn-primary">Save Schedule</button>
                             <span id="price-schedule-current" style="font-size:0.8rem;color:var(--text-secondary);"></span>
+                        </div>
+                    </section>
+
+                    <section
+                        id="access-control-section"
+                        class="settings-section"
+                        style="margin-top: 2rem; display: none"
+                    >
+                        <h3>Access Control</h3>
+                        <p>Control who can create accounts on this server.</p>
+                        <div class="setting-row">
+                            <div class="setting-row-text">
+                                <div class="setting-row-title">Allow public registration</div>
+                                <div class="setting-row-desc">
+                                    When off, the Register option is hidden and new sign-ups are
+                                    rejected. You can still create users in User Management below.
+                                </div>
+                                <div id="registration-locked-note" class="setting-row-desc hidden" style="color: var(--warning); margin-top: 0.25rem;">
+                                    Locked by the REGISTRATION_ENABLED environment variable.
+                                </div>
+                            </div>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="toggle-registration" />
+                                <span class="toggle-slider"></span>
+                            </label>
                         </div>
                     </section>
 
@@ -1383,8 +1286,8 @@
             </div>
 
             <!-- Buy Deck Modal -->
-            <div id="buy-deck-modal" class="modal hidden">
-                <div class="modal-content" style="max-width: 600px;">
+            <div id="buy-deck-modal" class="modal drawer-mode hidden">
+                <div class="modal-content">
                     <span class="modal-close" id="buy-modal-close">&times;</span>
                     <h2 style="margin-bottom: 1rem;">Buy Deck</h2>
 
@@ -1397,7 +1300,7 @@
                     </div>
 
                     <!-- Tabs -->
-                    <div style="display: flex; gap: 0; margin-bottom: 1.25rem; border-bottom: 2px solid var(--border-color);">
+                    <div style="display: flex; gap: 0; margin-bottom: 1.25rem; border-bottom: 2px solid var(--border);">
                         <button class="buy-tab-btn active" data-buy-tab="optimizer" style="padding: 0.5rem 1rem; background: none; border: none; border-bottom: 2px solid var(--primary); margin-bottom: -2px; color: var(--primary); font-weight: 600; cursor: pointer; font-size: 0.875rem;">
                             <i class="ph ph-magic-wand"></i> Mana Pool Optimizer
                         </button>
@@ -1784,7 +1687,7 @@
                                 width: 100%;
                                 padding: 0.75rem;
                                 border-radius: 6px;
-                                border: 1px solid var(--border-color);
+                                border: 1px solid var(--border);
                                 background: var(--bg-secondary);
                             "
                         />
@@ -1833,7 +1736,7 @@
                                 width: 100%;
                                 padding: 0.75rem;
                                 border-radius: 6px;
-                                border: 1px solid var(--border-color);
+                                border: 1px solid var(--border);
                                 background: var(--bg-secondary);
                             "
                         />
@@ -1897,8 +1800,8 @@
             </div>
 
             <!-- Printing Optimizer Modal -->
-            <div id="printing-optimizer-modal" class="modal hidden">
-                <div class="modal-content" style="max-width: 900px">
+            <div id="printing-optimizer-modal" class="modal drawer-mode drawer-wide hidden">
+                <div class="modal-content">
                     <span class="modal-close" id="optimizer-modal-close"
                         >&times;</span
                     >

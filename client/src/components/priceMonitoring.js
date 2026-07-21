@@ -1,5 +1,5 @@
 import api from '../services/api.js';
-import { showToast, debounce } from '../utils/ui.js';
+import { showToast, debounce, confirmDialog, openDrawer, closeDrawer } from '../utils/ui.js';
 
 const CONDITIONS = { any: 'Any', nm: 'NM', lp: 'LP', mp: 'MP', hp: 'HP', dm: 'DM' };
 
@@ -445,7 +445,13 @@ export function setupPriceMonitoring() {
     if (deleteBtn) {
       const id = parseInt(deleteBtn.dataset.id);
       const name = deleteBtn.dataset.name;
-      if (!confirm(`Delete price watch for "${name}"?`)) return;
+      const ok = await confirmDialog({
+        title: 'Delete price watch?',
+        message: `Stop watching the price for "${name}"?`,
+        confirmText: 'Delete',
+        danger: true,
+      });
+      if (!ok) return;
       try {
         await api.deletePriceWatch(id);
         showToast('Watch deleted', 'success');

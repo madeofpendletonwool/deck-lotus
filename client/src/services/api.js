@@ -359,6 +359,23 @@ class ApiClient {
     });
   }
 
+  // Public auth config (no auth required) — used to hide the Register option
+  async getAuthConfig() {
+    return this.request('/auth/config');
+  }
+
+  // App settings (admin only)
+  async getAdminSettings() {
+    return this.request('/admin/settings');
+  }
+
+  async updateAdminSettings(updates) {
+    return this.request('/admin/settings', {
+      method: 'PUT',
+      body: JSON.stringify(updates),
+    });
+  }
+
   // Shopping methods
   async getShoppingList(deckIds) {
     const params = new URLSearchParams();

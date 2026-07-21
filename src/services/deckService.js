@@ -337,7 +337,7 @@ export function getDeckStats(deckId, userId) {
      FROM deck_cards dc
      JOIN printings p ON dc.printing_id = p.id
      JOIN cards c ON p.card_id = c.id
-     WHERE dc.deck_id = ? AND dc.is_sideboard = 0
+     WHERE dc.deck_id = ? AND (dc.board_type = 'mainboard' OR (dc.board_type IS NULL AND dc.is_sideboard = 0))
      GROUP BY CAST(c.cmc AS INTEGER)
      ORDER BY cmc`,
     [deckId]
@@ -352,7 +352,7 @@ export function getDeckStats(deckId, userId) {
      FROM deck_cards dc
      JOIN printings p ON dc.printing_id = p.id
      JOIN cards c ON p.card_id = c.id
-     WHERE dc.deck_id = ? AND dc.is_sideboard = 0
+     WHERE dc.deck_id = ? AND (dc.board_type = 'mainboard' OR (dc.board_type IS NULL AND dc.is_sideboard = 0))
      GROUP BY c.colors`,
     [deckId]
   );
@@ -375,7 +375,7 @@ export function getDeckStats(deckId, userId) {
      FROM deck_cards dc
      JOIN printings p ON dc.printing_id = p.id
      JOIN cards c ON p.card_id = c.id
-     WHERE dc.deck_id = ? AND dc.is_sideboard = 0
+     WHERE dc.deck_id = ? AND (dc.board_type = 'mainboard' OR (dc.board_type IS NULL AND dc.is_sideboard = 0))
      GROUP BY type`,
     [deckId]
   );
@@ -471,6 +471,7 @@ export function getDeckByShareToken(shareToken) {
       dc.id as deck_card_id,
       dc.quantity,
       dc.is_sideboard,
+      COALESCE(dc.board_type, CASE WHEN dc.is_sideboard = 1 THEN 'sideboard' ELSE 'mainboard' END) as board_type,
       dc.is_commander,
       p.id as printing_id,
       p.card_id,
@@ -496,6 +497,7 @@ export function getDeckByShareToken(shareToken) {
      JOIN cards c ON p.card_id = c.id
      LEFT JOIN sets s ON p.set_code = s.code
      WHERE dc.deck_id = ?
+       AND COALESCE(dc.board_type, CASE WHEN dc.is_sideboard = 1 THEN 'sideboard' ELSE 'mainboard' END) != 'maybeboard'
      ORDER BY dc.is_sideboard, c.cmc, c.name`,
     [share.deck_id]
   );
@@ -577,7 +579,7 @@ export function checkDeckLegality(deckId, userId, format) {
      FROM deck_cards dc
      JOIN printings p ON dc.printing_id = p.id
      JOIN cards c ON p.card_id = c.id
-     WHERE dc.deck_id = ? AND dc.is_sideboard = 0
+     WHERE dc.deck_id = ? AND (dc.board_type = 'mainboard' OR (dc.board_type IS NULL AND dc.is_sideboard = 0))
      GROUP BY c.id
      ORDER BY c.name`,
     [deckId]

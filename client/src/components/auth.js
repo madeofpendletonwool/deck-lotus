@@ -9,6 +9,19 @@ export function setupAuth(onLoginSuccess) {
   const showRegisterBtn = document.getElementById('show-register');
   const showLoginBtn = document.getElementById('show-login');
 
+  // Hide the Register option when the server has registration disabled.
+  api.getAuthConfig()
+    .then((cfg) => {
+      if (cfg && cfg.registrationEnabled === false) {
+        loginForm.classList.remove('hidden');
+        registerForm.classList.add('hidden');
+        const authSwitch = showRegisterBtn.closest('.auth-switch');
+        if (authSwitch) authSwitch.classList.add('hidden');
+        else showRegisterBtn.classList.add('hidden');
+      }
+    })
+    .catch(() => { /* default to showing register if config can't be fetched */ });
+
   // Toggle between login and register
   showRegisterBtn.addEventListener('click', (e) => {
     e.preventDefault();

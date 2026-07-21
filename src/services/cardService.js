@@ -710,8 +710,8 @@ export function getCardDeckUsage(userId, cardId) {
   return db.all(
     `SELECT DISTINCT d.id, d.name, d.format,
             SUM(dc.quantity) as total_quantity,
-            GROUP_CONCAT(CASE WHEN dc.is_sideboard = 1 THEN dc.quantity ELSE 0 END) as sideboard_quantities,
-            GROUP_CONCAT(CASE WHEN dc.is_sideboard = 0 THEN dc.quantity ELSE 0 END) as mainboard_quantities
+            GROUP_CONCAT(CASE WHEN COALESCE(dc.board_type, CASE WHEN dc.is_sideboard = 1 THEN 'sideboard' ELSE 'mainboard' END) = 'sideboard' THEN dc.quantity ELSE 0 END) as sideboard_quantities,
+            GROUP_CONCAT(CASE WHEN COALESCE(dc.board_type, CASE WHEN dc.is_sideboard = 1 THEN 'sideboard' ELSE 'mainboard' END) = 'mainboard' THEN dc.quantity ELSE 0 END) as mainboard_quantities
      FROM deck_cards dc
      JOIN decks d ON dc.deck_id = d.id
      JOIN printings p ON dc.printing_id = p.id

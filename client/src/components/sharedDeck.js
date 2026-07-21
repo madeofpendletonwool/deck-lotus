@@ -1,6 +1,12 @@
 import api from '../services/api.js';
 import { showLoading, hideLoading, formatMana, showToast } from '../utils/ui.js';
 
+// Board of a shared-deck card (board_type authoritative; is_sideboard is legacy).
+const sharedBoardOf = (c) => c.board_type || (c.is_sideboard ? 'sideboard' : 'mainboard');
+const isSharedMainboard = (c) => sharedBoardOf(c) === 'mainboard';
+const isSharedSideboard = (c) => sharedBoardOf(c) === 'sideboard';
+
+
 let sharedDeck = null;
 let isAuthenticated = false;
 
@@ -97,8 +103,8 @@ function renderSharedDeckCards() {
   const mainboard = document.getElementById('shared-mainboard');
   const sideboard = document.getElementById('shared-sideboard');
 
-  const mainboardCards = sharedDeck.cards.filter(c => !c.is_sideboard);
-  const sideboardCards = sharedDeck.cards.filter(c => c.is_sideboard);
+  const mainboardCards = sharedDeck.cards.filter(isSharedMainboard);
+  const sideboardCards = sharedDeck.cards.filter(isSharedSideboard);
 
   // Update counts
   const mainboardTotal = mainboardCards.reduce((sum, c) => sum + c.quantity, 0);
@@ -192,7 +198,7 @@ function switchTab(tab) {
 function renderSharedDeckStats() {
   // Calculate mana curve
   const manaCurve = {};
-  sharedDeck.cards.filter(c => !c.is_sideboard).forEach(card => {
+  sharedDeck.cards.filter(isSharedMainboard).forEach(card => {
     const cmc = Math.floor(card.cmc || 0);
     if (!manaCurve[cmc]) {
       manaCurve[cmc] = 0;
@@ -207,7 +213,7 @@ function renderSharedDeckStats() {
 
   // Calculate type distribution
   const typeDistribution = {};
-  sharedDeck.cards.filter(c => !c.is_sideboard).forEach(card => {
+  sharedDeck.cards.filter(isSharedMainboard).forEach(card => {
     const typeLine = card.type_line || '';
     let type = 'Other';
 
@@ -232,7 +238,7 @@ function renderSharedDeckStats() {
 
   // Calculate color distribution
   const colorDistribution = {};
-  sharedDeck.cards.filter(c => !c.is_sideboard).forEach(card => {
+  sharedDeck.cards.filter(isSharedMainboard).forEach(card => {
     const colors = card.colors || '';
     if (!colorDistribution[colors]) {
       colorDistribution[colors] = 0;

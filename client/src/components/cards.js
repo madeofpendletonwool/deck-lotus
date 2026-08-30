@@ -587,7 +587,7 @@ async function quickAddCard(cardId, deckId) {
   }
 }
 
-export async function showCardDetail(cardId) {
+export async function showCardDetail(cardId, printingId = null) {
   try {
     showLoading();
     const [cardResult, ownershipResult] = await Promise.all([
@@ -596,7 +596,11 @@ export async function showCardDetail(cardId) {
     ]);
     const card = cardResult.card;
     const ownership = ownershipResult;
-    const firstPrinting = card.printings && card.printings.length > 0 ? card.printings[0] : null;
+    const firstPrinting = card.printings && card.printings.length > 0
+      ? (printingId !== null
+          ? (card.printings.find(p => p.id == printingId) || card.printings[0])
+          : card.printings[0])
+      : null;
     hideLoading();
 
     // Parse type line to extract supertypes, types, and subtypes
@@ -1461,16 +1465,13 @@ async function showSwapPrintingModal(card, fromPrintingId, quantity, cardId, own
 
       try {
         showLoading();
-        // Remove from old printing
-        await api.setOwnedPrintingQuantity(fromPrintingId, 0);
-        // Add to new printing (will add to existing if already owned)
-        const existingOwned = ownership.ownedPrintings.find(op => op.printing_id === toPrintingId);
-        const newQuantity = (existingOwned ? existingOwned.quantity : 0) + quantity;
-        await api.setOwnedPrintingQuantity(toPrintingId, newQuantity);
+        // Move inventory and matching deck usage together in one transaction.
+        await api.swapOwnedPrinting(fromPrintingId, toPrintingId);
 
         showToast('Printing changed!', 'success', 2000);
-        // Reload card detail
-        await showCardDetail(cardId);
+        window.dispatchEvent(new CustomEvent('inventory:refresh'));
+        // Reload card detail using the newly selected printing
+        await showCardDetail(cardId, toPrintingId);
         hideLoading();
       } catch (error) {
         hideLoading();

@@ -14,6 +14,7 @@ import {
   getCardOwnershipStatus,
   getCardOwnedPrintings,
   setOwnedPrintingQuantity,
+  swapOwnedPrinting,
   getCardOwnershipAndUsage,
 } from '../services/cardService.js';
 import { authenticate } from '../middleware/auth.js';
@@ -237,6 +238,26 @@ router.get('/:id/ownership-usage', authenticate, (req, res, next) => {
 
     const data = getCardOwnershipAndUsage(userId, cardId);
     res.json(data);
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /api/cards/printings/:printingId/swap
+ * Atomically move owned copies to another printing
+ */
+router.post('/printings/:printingId/swap', authenticate, (req, res, next) => {
+  try {
+    const fromPrintingId = parseInt(req.params.printingId);
+    const toPrintingId = parseInt(req.body.replacementPrintingId);
+
+    if (!Number.isInteger(toPrintingId)) {
+      return res.status(400).json({ error: 'replacementPrintingId is required' });
+    }
+
+    const result = swapOwnedPrinting(req.user.id, fromPrintingId, toPrintingId);
+    res.json(result);
   } catch (error) {
     next(error);
   }

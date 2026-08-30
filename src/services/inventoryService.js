@@ -17,7 +17,7 @@ export function getInventory(userId, filters = {}) {
   } = filters;
 
   const offset = (page - 1) * limit;
-  const params = [userId];
+  const params = [userId, userId, userId];
   const countParams = [userId];
 
   // Base query - get all owned cards with their details
@@ -30,7 +30,18 @@ export function getInventory(userId, filters = {}) {
       c.colors,
       c.type_line,
       c.oracle_text,
-      (SELECT p.image_url FROM printings p WHERE p.card_id = c.id AND p.image_url IS NOT NULL LIMIT 1) as image_url,
+      (SELECT p.image_url
+       FROM owned_printings op
+       JOIN printings p ON op.printing_id = p.id
+       WHERE op.user_id = ? AND p.card_id = c.id AND p.image_url IS NOT NULL
+       ORDER BY op.quantity DESC, op.id ASC
+       LIMIT 1) as image_url,
+      (SELECT p.id
+       FROM owned_printings op
+       JOIN printings p ON op.printing_id = p.id
+       WHERE op.user_id = ? AND p.card_id = c.id AND p.image_url IS NOT NULL
+       ORDER BY op.quantity DESC, op.id ASC
+       LIMIT 1) as selected_printing_id,
       (
         SELECT COALESCE(SUM(op.quantity), 0)
         FROM owned_printings op

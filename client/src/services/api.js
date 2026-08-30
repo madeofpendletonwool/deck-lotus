@@ -142,6 +142,13 @@ class ApiClient {
     });
   }
 
+  async swapOwnedPrinting(fromPrintingId, replacementPrintingId) {
+    return this.request(`/cards/printings/${fromPrintingId}/swap`, {
+      method: 'POST',
+      body: JSON.stringify({ replacementPrintingId }),
+    });
+  }
+
   // Deck methods
   async getDecks() {
     return this.request('/decks');

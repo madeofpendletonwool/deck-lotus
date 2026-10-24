@@ -247,8 +247,6 @@ export function setupSettings() {
     await loadApiKeys();
     await loadSyncStatus();
     await checkAdminAndLoadUsers();
-    await loadBackupConfig();
-    await loadBackups();
     await loadPriceSchedule();
   });
 }
@@ -260,6 +258,8 @@ async function checkAdminAndLoadUsers() {
     const accessControlSection = document.getElementById('access-control-section');
     const backupSection = document.getElementById('backup-section');
     const databaseSection = document.getElementById('database-section');
+    const serverBackups = document.getElementById('server-backups-admin');
+    const createBackupNowBtn = document.getElementById('create-backup-now-btn');
 
     // Backup section is available to all users (they can backup their own data)
     if (backupSection) backupSection.style.display = 'block';
@@ -269,13 +269,19 @@ async function checkAdminAndLoadUsers() {
       if (userManagementSection) userManagementSection.style.display = 'block';
       if (accessControlSection) accessControlSection.style.display = 'block';
       if (databaseSection) databaseSection.style.display = 'block';
+      if (serverBackups) serverBackups.style.display = 'block';
+      if (createBackupNowBtn) createBackupNowBtn.style.display = '';
       await loadUsers();
       await loadAccessControl();
+      await loadBackupConfig();
+      await loadBackups();
     } else {
       // Hide admin-only sections for non-admins
       if (userManagementSection) userManagementSection.style.display = 'none';
       if (accessControlSection) accessControlSection.style.display = 'none';
       if (databaseSection) databaseSection.style.display = 'none';
+      if (serverBackups) serverBackups.style.display = 'none';
+      if (createBackupNowBtn) createBackupNowBtn.style.display = 'none';
     }
   } catch (error) {
     console.error('Failed to check admin status:', error);

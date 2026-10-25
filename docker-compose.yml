@@ -14,14 +14,14 @@ services:
       - DATABASE_PATH=/app/data/deck-lotus.db
 
       # ── Security (REQUIRED — change JWT_SECRET before deploying!) ──────────
-      - JWT_SECRET=${JWT_SECRET:-change-this-to-a-long-random-secret}
+      - JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET in .env (openssl rand -hex 32)}
       - JWT_EXPIRES_IN=7d
       - JWT_REFRESH_EXPIRES_IN=30d
 
       # ── Admin user (created on first startup if no admin exists) ───────────
       - ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
       - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@example.com}
-      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-changeme123}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-}
 
       # ── Mana Pool API (required for price monitoring & cart optimizer) ─────
       # Generate your token at: https://manapool.com/seller/settings/integrations

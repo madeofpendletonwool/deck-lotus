@@ -150,12 +150,12 @@ export function restoreBackup(backupData, options = {}) {
   const restore = db.transaction(() => {
     // If overwrite is enabled, delete existing data
     if (overwrite && userId) {
-      db.prepare('DELETE FROM api_keys WHERE user_id = ?').run(userId);
+      // api_keys are left alone: scoped restores don't bring keys back
       db.prepare('DELETE FROM owned_cards WHERE user_id = ?').run(userId);
       db.prepare('DELETE FROM deck_cards WHERE deck_id IN (SELECT id FROM decks WHERE user_id = ?)').run(userId);
       db.prepare('DELETE FROM deck_shares WHERE deck_id IN (SELECT id FROM decks WHERE user_id = ?)').run(userId);
       db.prepare('DELETE FROM decks WHERE user_id = ?').run(userId);
-      // Don't delete the user itself, just update it
+      // The user row itself is never touched by a scoped restore
     } else if (overwrite && !userId) {
       db.prepare('DELETE FROM deck_cards').run();
       db.prepare('DELETE FROM deck_shares').run();
@@ -171,7 +171,10 @@ export function restoreBackup(backupData, options = {}) {
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `);
 
-    for (const user of usersToRestore) {
+    // A scoped (non-admin) restore never writes the users table: the caller
+    // already exists, and taking is_admin/password_hash from an uploaded file
+    // would let anyone promote themselves or change their credentials.
+    for (const user of userId ? [] : usersToRestore) {
       try {
         insertUser.run(
           user.id,
@@ -190,8 +193,8 @@ export function restoreBackup(backupData, options = {}) {
 
     const restoredUserIds = usersToRestore.map(u => u.id);
 
-    // Restore API keys
-    const apiKeys = (backupData.data.api_keys || []).filter(k =>
+    // Restore API keys (admin restores only: an uploaded key_hash must not become a credential)
+    const apiKeys = userId ? [] : (backupData.data.api_keys || []).filter(k =>
       restoredUserIds.includes(k.user_id)
     );
 
@@ -235,7 +238,7 @@ export function restoreBackup(backupData, options = {}) {
         const card = getCardId.get(ownedCard.card_name);
         if (card) {
           insertOwnedCard.run(
-            ownedCard.user_id,
+            userId || ownedCard.user_id,
             card.id,
             ownedCard.quantity,
             ownedCard.created_at,
@@ -260,24 +263,46 @@ export function restoreBackup(backupData, options = {}) {
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `);
 
+    // Scoped restores get fresh deck ids so a crafted file can't REPLACE another user's deck
+    const insertScopedDeck = db.prepare(`
+      INSERT INTO decks (user_id, name, format, description, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `);
+
+    // Backup deck id -> deck id in this database
+    const deckIdMap = new Map();
+
     for (const deck of decks) {
       try {
-        insertDeck.run(
-          deck.id,
-          deck.user_id,
-          deck.name,
-          deck.format,
-          deck.description,
-          deck.created_at,
-          deck.updated_at
-        );
+        if (userId) {
+          const info = insertScopedDeck.run(
+            userId,
+            deck.name,
+            deck.format,
+            deck.description,
+            deck.created_at,
+            deck.updated_at
+          );
+          deckIdMap.set(deck.id, Number(info.lastInsertRowid));
+        } else {
+          insertDeck.run(
+            deck.id,
+            deck.user_id,
+            deck.name,
+            deck.format,
+            deck.description,
+            deck.created_at,
+            deck.updated_at
+          );
+          deckIdMap.set(deck.id, deck.id);
+        }
         results.decks++;
       } catch (e) {
         results.errors.push(`Deck ${deck.name}: ${e.message}`);
       }
     }
 
-    const restoredDeckIds = decks.map(d => d.id);
+    const restoredDeckIds = [...deckIdMap.keys()];
 
     // Restore deck_cards (using UUIDs to find current printing_ids)
     const deckCards = (backupData.data.deck_cards || []).filter(dc =>
@@ -298,7 +323,7 @@ export function restoreBackup(backupData, options = {}) {
         const printing = getPrintingId.get(deckCard.printing_uuid);
         if (printing) {
           insertDeckCard.run(
-            deckCard.deck_id,
+            deckIdMap.get(deckCard.deck_id),
             printing.id,
             deckCard.quantity,
             deckCard.is_sideboard,
@@ -315,8 +340,8 @@ export function restoreBackup(backupData, options = {}) {
       }
     }
 
-    // Restore deck shares
-    const deckShares = (backupData.data.deck_shares || []).filter(ds =>
+    // Restore deck shares (admin restores only: an uploaded share_token could clobber someone else's link)
+    const deckShares = userId ? [] : (backupData.data.deck_shares || []).filter(ds =>
       restoredDeckIds.includes(ds.deck_id)
     );
 
@@ -439,10 +464,25 @@ export function listBackups() {
 }
 
 /**
+ * Resolve a backup filename to a path inside BACKUP_DIR.
+ * Only plain `*.json` names are accepted, so `../` and absolute paths can't escape.
+ */
+function resolveBackupPath(filename) {
+  if (typeof filename !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._-]*\.json$/.test(filename)) {
+    throw new Error('Invalid backup filename');
+  }
+  const filepath = path.resolve(BACKUP_DIR, filename);
+  if (path.dirname(filepath) !== path.resolve(BACKUP_DIR)) {
+    throw new Error('Invalid backup filename');
+  }
+  return filepath;
+}
+
+/**
  * Load a backup file by filename
  */
 export function loadBackupFile(filename) {
-  const filepath = path.join(BACKUP_DIR, filename);
+  const filepath = resolveBackupPath(filename);
   if (!fs.existsSync(filepath)) {
     throw new Error(`Backup file not found: ${filename}`);
   }
@@ -453,7 +493,7 @@ export function loadBackupFile(filename) {
  * Delete a backup file
  */
 export function deleteBackupFile(filename) {
-  const filepath = path.join(BACKUP_DIR, filename);
+  const filepath = resolveBackupPath(filename);
   if (!fs.existsSync(filepath)) {
     throw new Error(`Backup file not found: ${filename}`);
   }

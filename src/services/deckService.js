@@ -82,7 +82,8 @@ export function getDeckById(deckId, userId) {
       c.toughness,
       c.loyalty,
       c.layout,
-      (SELECT CASE WHEN oc.id IS NOT NULL THEN 1 ELSE 0 END FROM owned_cards oc WHERE oc.user_id = ? AND oc.card_id = c.id LIMIT 1) as is_owned
+      (SELECT CASE WHEN oc.id IS NOT NULL THEN 1 ELSE 0 END FROM owned_cards oc WHERE oc.user_id = ? AND oc.card_id = c.id LIMIT 1) as is_owned,
+      (SELECT SUM(op.quantity) FROM owned_printings op JOIN printings op_p ON op.printing_id = op_p.id WHERE op.user_id = ? AND op_p.card_id = c.id) as owned_quantity
      FROM deck_cards dc
      JOIN printings p ON dc.printing_id = p.id
      JOIN cards c ON p.card_id = c.id
@@ -96,7 +97,7 @@ export function getDeckById(deckId, userId) {
          ELSE 3
        END,
        c.cmc, c.name`,
-    [userId, deckId]
+    [userId, userId, deckId]
   );
 
   return {
@@ -516,15 +517,16 @@ export function getDeckByShareToken(shareToken) {
 
 /**
  * Render a shared deck as "quantity name" lines, commander first. Multi-face names follow what
- * MPC Autofill can find: "Fire // Ice" becomes "Fire Ice", anything else uses its front name.
+ * MPC Autofill can find: names printed on one side are joined, so "Fire // Ice" becomes
+ * "Fire Ice", and anything else uses its front name. Mirrors mpcName in the client's deckExport.js.
  */
 export function formatSharedDeckAsText(deck) {
-  const splitLayouts = new Set(['split', 'aftermath']);
+  const oneSidedLayouts = new Set(['split', 'aftermath', 'flip']);
   const totals = new Map();
 
   const ordered = [...deck.cards].sort((a, b) => (b.is_commander || 0) - (a.is_commander || 0));
   for (const card of ordered) {
-    const name = splitLayouts.has(card.layout) ? card.name.replace(' // ', ' ') : card.name.split(' // ')[0];
+    const name = oneSidedLayouts.has(card.layout) ? card.name.replaceAll(' // ', ' ') : card.name.split(' // ')[0];
     totals.set(name, (totals.get(name) || 0) + card.quantity);
   }
 

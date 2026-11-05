@@ -1478,6 +1478,8 @@ async function toggleCardOwnership(cardId, buttonEl) {
     currentDeck.cards.forEach(card => {
       if (card.card_id == cardId) {
         card.is_owned = result.owned;
+        // Marking a card owned adds one copy to the collection; unmarking removes them all.
+        card.owned_quantity = result.owned ? 1 : 0;
       }
     });
 

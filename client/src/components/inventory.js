@@ -751,7 +751,7 @@ function renderStats(stats) {
     <div class="inventory-stat">
       <i class="ph ph-check-circle"></i>
       <div>
-        <div class="stat-value">${stats.available.toLocaleString()}</div>
+        <div class="stat-value">${Math.max(stats.available, 0).toLocaleString()}</div>
         <div class="stat-label">Available</div>
       </div>
     </div>
@@ -974,4 +974,5 @@ function renderPagination() {
   if (prevBtn) prevBtn.disabled = currentPage <= 1;
   if (nextBtn) nextBtn.disabled = currentPage >= totalPages;
   if (pageInfo) pageInfo.textContent = `Page ${currentPage} of ${totalPages}`;
+  document.getElementById('inventory-pagination')?.classList.toggle('hidden', totalPages <= 1);
 }

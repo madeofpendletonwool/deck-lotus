@@ -883,6 +883,9 @@ async function main() {
       }
     }
 
+    // Refresh query planner stats and fold the import's write-ahead log back into the database.
+    targetDb.exec('ANALYZE');
+    targetDb.pragma('wal_checkpoint(TRUNCATE)');
     targetDb.close();
 
     // Clean up temporary MTGJSON files to save disk space

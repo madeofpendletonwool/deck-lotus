@@ -26,8 +26,9 @@ const router = express.Router();
  */
 router.get('/browse', authenticate, (req, res, next) => {
   try {
-    const { name, colors, type, rarities, sort, sets, subtypes, cmcMin, cmcMax, page = 1, limit = 50, onlyOwned } = req.query;
-    const offset = (parseInt(page) - 1) * parseInt(limit);
+    const { name, colors, type, rarities, sort, seed, sets, subtypes, cmcMin, cmcMax, page = 1, limit = 50, onlyOwned } = req.query;
+    const pageSize = Math.min(Math.max(parseInt(limit) || 50, 1), 200);
+    const offset = (Math.max(parseInt(page) || 1, 1) - 1) * pageSize;
 
     const result = browseCards({
       name,
@@ -35,13 +36,14 @@ router.get('/browse', authenticate, (req, res, next) => {
       type,
       rarities: rarities ? rarities.split(',') : [],
       sort: sort || 'random',
+      seed: seed ? parseInt(seed) : null,
       sets: sets ? sets.split(',') : [],
       subtypes: subtypes ? subtypes.split(',') : [],
       cmcMin: cmcMin ? parseInt(cmcMin) : null,
       cmcMax: cmcMax ? parseInt(cmcMax) : null,
       onlyOwned: onlyOwned === 'true',
       userId: req.user.id,
-      limit: parseInt(limit),
+      limit: pageSize,
       offset
     });
 
@@ -63,7 +65,7 @@ router.get('/search', authenticate, (req, res, next) => {
       return res.json({ cards: [] });
     }
 
-    const cards = searchCards(q, limit ? parseInt(limit) : 20, type || null);
+    const cards = searchCards(q, Math.min(parseInt(limit) || 20, 100), type || null);
     res.json({ cards });
   } catch (error) {
     next(error);

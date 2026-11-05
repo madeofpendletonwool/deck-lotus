@@ -25,6 +25,12 @@ export function getDb() {
   db = new Database(dbPath, { verbose: process.env.NODE_ENV === 'development' ? console.log : null });
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
+  // NORMAL is safe with WAL and avoids an fsync per transaction. The cache and memory map keep
+  // card data in process, so queries don't depend on the OS page cache staying warm.
+  db.pragma('synchronous = NORMAL');
+  db.pragma('cache_size = -64000'); // 64 MB
+  db.pragma('mmap_size = 268435456'); // 256 MB
+  db.pragma('temp_store = MEMORY');
 
   return db;
 }

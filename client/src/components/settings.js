@@ -345,7 +345,7 @@ function renderUsers(users) {
       <div style="flex: 1;">
         <div style="display: flex; align-items: center; gap: 0.5rem;">
           <strong>${user.username}</strong>
-          ${user.is_admin ? '<span class="badge" style="background: var(--primary); color: white; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem;">Admin</span>' : ''}
+          ${user.is_admin ? '<span class="badge" style="background: var(--primary); color: var(--on-primary); padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem;">Admin</span>' : ''}
         </div>
         <div style="font-size: 0.875rem; color: var(--text-secondary); margin-top: 0.25rem;">
           ${user.email}<br>

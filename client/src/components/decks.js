@@ -1,5 +1,5 @@
 import api from '../services/api.js';
-import { showLoading, hideLoading, formatDate, showError, showToast, confirmDialog } from '../utils/ui.js';
+import { showLoading, hideLoading, showToast, confirmDialog } from '../utils/ui.js';
 
 let decks = [];
 
@@ -58,14 +58,15 @@ function showNewDeckModal() {
     const format = document.getElementById('new-deck-format').value;
 
     try {
-      showLoading();
       modal.classList.add('hidden');
-      await api.createDeck(name, format, '');
-      await loadDecks();
-      hideLoading();
+      const result = await api.createDeck(name, format, '');
+      if (result.deck?.id) {
+        openDeckBuilder(result.deck.id); // A new deck is empty, so go straight to adding cards
+      } else {
+        await loadDecks();
+      }
     } catch (error) {
-      hideLoading();
-      showError('Failed to create deck: ' + error.message);
+      showToast('Failed to create deck: ' + error.message, 'error');
     }
   });
 
@@ -76,16 +77,23 @@ function showNewDeckModal() {
 }
 
 async function loadDecks() {
+  const decksList = document.getElementById('decks-list');
+  decksList.classList.add('is-loading');
   try {
-    showLoading();
     const result = await api.getDecks();
     decks = result.decks;
     renderDecks();
-    hideLoading();
   } catch (error) {
-    hideLoading();
     showToast('Failed to load decks: ' + error.message, 'error');
+  } finally {
+    decksList.classList.remove('is-loading');
   }
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text ?? '';
+  return div.innerHTML;
 }
 
 function renderDecks() {
@@ -93,58 +101,42 @@ function renderDecks() {
 
   if (decks.length === 0) {
     decksList.innerHTML = `
-      <div style="grid-column: 1 / -1; text-align: center; padding: 3rem; color: var(--text-secondary);">
+      <div class="grid-message">
+        <i class="ph ph-cards"></i>
         <h3>No decks yet</h3>
-        <p>Click "New Deck" to create your first deck!</p>
+        <p>Create one from scratch, or import a list from another site.</p>
       </div>
     `;
     return;
   }
 
   decksList.innerHTML = decks.map(deck => {
-    // Use art_crop version of the image for better background display
-    const backgroundImage = deck.preview_image
-      ? deck.preview_image.replace('/normal/', '/art_crop/')
-      : null;
-
-    const backgroundStyle = backgroundImage
-      ? `background: linear-gradient(to bottom, rgba(0,0,0,0.7), rgba(0,0,0,0.9)), url('${backgroundImage}') center/cover no-repeat;`
-      : '';
+    const art = deck.preview_image ? deck.preview_image.replace('/normal/', '/art_crop/') : null;
+    const sideboard = deck.sideboard_count ? ` + ${deck.sideboard_count} side` : '';
 
     return `
-      <div class="deck-card" data-deck-id="${deck.id}" style="${backgroundStyle}">
-        <div class="deck-card-header">
-          <div>
-            <h3>${deck.name}</h3>
-            ${deck.format ? `<span class="deck-format">${deck.format}</span>` : ''}
+      <article class="deck-card" data-deck-id="${deck.id}">
+        <a class="deck-card-link" href="/decks/${deck.id}">
+          <div class="deck-card-art">
+            ${art ? `<img src="${art}" alt="" loading="lazy" decoding="async" onerror="this.remove()">` : '<i class="ph ph-cards"></i>'}
           </div>
-        </div>
-        <div class="deck-card-stats">
-          <span>Main: ${deck.mainboard_count || 0} cards</span>
-          <span>Side: ${deck.sideboard_count || 0} cards</span>
-        </div>
-        <div class="deck-card-actions">
-          <button class="btn btn-primary btn-edit" data-deck-id="${deck.id}">Edit</button>
-          <button class="btn btn-danger btn-delete" data-deck-id="${deck.id}">Delete</button>
-        </div>
-      </div>
+          <div class="deck-card-body">
+            <h3>${escapeHtml(deck.name)}</h3>
+            <div class="deck-card-stats">
+              ${deck.format ? `<span class="deck-format">${escapeHtml(deck.format)}</span>` : ''}
+              <span>${deck.mainboard_count || 0} cards${sideboard}</span>
+            </div>
+          </div>
+        </a>
+        <button class="icon-btn btn-delete" data-deck-id="${deck.id}" title="Delete deck" aria-label="Delete ${escapeHtml(deck.name)}">
+          <i class="ph ph-trash"></i>
+        </button>
+      </article>
     `;
   }).join('');
 
-  // Add event listeners
-  decksList.querySelectorAll('.btn-edit').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const deckId = btn.dataset.deckId;
-      openDeckBuilder(deckId);
-    });
-  });
-
   decksList.querySelectorAll('.btn-delete').forEach(btn => {
-    btn.addEventListener('click', async (e) => {
-      e.stopPropagation();
-      const deckId = btn.dataset.deckId;
-
+    btn.addEventListener('click', async () => {
       const ok = await confirmDialog({
         title: 'Delete deck?',
         message: 'This permanently deletes the deck and its contents.',
@@ -153,30 +145,28 @@ function renderDecks() {
       });
       if (ok) {
         try {
-          showLoading();
-          await api.deleteDeck(deckId);
+          await api.deleteDeck(btn.dataset.deckId);
           await loadDecks();
-          hideLoading();
           showToast('Deck deleted', 'success');
         } catch (error) {
-          hideLoading();
           showToast('Failed to delete deck: ' + error.message, 'error');
         }
       }
     });
   });
 
-  decksList.querySelectorAll('.deck-card').forEach(card => {
-    card.addEventListener('click', () => {
-      const deckId = card.dataset.deckId;
-      openDeckBuilder(deckId);
+  decksList.querySelectorAll('.deck-card-link').forEach(link => {
+    link.addEventListener('click', (e) => {
+      // Let the browser handle open-in-new-tab and friends.
+      if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+      e.preventDefault();
+      openDeckBuilder(link.closest('.deck-card').dataset.deckId);
     });
   });
 }
 
 function openDeckBuilder(deckId) {
-  // Dispatch event to open deck builder
-  window.dispatchEvent(new CustomEvent('open-deck', { detail: { deckId } }));
+  window.dispatchEvent(new CustomEvent('navigate', { detail: { path: `/decks/${deckId}` } }));
 }
 
 function showImportModal() {
@@ -215,13 +205,10 @@ function showImportModal() {
       hideLoading();
       showToast(`Successfully imported ${result.imported} cards!`, 'success', 3000);
 
-      // Reload decks and open the imported deck
-      await loadDecks();
-
-      if (result.deck && result.deck.id) {
-        setTimeout(() => {
-          openDeckBuilder(result.deck.id);
-        }, 500);
+      if (result.deck?.id) {
+        openDeckBuilder(result.deck.id);
+      } else {
+        await loadDecks();
       }
     } catch (error) {
       hideLoading();

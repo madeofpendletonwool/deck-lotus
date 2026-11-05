@@ -1,21 +1,55 @@
 // API Client for Deck Lotus
 
+const SEARCH_CACHE_SIZE = 200;
+
 class ApiClient {
   constructor() {
     this.baseURL = '/api';
     this.token = localStorage.getItem('token');
+    this.refreshToken = localStorage.getItem('refreshToken');
+    this.refreshing = null;
+    this.searchCache = new Map();
   }
 
-  setToken(token) {
+  setToken(token, refreshToken = null) {
     this.token = token;
-    if (token) {
-      localStorage.setItem('token', token);
+    this.refreshToken = refreshToken;
+    this.persist('token', token);
+    this.persist('refreshToken', refreshToken);
+  }
+
+  persist(key, value) {
+    if (value) {
+      localStorage.setItem(key, value);
     } else {
-      localStorage.removeItem('token');
+      localStorage.removeItem(key);
     }
   }
 
-  async request(endpoint, options = {}) {
+  /** Swap the refresh token for new tokens. Concurrent 401s share one attempt. */
+  renewSession() {
+    if (!this.refreshToken) return Promise.resolve(false);
+    if (!this.refreshing) {
+      this.refreshing = fetch(`${this.baseURL}/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken: this.refreshToken }),
+      })
+        .then(async (response) => {
+          if (!response.ok) return false;
+          const tokens = await response.json();
+          this.setToken(tokens.accessToken, tokens.refreshToken);
+          return true;
+        })
+        .catch(() => false)
+        .finally(() => {
+          this.refreshing = null;
+        });
+    }
+    return this.refreshing;
+  }
+
+  async request(endpoint, options = {}, isRetry = false) {
     const headers = {
       'Content-Type': 'application/json',
       ...options.headers,
@@ -29,6 +63,16 @@ class ApiClient {
       ...options,
       headers,
     });
+
+    // A 401 only ever means the session is no good. Renew it, or send the user back to log in,
+    // rather than leaving every request on the page failing silently until a manual refresh.
+    if (response.status === 401 && this.token && !endpoint.startsWith('/auth/log')) {
+      if (!isRetry && (await this.renewSession())) {
+        return this.request(endpoint, options, true);
+      }
+      this.logout();
+      window.dispatchEvent(new CustomEvent('auth:expired'));
+    }
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({ error: 'Request failed' }));
@@ -44,7 +88,7 @@ class ApiClient {
       method: 'POST',
       body: JSON.stringify({ username, email, password }),
     });
-    this.setToken(data.accessToken);
+    this.setToken(data.accessToken, data.refreshToken);
     return data;
   }
 
@@ -53,7 +97,7 @@ class ApiClient {
       method: 'POST',
       body: JSON.stringify({ username, password }),
     });
-    this.setToken(data.accessToken);
+    this.setToken(data.accessToken, data.refreshToken);
     return data;
   }
 
@@ -81,19 +125,30 @@ class ApiClient {
   }
 
   // Card methods
-  async searchCards(query, limit = 20, type = null) {
+  async searchCards(query, limit = 20, type = null, { signal } = {}) {
     const params = new URLSearchParams({ q: query, limit });
     if (type) params.append('type', type);
-    return this.request(`/cards/search?${params}`);
+
+    const key = params.toString();
+    const cached = this.searchCache.get(key);
+    if (cached) return cached;
+
+    const result = await this.request(`/cards/search?${params}`, { signal });
+    if (this.searchCache.size >= SEARCH_CACHE_SIZE) {
+      this.searchCache.delete(this.searchCache.keys().next().value);
+    }
+    this.searchCache.set(key, result);
+    return result;
   }
 
-  async browseCards(filters = {}) {
+  async browseCards(filters = {}, { signal } = {}) {
     const params = new URLSearchParams();
     if (filters.name) params.append('name', filters.name);
     if (filters.colors) params.append('colors', filters.colors); // Already a string from frontend
     if (filters.type) params.append('type', filters.type);
     if (filters.rarities) params.append('rarities', filters.rarities);
     if (filters.sort) params.append('sort', filters.sort);
+    if (filters.seed) params.append('seed', filters.seed);
     if (filters.sets) params.append('sets', filters.sets); // Already a string from frontend
     if (filters.subtypes) params.append('subtypes', filters.subtypes); // Already a string from frontend
     if (filters.cmcMin !== null && filters.cmcMin !== undefined) params.append('cmcMin', filters.cmcMin);
@@ -101,7 +156,7 @@ class ApiClient {
     if (filters.onlyOwned) params.append('onlyOwned', filters.onlyOwned);
     if (filters.page) params.append('page', filters.page);
     if (filters.limit) params.append('limit', filters.limit);
-    return this.request(`/cards/browse?${params}`);
+    return this.request(`/cards/browse?${params}`, { signal });
   }
 
   async getCard(id) {
@@ -393,6 +448,7 @@ class ApiClient {
     if (filters.type && filters.type !== 'all') params.append('type', filters.type);
     if (filters.sets && filters.sets.length > 0) params.append('sets', filters.sets.join(','));
     if (filters.sort) params.append('sort', filters.sort);
+    if (filters.seed) params.append('seed', filters.seed);
     if (filters.availability) params.append('availability', filters.availability);
     if (filters.page) params.append('page', filters.page);
     if (filters.limit) params.append('limit', filters.limit);

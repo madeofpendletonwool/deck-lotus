@@ -1,5 +1,6 @@
 import api from '../services/api.js';
 import { showLoading, hideLoading, formatMana, showToast } from '../utils/ui.js';
+import { openExportModal } from './exportModal.js';
 
 // Board of a shared-deck card (board_type authoritative; is_sideboard is legacy).
 const sharedBoardOf = (c) => c.board_type || (c.is_sideboard ? 'sideboard' : 'mainboard');
@@ -17,6 +18,11 @@ export function setupSharedDeck() {
       const tab = btn.dataset.tab;
       switchTab(tab);
     });
+  });
+
+  // Anyone with the link can export the list, e.g. to print proxies of it.
+  document.getElementById('export-shared-deck-btn').addEventListener('click', () => {
+    if (sharedDeck) openExportModal(sharedDeck, { canFilterOwned: false });
   });
 
   // Import shared deck (for logged-in users)

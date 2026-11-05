@@ -207,7 +207,7 @@ function renderFilters() {
       <!-- Price Filters -->
       <div class="filter-group">
         <label>Price Range</label>
-        <div style="display: flex; gap: 0.5rem; align-items: center;">
+        <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center;">
           <input
             type="number"
             id="price-min"

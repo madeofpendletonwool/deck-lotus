@@ -210,12 +210,30 @@ async function showStatus() {
 }
 
 let priceHistoryChart = null;
+let chartLibrary = null;
 
-function renderHistoryChart(history, cardName, maxPrice) {
+// Chart.js is about 200 KB and only this one panel needs it, so fetch it the first time it's used.
+function loadChartLibrary() {
+  if (!chartLibrary) {
+    chartLibrary = new Promise((resolve) => {
+      const script = document.createElement('script');
+      script.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js';
+      script.onload = () => resolve(true);
+      script.onerror = () => {
+        chartLibrary = null;
+        resolve(false);
+      };
+      document.head.appendChild(script);
+    });
+  }
+  return chartLibrary;
+}
+
+async function renderHistoryChart(history, cardName, maxPrice) {
   const wrap = document.getElementById('pm-history-chart-wrap');
   const canvas = document.getElementById('pm-history-chart');
 
-  if (!window.Chart || !history.length) {
+  if (!history.length || !(await loadChartLibrary())) {
     wrap.classList.add('hidden');
     return;
   }

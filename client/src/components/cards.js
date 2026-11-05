@@ -16,6 +16,10 @@ let currentFilters = {
 };
 let allSets = [];
 let allSubtypes = [];
+let filterOptionsLoaded = false;
+let browseController = null; // Aborts the in-flight browse when a newer one starts
+// Shuffled order stays the same for a visit, so paging never repeats or skips cards.
+const shuffleSeed = 10007 + Math.floor(Math.random() * 90000);
 
 export function setupCards() {
   const searchInput = document.getElementById('cards-browse-search');
@@ -32,10 +36,6 @@ export function setupCards() {
   const prevBtn = document.getElementById('prev-page');
   const nextBtn = document.getElementById('next-page');
 
-  // Load sets and subtypes for modals
-  loadSets();
-  loadSubtypes();
-
   // Setup filter modals
   setupSetFilterModal();
   setupSubtypeFilterModal();
@@ -45,7 +45,7 @@ export function setupCards() {
     currentFilters.name = query;
     currentPage = 1;
     await loadCards();
-  }, 300);
+  }, 150);
 
   searchInput.addEventListener('input', (e) => {
     debouncedSearch(e.target.value);
@@ -86,9 +86,6 @@ export function setupCards() {
       currentFilters.rarities = Array.from(rarityCheckboxes)
         .filter(cb => cb.checked)
         .map(cb => cb.value);
-      // Update visual state
-      checkbox.closest('label').querySelector('.rarity-checkbox-box').style.border =
-        checkbox.checked ? '2px solid var(--primary)' : '2px solid transparent';
       currentPage = 1;
       await loadCards();
     });
@@ -133,21 +130,38 @@ export function setupCards() {
     await loadCards();
   });
 
+  // More filters
+  const moreFiltersBtn = document.getElementById('browse-more-filters');
+  moreFiltersBtn.addEventListener('click', () => {
+    const panel = document.getElementById('browse-filters');
+    panel.classList.toggle('hidden');
+    moreFiltersBtn.setAttribute('aria-expanded', String(!panel.classList.contains('hidden')));
+  });
+
   // Pagination
   prevBtn.addEventListener('click', async () => {
     if (currentPage > 1) {
       currentPage--;
       await loadCards();
+      window.scrollTo(0, 0);
     }
   });
 
   nextBtn.addEventListener('click', async () => {
     currentPage++;
     await loadCards();
+    window.scrollTo(0, 0);
   });
 
   // Load cards when page is shown
   window.addEventListener('page:cards', () => {
+    // Fetched here rather than at startup: nothing needs them until this page opens, and at
+    // startup the user may not be logged in yet.
+    if (!filterOptionsLoaded) {
+      filterOptionsLoaded = true;
+      loadSets();
+      loadSubtypes();
+    }
     loadCards();
   });
 
@@ -366,80 +380,90 @@ function renderSubtypeList(subtypes) {
   });
 }
 
-async function loadCards() {
-  try {
-    showLoading();
+function updateFilterCount() {
+  const count =
+    currentFilters.rarities.length +
+    currentFilters.sets.length +
+    currentFilters.subtypes.length +
+    (currentFilters.cmcMin !== null || currentFilters.cmcMax !== null ? 1 : 0) +
+    (currentFilters.onlyOwned ? 1 : 0);
+  const badge = document.getElementById('browse-filter-count');
+  badge.textContent = count;
+  badge.classList.toggle('hidden', count === 0);
+}
 
+async function loadCards() {
+  browseController?.abort();
+  const controller = new AbortController();
+  browseController = controller;
+
+  const grid = document.getElementById('cards-grid');
+  grid.classList.add('is-loading');
+  updateFilterCount();
+
+  try {
     const filters = {
       name: currentFilters.name && currentFilters.name.trim() ? currentFilters.name : undefined,
       colors: currentFilters.colors.length > 0 ? currentFilters.colors.join(',') : undefined,
       type: currentFilters.type !== 'all' ? currentFilters.type : undefined,
       rarities: currentFilters.rarities.length > 0 ? currentFilters.rarities.join(',') : undefined,
       sort: currentFilters.sort,
+      seed: shuffleSeed,
       sets: currentFilters.sets.length > 0 ? currentFilters.sets.join(',') : undefined,
       subtypes: currentFilters.subtypes.length > 0 ? currentFilters.subtypes.join(',') : undefined,
       cmcMin: currentFilters.cmcMin,
       cmcMax: currentFilters.cmcMax,
       onlyOwned: currentFilters.onlyOwned,
       page: currentPage,
-      limit: 50
+      limit: 60
     };
 
     // Remove undefined values
     Object.keys(filters).forEach(key => filters[key] === undefined && delete filters[key]);
 
-    console.log('Frontend sending filters:', currentFilters);
-    console.log('API filters after processing:', filters);
-
-    const result = await api.browseCards(filters);
+    const result = await api.browseCards(filters, { signal: controller.signal });
     renderCards(result.cards || []);
     updatePagination(result.page, result.totalPages, result.total);
-    hideLoading();
+    grid.classList.remove('is-loading');
   } catch (error) {
-    hideLoading();
+    if (error.name === 'AbortError') return;
+    grid.classList.remove('is-loading');
     console.error('Failed to load cards:', error);
+    grid.innerHTML = `<div class="grid-message"><i class="ph ph-warning-circle"></i><p>Couldn't load cards: ${error.message}</p></div>`;
   }
+}
+
+function escapeAttr(text) {
+  return String(text ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
 }
 
 function renderCards(cards) {
   const cardsGrid = document.getElementById('cards-grid');
 
   if (cards.length === 0) {
-    cardsGrid.innerHTML = '<div style="grid-column: 1 / -1; text-align: center; padding: 2rem; color: var(--text-secondary);">No cards found</div>';
+    cardsGrid.innerHTML = '<div class="grid-message"><i class="ph ph-magnifying-glass"></i><p>No cards match. Try a shorter name or fewer filters.</p></div>';
     return;
   }
 
   cardsGrid.innerHTML = cards.map(card => `
-    <div class="card-item" data-card-id="${card.id}" draggable="true" style="position: relative;">
-      ${card.image_url ? `
-        <img src="${card.large_image_url || card.image_url}"
-             alt="${card.name}"
-             data-fallback="${card.image_url}"
-             class="card-image"
-             style="width: 100%; border-radius: 8px; margin-bottom: 0.5rem; pointer-events: none;">
-      ` : ''}
-      <button class="quick-add-btn" data-card-id="${card.id}" style="position: absolute; top: 8px; right: 8px; background: rgba(0,0,0,0.8); color: white; border: none; border-radius: 50%; width: 32px; height: 32px; cursor: pointer; font-size: 20px; display: flex; align-items: center; justify-content: center; z-index: 10;">+</button>
-      <button class="ownership-toggle-btn ${card.is_owned ? 'owned' : ''}" data-card-id="${card.id}" style="position: absolute; top: 8px; left: 8px; background: ${card.is_owned ? 'rgba(16, 185, 129, 0.9)' : 'rgba(0,0,0,0.8)'}; color: white; border: none; border-radius: 50%; width: 32px; height: 32px; cursor: pointer; font-size: 18px; display: flex; align-items: center; justify-content: center; z-index: 10;">
-        <i class="ph ${card.is_owned ? 'ph-check-circle' : 'ph-circle'}"></i>
+    <div class="card-item" data-card-id="${card.id}" draggable="true" title="${escapeAttr(card.name)}">
+      ${card.image_url
+        ? `<img src="${card.image_url}" alt="${escapeAttr(card.name)}" class="card-image" width="488" height="680" loading="lazy" decoding="async">`
+        : `<div class="card-image card-image-missing">${escapeAttr(card.name)}</div>`}
+      <button class="ownership-toggle-btn ${card.is_owned ? 'owned' : ''}" data-card-id="${card.id}" aria-label="Toggle in collection">
+        <i class="${card.is_owned ? 'ph-fill ph-check-circle' : 'ph ph-circle'}"></i>
       </button>
-      <div class="card-name" style="pointer-events: none;">${card.name}</div>
-      <div class="card-mana" style="pointer-events: none;">${formatMana(card.mana_cost)}</div>
-      <div class="card-type" style="pointer-events: none;">${card.type_line || ''}</div>
-      <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.5rem; pointer-events: none;">
-        Mana Value: ${card.cmc || 0}
-      </div>
+      <button class="quick-add-btn" data-card-id="${card.id}" aria-label="Add to a deck"><i class="ph ph-plus"></i></button>
     </div>
   `).join('');
 
-  // Add error handlers for images
-  cardsGrid.querySelectorAll('.card-image').forEach(img => {
+  // A card with no working image still needs to show which card it is
+  cardsGrid.querySelectorAll('img.card-image').forEach(img => {
     img.addEventListener('error', function() {
-      const fallback = this.dataset.fallback;
-      if (fallback && this.src !== fallback) {
-        this.src = fallback;
-      } else {
-        this.style.display = 'none';
-      }
+      const missing = document.createElement('div');
+      missing.className = 'card-image card-image-missing';
+      missing.textContent = this.alt;
+      this.replaceWith(missing);
     });
   });
 
@@ -481,12 +505,10 @@ async function toggleCardOwnership(cardId, buttonEl) {
     // Update button appearance
     if (result.owned) {
       buttonEl.classList.add('owned');
-      buttonEl.style.background = 'rgba(16, 185, 129, 0.9)';
-      buttonEl.innerHTML = '<i class="ph ph-check-circle"></i>';
+      buttonEl.innerHTML = '<i class="ph-fill ph-check-circle"></i>';
       showToast('Added to collection', 'success', 1500);
     } else {
       buttonEl.classList.remove('owned');
-      buttonEl.style.background = 'rgba(0,0,0,0.8)';
       buttonEl.innerHTML = '<i class="ph ph-circle"></i>';
       showToast('Removed from collection', 'success', 1500);
     }
@@ -501,7 +523,9 @@ function updatePagination(page, totalPages, total) {
   const prevBtn = document.getElementById('prev-page');
   const nextBtn = document.getElementById('next-page');
 
-  pageInfo.textContent = `Page ${page} of ${totalPages} (${total} cards)`;
+  pageInfo.textContent = totalPages > 0 ? `Page ${page} of ${totalPages}` : '';
+  document.getElementById('browse-count').textContent = `${total.toLocaleString()} ${total === 1 ? 'card' : 'cards'}`;
+  document.getElementById('pagination').classList.toggle('hidden', totalPages <= 1);
 
   prevBtn.disabled = page <= 1;
   nextBtn.disabled = page >= totalPages;
@@ -1493,11 +1517,9 @@ function updateBrowseGridOwnership(cardId, isOwned) {
 
   if (isOwned) {
     ownershipBtn.classList.add('owned');
-    ownershipBtn.style.background = 'rgba(16, 185, 129, 0.9)';
-    ownershipBtn.innerHTML = '<i class="ph ph-check-circle"></i>';
+    ownershipBtn.innerHTML = '<i class="ph-fill ph-check-circle"></i>';
   } else {
     ownershipBtn.classList.remove('owned');
-    ownershipBtn.style.background = 'rgba(0,0,0,0.8)';
     ownershipBtn.innerHTML = '<i class="ph ph-circle"></i>';
   }
 }

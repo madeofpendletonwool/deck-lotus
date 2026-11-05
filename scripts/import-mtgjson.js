@@ -6,6 +6,7 @@ import { pipeline } from 'stream/promises';
 import Database from 'better-sqlite3';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { mergeCardRows } from '../src/utils/cardFaces.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -102,6 +103,7 @@ async function importCards(sourceDb, targetDb) {
       c.type, c.text, c.power, c.toughness, c.loyalty, c.keywords,
       c.isReserved, c.edhrecRank, c.edhrecSaltiness, c.originalReleaseDate,
       c.subtypes, c.supertypes, c.types, c.leadershipSkills, c.layout,
+      c.side, c.faceName,
       cl.alchemy, cl.brawl, cl.commander, cl.duel, cl.future,
       cl.gladiator, cl.historic, cl.legacy, cl.modern, cl.oathbreaker,
       cl.oldschool, cl.pauper, cl.paupercommander, cl.penny, cl.pioneer,
@@ -237,8 +239,9 @@ async function importCards(sourceDb, targetDb) {
     }
   });
 
-  insertMany(sourceCards);
-  console.log(`✓ Imported ${sourceCards.length} unique cards`);
+  const uniqueCards = mergeCardRows(sourceCards);
+  insertMany(uniqueCards);
+  console.log(`✓ Imported ${uniqueCards.length} unique cards`);
 
   // Import printings
   console.log('Importing card printings...');

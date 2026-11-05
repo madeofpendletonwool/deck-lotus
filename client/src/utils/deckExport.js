@@ -6,15 +6,15 @@
  *  - MTG Print takes Arena-style lines. A flat list keeps every card, with no headers to trip on.
  *  - MTG Print reports a "Commander" header as a card it can't find.
  *  - MPC Autofill splits a line on "// " into front and back faces, so "A // B" is never sent
- *    as-is (see mpcName). Set codes would *filter* its search to images tagged with that
- *    printing, so they are left off.
+ *    as-is (see mpcName). It picks art by name, so set codes are left off: its current search
+ *    ignores them, and its newer API treats them as a filter.
  *  - Arena, Moxfield and MTGO each mark the sideboard differently.
  */
 
 const FACE_SEPARATOR = ' // ';
 
-// Both halves are printed on one face, so MPC Autofill indexes these under both names.
-const SPLIT_FACE_LAYOUTS = new Set(['split', 'aftermath']);
+// All the names are printed on one side, so MPC Autofill indexes these under every name joined.
+const ONE_SIDED_NAME_LAYOUTS = new Set(['split', 'aftermath', 'flip']);
 
 export const EXPORT_FORMATS = [
   {
@@ -107,7 +107,7 @@ function isBasicLand(card) {
 function mpcName(card) {
   const name = card.name || '';
   if (!name.includes(FACE_SEPARATOR)) return name;
-  return SPLIT_FACE_LAYOUTS.has(card.layout) ? name.replace(FACE_SEPARATOR, ' ') : firstFaceName(card);
+  return ONE_SIDED_NAME_LAYOUTS.has(card.layout) ? name.replaceAll(FACE_SEPARATOR, ' ') : firstFaceName(card);
 }
 
 /** Just the first name, for formats that don't understand "A // B" at all. */
@@ -121,23 +121,43 @@ function printingSuffix(card) {
   return ` (${card.set_code.toUpperCase()})${collector}`;
 }
 
+/** Copies of a card the collection covers. A card marked owned with no count covers them all. */
+function ownedCopies(card) {
+  if (!card.is_owned) return 0;
+  return card.owned_quantity ?? Infinity;
+}
+
+/**
+ * Reduce each list to the copies still missing. Owned copies are per card, not per printing, and
+ * only count once across the deck, so they go to the earliest boards first.
+ */
+function subtractOwned(lists) {
+  const used = new Map();
+  return lists.map((list) => list.flatMap((card) => {
+    const key = card.card_id ?? card.name;
+    const available = Math.max(ownedCopies(card) - (used.get(key) || 0), 0);
+    const quantity = card.quantity ?? 1;
+    const covered = Math.min(available, quantity);
+    used.set(key, (used.get(key) || 0) + covered);
+    return covered === quantity ? [] : [{ ...card, quantity: quantity - covered }];
+  }));
+}
+
 /** Sort a deck into boards, applying the export options. Commanders never appear twice. */
 export function partitionDeck(cards, options = {}) {
   const opts = { ...DEFAULT_EXPORT_OPTIONS, ...options };
-  const keep = (card) => {
-    if (opts.excludeBasics && isBasicLand(card)) return false;
-    if (opts.unownedOnly && card.is_owned) return false;
-    return true;
-  };
-  const kept = (cards || []).filter(keep);
+  const kept = (cards || []).filter((card) => !(opts.excludeBasics && isBasicLand(card)));
   const inBoard = (board) => kept.filter((c) => boardOf(c) === board && !c.is_commander);
 
-  return {
-    commanders: kept.filter((c) => c.is_commander),
-    main: inBoard('mainboard'),
-    side: opts.includeSideboard ? inBoard('sideboard') : [],
-    maybe: opts.includeMaybeboard ? inBoard('maybeboard') : [],
-  };
+  const boards = [
+    kept.filter((c) => c.is_commander),
+    inBoard('mainboard'),
+    opts.includeSideboard ? inBoard('sideboard') : [],
+    opts.includeMaybeboard ? inBoard('maybeboard') : [],
+  ];
+  const [commanders, main, side, maybe] = opts.unownedOnly ? subtractOwned(boards) : boards;
+
+  return { commanders, main, side, maybe };
 }
 
 /** Sum quantities of lines that come out identical, e.g. the same land from two sets. */

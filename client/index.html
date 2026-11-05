@@ -34,6 +34,8 @@
             sizes="512x512"
             href="/android-chrome-512x512.png"
         />
+        <link rel="preconnect" href="https://cards.scryfall.io" />
+        <meta name="theme-color" content="#0c0d11" />
         <link rel="stylesheet" href="/mana.min.css" />
         <link
             rel="stylesheet"
@@ -46,7 +48,6 @@
             href="https://cdn.jsdelivr.net/npm/@phosphor-icons/web@2.1.1/src/fill/style.css"
         />
         <link rel="stylesheet" href="/src/styles/main.css" />
-        <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     </head>
     <body>
         <div id="app">
@@ -54,34 +55,30 @@
             <nav id="navbar" class="navbar hidden">
                 <div class="nav-container">
                     <div class="nav-brand">
-                        <img
-                            src="/decklotus.png"
-                            alt="Deck Lotus"
-                            style="height: 40px"
-                        />
+                        <img src="/decklotus.png" alt="Deck Lotus" class="nav-logo" />
                     </div>
                     <div class="nav-links">
-                        <a href="#" data-page="decks" class="nav-link active" title="My Decks">
+                        <a href="/decks" data-page="decks" class="nav-link active" title="My Decks">
                             <i class="ph ph-cards nav-icon"></i>
                             <span class="nav-text">My Decks</span>
                         </a>
-                        <a href="#" data-page="cards" class="nav-link" title="Browse Cards">
+                        <a href="/cards" data-page="cards" class="nav-link" title="Browse Cards">
                             <i class="ph ph-magnifying-glass nav-icon"></i>
                             <span class="nav-text">Browse Cards</span>
                         </a>
-                        <a href="#" data-page="shopping" class="nav-link" title="Shopping">
+                        <a href="/shopping" data-page="shopping" class="nav-link" title="Shopping">
                             <i class="ph ph-shopping-cart nav-icon"></i>
                             <span class="nav-text">Shopping</span>
                         </a>
-                        <a href="#" data-page="inventory" class="nav-link" title="Inventory">
+                        <a href="/inventory" data-page="inventory" class="nav-link" title="Inventory">
                             <i class="ph ph-archive nav-icon"></i>
                             <span class="nav-text">Inventory</span>
                         </a>
-                        <a href="#" data-page="price-monitoring" class="nav-link" title="Price Watch">
+                        <a href="/price-monitoring" data-page="price-monitoring" class="nav-link" title="Price Watch">
                             <i class="ph ph-bell-ringing nav-icon"></i>
                             <span class="nav-text">Price Watch</span>
                         </a>
-                        <a href="#" data-page="settings" class="nav-link" title="Settings">
+                        <a href="/settings" data-page="settings" class="nav-link" title="Settings">
                             <i class="ph ph-gear nav-icon"></i>
                             <span class="nav-text">Settings</span>
                         </a>
@@ -303,8 +300,8 @@
             <div id="decks-page" class="page hidden">
                 <div class="page-header">
                     <h2>My Decks</h2>
-                    <div style="display: flex; gap: 0.5rem">
-                        <button id="import-deck-btn" class="btn btn-secondary">
+                    <div class="btn-row spacer">
+                        <button id="import-deck-btn" class="btn btn-ghost">
                             <i class="ph ph-upload btn-icon"></i>
                             <span class="btn-text">Import Deck</span>
                         </button>
@@ -321,131 +318,82 @@
             <div id="deck-builder-page" class="page hidden">
                 <div class="deck-builder">
                     <div class="deck-header">
-                        <div class="deck-info-row">
-                            <input
-                                type="text"
-                                id="deck-name"
-                                class="deck-name-input"
-                                placeholder="Deck Name"
-                            />
-                            <select id="deck-format" class="deck-format-select">
-                                <option value="">Select Format</option>
-                                <option value="standard">Standard</option>
-                                <option value="modern">Modern</option>
-                                <option value="commander">Commander</option>
-                                <option value="legacy">Legacy</option>
-                                <option value="vintage">Vintage</option>
-                                <option value="pauper">Pauper</option>
-                            </select>
-                            <div class="deck-actions">
-                                <button
-                                    id="share-deck-btn"
-                                    class="btn btn-secondary"
-                                >
-                                    Share
-                                </button>
-                                <button
-                                    id="save-deck-btn"
-                                    class="btn btn-primary"
-                                >
-                                    Save
-                                </button>
-                                <button
-                                    id="back-to-decks-btn"
-                                    class="btn btn-secondary"
-                                >
-                                    Back
-                                </button>
-                            </div>
-                        </div>
-                        <div class="deck-price-row">
-                            <div
-                                id="deck-total-price"
-                                class="deck-price-display"
-                            ></div>
-                            <div style="display: flex; gap: 0.5rem;">
-                                <button id="optimize-printings-btn" class="btn btn-secondary">
-                                    <i class="ph ph-magic-wand btn-icon"></i>
-                                    <span class="btn-text">Optimize Printings</span>
-                                </button>
-                                <button id="buy-deck-btn" class="btn btn-success">
-                                    Buy Deck
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Card Search - Full Width Row -->
-                    <div class="search-panel-row">
-                        <div class="search-box">
-                            <input
-                                type="text"
-                                id="card-search"
-                                placeholder="Add new cards..."
-                                autocomplete="off"
-                            />
-                            <div
-                                id="search-results"
-                                class="search-results hidden"
-                            ></div>
+                        <button id="back-to-decks-btn" class="icon-btn" title="Back to decks" aria-label="Back to decks">
+                            <i class="ph ph-arrow-left"></i>
+                        </button>
+                        <input type="text" id="deck-name" class="deck-name-input" placeholder="Untitled deck" aria-label="Deck name" />
+                        <select id="deck-format" class="deck-format-select" aria-label="Format">
+                            <option value="">No format</option>
+                            <option value="standard">Standard</option>
+                            <option value="modern">Modern</option>
+                            <option value="commander">Commander</option>
+                            <option value="legacy">Legacy</option>
+                            <option value="vintage">Vintage</option>
+                            <option value="pauper">Pauper</option>
+                        </select>
+                        <span id="deck-save-status" class="deck-save-status" aria-live="polite"></span>
+                        <div id="deck-total-price" class="deck-price-display"></div>
+                        <div class="deck-actions">
+                            <button id="optimize-printings-btn" class="btn btn-ghost" title="Find cheaper or matching printings">
+                                <i class="ph ph-magic-wand btn-icon"></i>
+                                <span class="btn-text">Optimize</span>
+                            </button>
+                            <button id="share-deck-btn" class="btn btn-ghost">
+                                <i class="ph ph-share-network btn-icon"></i>
+                                <span class="btn-text">Share</span>
+                            </button>
+                            <button id="export-deck-btn" class="btn btn-ghost">
+                                <i class="ph ph-export btn-icon"></i>
+                                <span class="btn-text">Export</span>
+                            </button>
+                            <button id="buy-deck-btn" class="btn btn-primary">
+                                <i class="ph ph-shopping-cart-simple btn-icon"></i>
+                                <span class="btn-text">Buy</span>
+                            </button>
                         </div>
                     </div>
 
                     <div class="deck-builder-content">
                         <!-- Deck List -->
                         <div class="deck-panel">
-                            <div class="deck-tabs">
-                                <button
-                                    class="tab-btn active"
-                                    data-tab="mainboard"
-                                >
-                                    Mainboard (<span id="mainboard-count"
-                                        >0</span
-                                    >)
-                                </button>
-                                <button class="tab-btn" data-tab="sideboard">
-                                    Sideboard (<span id="sideboard-count"
-                                        >0</span
-                                    >)
-                                </button>
-                                <button class="tab-btn" data-tab="maybeboard">
-                                    Maybeboard (<span id="maybeboard-count"
-                                        >0</span
-                                    >)
-                                </button>
-                                <div class="deck-view-controls">
-                                    <button
-                                        id="toggle-compact-btn"
-                                        class="btn-icon"
-                                        title="Toggle compact view"
-                                    >
-                                        <i class="ph ph-list"></i>
-                                    </button>
-                                    <button
-                                        id="export-deck-btn"
-                                        class="btn-icon"
-                                        title="Export deck"
-                                    >
-                                        <i class="ph ph-download-simple"></i>
-                                    </button>
-                                </div>
-                            </div>
-                            <div style="padding: 0.75rem; position: relative;">
+                            <div class="search-box">
+                                <i class="ph ph-magnifying-glass search-box-icon"></i>
                                 <input
                                     type="text"
-                                    id="deck-filter-search"
-                                    placeholder="Filter cards in deck..."
+                                    id="card-search"
+                                    placeholder="Add a card by name"
                                     autocomplete="off"
-                                    style="width: 100%; padding: 0.5rem 2rem 0.5rem 0.75rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-secondary); font-size: 0.9rem;"
+                                    spellcheck="false"
+                                    aria-label="Add a card by name"
+                                    role="combobox"
+                                    aria-expanded="false"
+                                    aria-controls="search-results"
                                 />
-                                <button
-                                    id="deck-filter-clear"
-                                    class="hidden"
-                                    style="position: absolute; right: 1.5rem; top: 50%; transform: translateY(-50%); background: none; border: none; color: var(--text-secondary); cursor: pointer; padding: 0.25rem; display: flex; align-items: center; justify-content: center; font-size: 1.25rem;"
-                                    title="Clear filter"
-                                >
-                                    <i class="ph ph-x"></i>
+                                <kbd class="search-box-hint">/</kbd>
+                                <div id="search-results" class="search-results hidden" role="listbox"></div>
+                            </div>
+                            <div class="deck-tabs">
+                                <button class="tab-btn active" data-tab="mainboard">
+                                    Main <span id="mainboard-count" class="tab-count">0</span>
                                 </button>
+                                <button class="tab-btn" data-tab="sideboard">
+                                    Side <span id="sideboard-count" class="tab-count">0</span>
+                                </button>
+                                <button class="tab-btn" data-tab="maybeboard">
+                                    Maybe <span id="maybeboard-count" class="tab-count">0</span>
+                                </button>
+                                <div class="deck-view-controls">
+                                    <div class="deck-filter">
+                                        <i class="ph ph-funnel-simple deck-filter-icon"></i>
+                                        <input type="text" id="deck-filter-search" placeholder="Filter" autocomplete="off" aria-label="Filter cards in this deck" />
+                                        <button id="deck-filter-clear" class="hidden" title="Clear filter" aria-label="Clear filter">
+                                            <i class="ph ph-x"></i>
+                                        </button>
+                                    </div>
+                                    <button id="toggle-compact-btn" class="icon-btn" title="Change list density" aria-label="Change list density">
+                                        <i class="ph ph-rows"></i>
+                                    </button>
+                                </div>
                             </div>
                             <div id="mainboard" class="deck-list active"></div>
                             <div id="sideboard" class="deck-list hidden"></div>
@@ -454,20 +402,10 @@
 
                         <!-- Stats Panel -->
                         <div class="stats-panel">
-                            <div
-                                style="
-                                    display: flex;
-                                    justify-content: space-between;
-                                    align-items: center;
-                                    margin-bottom: 1rem;
-                                "
-                            >
-                                <h3 style="margin: 0">Deck Statistics</h3>
-                                <button
-                                    id="check-legality-btn"
-                                    class="btn btn-primary btn-sm"
-                                >
-                                    Check Legality
+                            <div class="stats-panel-header">
+                                <h3>Deck stats</h3>
+                                <button id="check-legality-btn" class="btn btn-ghost btn-sm">
+                                    <i class="ph ph-seal-check"></i> Check legality
                                 </button>
                             </div>
                             <div id="deck-stats">
@@ -494,49 +432,17 @@
                     </div>
 
                     <!-- Example Hand Section -->
-                    <div
-                        class="example-hand-section"
-                        style="
-                            background: var(--bg-secondary);
-                            border-radius: 1rem;
-                            padding: 1.5rem;
-                            margin-top: 1.5rem;
-                        "
-                    >
-                        <h3 style="margin-bottom: 1rem">Example Hand</h3>
-                        <div id="example-hand" class="example-hand-grid"></div>
-                        <div
-                            class="example-hand-controls"
-                            style="display: flex; gap: 0.5rem; margin-top: 1rem"
-                        >
-                            <button
-                                id="draw-card-btn"
-                                class="btn btn-secondary"
-                                style="flex: 1"
-                            >
-                                <i class="ph ph-plus"></i> Draw
-                            </button>
-                            <button
-                                id="deal-hand-btn"
-                                class="btn btn-primary"
-                                style="flex: 1"
-                            >
-                                <i class="ph ph-shuffle"></i> Deal New Hand
-                            </button>
+                    <section class="example-hand-section">
+                        <div class="example-hand-header">
+                            <h3>Example hand</h3>
+                            <div id="hand-stats" class="hand-stats"></div>
+                            <div class="example-hand-controls">
+                                <button id="draw-card-btn" class="btn btn-ghost btn-sm"><i class="ph ph-plus"></i> Draw</button>
+                                <button id="deal-hand-btn" class="btn btn-secondary btn-sm"><i class="ph ph-shuffle"></i> New hand</button>
+                            </div>
                         </div>
-                        <div
-                            id="hand-stats"
-                            style="
-                                margin-top: 1rem;
-                                padding: 0.75rem;
-                                background: var(--bg-tertiary);
-                                border-radius: 0.5rem;
-                                text-align: center;
-                                font-size: 0.875rem;
-                                color: var(--text-secondary);
-                            "
-                        ></div>
-                    </div>
+                        <div id="example-hand" class="example-hand-grid"></div>
+                    </section>
                 </div>
             </div>
 
@@ -544,168 +450,74 @@
             <div id="cards-page" class="page hidden">
                 <div class="page-header">
                     <h2>Browse Cards</h2>
+                    <span id="browse-count" class="page-header-meta" aria-live="polite"></span>
                 </div>
-                <div class="cards-search" style="position: relative;">
-                    <input
-                        type="text"
-                        id="cards-browse-search"
-                        placeholder="Search cards..."
-                        class="search-input"
-                        style="padding-right: 2.5rem;"
-                    />
-                    <button
-                        id="cards-browse-clear"
-                        class="search-clear-btn hidden"
-                        title="Clear search"
-                    >
-                        <i class="ph ph-x"></i>
+                <div class="browse-toolbar">
+                    <div class="browse-search">
+                        <i class="ph ph-magnifying-glass search-box-icon"></i>
+                        <input type="text" id="cards-browse-search" placeholder="Search by card name" class="search-input" autocomplete="off" spellcheck="false" aria-label="Search by card name" />
+                        <button id="cards-browse-clear" class="search-clear-btn hidden" title="Clear search" aria-label="Clear search">
+                            <i class="ph ph-x"></i>
+                        </button>
+                    </div>
+                    <div id="filter-colors" class="color-filter-group" role="group" aria-label="Colors">
+                        <label class="color-checkbox" title="White"><input type="checkbox" value="W" /><span class="color-checkbox-box"><i class="ms ms-w ms-cost"></i></span></label>
+                        <label class="color-checkbox" title="Blue"><input type="checkbox" value="U" /><span class="color-checkbox-box"><i class="ms ms-u ms-cost"></i></span></label>
+                        <label class="color-checkbox" title="Black"><input type="checkbox" value="B" /><span class="color-checkbox-box"><i class="ms ms-b ms-cost"></i></span></label>
+                        <label class="color-checkbox" title="Red"><input type="checkbox" value="R" /><span class="color-checkbox-box"><i class="ms ms-r ms-cost"></i></span></label>
+                        <label class="color-checkbox" title="Green"><input type="checkbox" value="G" /><span class="color-checkbox-box"><i class="ms ms-g ms-cost"></i></span></label>
+                        <label class="color-checkbox" title="Colorless"><input type="checkbox" value="C" /><span class="color-checkbox-box"><i class="ms ms-c ms-cost"></i></span></label>
+                    </div>
+                    <select id="filter-types" class="filter-select" aria-label="Card type">
+                        <option value="all">All types</option>
+                        <option value="Creature">Creature</option>
+                        <option value="Instant">Instant</option>
+                        <option value="Sorcery">Sorcery</option>
+                        <option value="Enchantment">Enchantment</option>
+                        <option value="Artifact">Artifact</option>
+                        <option value="Planeswalker">Planeswalker</option>
+                        <option value="Land">Land</option>
+                    </select>
+                    <select id="filter-sort" class="filter-select" aria-label="Sort by">
+                        <option value="random">Sort: Shuffled</option>
+                        <option value="name">Sort: Name</option>
+                        <option value="cmc">Sort: Mana value</option>
+                        <option value="color">Sort: Color</option>
+                        <option value="price">Sort: Price, high to low</option>
+                    </select>
+                    <button id="browse-more-filters" class="btn btn-ghost" aria-expanded="false" aria-controls="browse-filters">
+                        <i class="ph ph-sliders-horizontal"></i> Filters <span id="browse-filter-count" class="tab-count hidden"></span>
                     </button>
-                    <div class="filter-bar">
-                        <div class="filter-field">
-                            <label class="field-label">Sort By</label>
-                            <select id="filter-sort" class="filter-select">
-                                <option value="random">Random</option>
-                                <option value="name">Alphabetical</option>
-                                <option value="cmc">Mana Value</option>
-                                <option value="color">Color</option>
-                                <option value="price">
-                                    Price (High to Low)
-                                </option>
-                            </select>
+                </div>
+                <div id="browse-filters" class="filter-bar hidden">
+                    <div class="filter-field">
+                        <span class="field-label">Rarity</span>
+                        <div id="filter-rarity" class="rarity-filter-group">
+                            <label class="rarity-checkbox"><input type="checkbox" value="common" /><span class="rarity-checkbox-box rarity-c">Common</span></label>
+                            <label class="rarity-checkbox"><input type="checkbox" value="uncommon" /><span class="rarity-checkbox-box rarity-u">Uncommon</span></label>
+                            <label class="rarity-checkbox"><input type="checkbox" value="rare" /><span class="rarity-checkbox-box rarity-r">Rare</span></label>
+                            <label class="rarity-checkbox"><input type="checkbox" value="mythic" /><span class="rarity-checkbox-box rarity-m">Mythic</span></label>
                         </div>
-                        <div class="filter-field">
-                            <label class="field-label">Card Type</label>
-                            <select id="filter-types" class="filter-select">
-                                <option value="all">All Types</option>
-                                <option value="Creature">Creature</option>
-                                <option value="Instant">Instant</option>
-                                <option value="Sorcery">Sorcery</option>
-                                <option value="Enchantment">Enchantment</option>
-                                <option value="Artifact">Artifact</option>
-                                <option value="Planeswalker">
-                                    Planeswalker
-                                </option>
-                                <option value="Land">Land</option>
-                            </select>
+                    </div>
+                    <div class="filter-field">
+                        <label class="field-label" for="filter-cmc-min">Mana value</label>
+                        <div class="cmc-range">
+                            <input type="number" id="filter-cmc-min" class="input-narrow" placeholder="Min" min="0" max="20" aria-label="Minimum mana value" />
+                            <span>to</span>
+                            <input type="number" id="filter-cmc-max" class="input-narrow" placeholder="Max" min="0" max="20" aria-label="Maximum mana value" />
                         </div>
-                        <div class="filter-field">
-                            <label class="field-label">Rarity</label>
-                            <div id="filter-rarity" class="rarity-filter-group" style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                                <label class="rarity-checkbox">
-                                    <input type="checkbox" value="common" />
-                                    <span class="rarity-checkbox-box rarity-c">C</span>
-                                </label>
-                                <label class="rarity-checkbox">
-                                    <input type="checkbox" value="uncommon" />
-                                    <span class="rarity-checkbox-box rarity-u">U</span>
-                                </label>
-                                <label class="rarity-checkbox">
-                                    <input type="checkbox" value="rare" />
-                                    <span class="rarity-checkbox-box rarity-r">R</span>
-                                </label>
-                                <label class="rarity-checkbox">
-                                    <input type="checkbox" value="mythic" />
-                                    <span class="rarity-checkbox-box rarity-m">M</span>
-                                </label>
-                            </div>
-                        </div>
-                        <div class="filter-field">
-                            <label class="field-label">CMC</label>
-                            <div class="cmc-range">
-                                <input
-                                    type="number"
-                                    id="filter-cmc-min"
-                                    class="input-narrow"
-                                    placeholder="Min"
-                                    min="0"
-                                    max="20"
-                                />
-                                <span>-</span>
-                                <input
-                                    type="number"
-                                    id="filter-cmc-max"
-                                    class="input-narrow"
-                                    placeholder="Max"
-                                    min="0"
-                                    max="20"
-                                />
-                            </div>
-                        </div>
-                        <div class="filter-field">
-                            <label class="field-label">Colors</label>
-                            <div id="filter-colors" class="color-filter-group">
-                                <label class="color-checkbox">
-                                    <input type="checkbox" value="W" />
-                                    <span class="color-checkbox-box"
-                                        ><i class="ms ms-w ms-cost"></i
-                                    ></span>
-                                </label>
-                                <label class="color-checkbox">
-                                    <input type="checkbox" value="U" />
-                                    <span class="color-checkbox-box"
-                                        ><i class="ms ms-u ms-cost"></i
-                                    ></span>
-                                </label>
-                                <label class="color-checkbox">
-                                    <input type="checkbox" value="B" />
-                                    <span class="color-checkbox-box"
-                                        ><i class="ms ms-b ms-cost"></i
-                                    ></span>
-                                </label>
-                                <label class="color-checkbox">
-                                    <input type="checkbox" value="R" />
-                                    <span class="color-checkbox-box"
-                                        ><i class="ms ms-r ms-cost"></i
-                                    ></span>
-                                </label>
-                                <label class="color-checkbox">
-                                    <input type="checkbox" value="G" />
-                                    <span class="color-checkbox-box"
-                                        ><i class="ms ms-g ms-cost"></i
-                                    ></span>
-                                </label>
-                                <label class="color-checkbox">
-                                    <input type="checkbox" value="C" />
-                                    <span class="color-checkbox-box"
-                                        ><i class="ms ms-c ms-cost"></i
-                                    ></span>
-                                </label>
-                            </div>
-                        </div>
-                        <div class="filter-field">
-                            <label class="field-label">Sets</label>
-                            <button id="filter-sets-btn" class="btn btn-secondary">
-                                <span id="selected-sets-count">All Sets</span>
-                            </button>
-                        </div>
-                        <div class="filter-field">
-                            <label class="field-label">Subtypes</label>
-                            <button id="filter-subtypes-btn" class="btn btn-secondary">
-                                <span id="selected-subtypes-count">All Subtypes</span>
-                            </button>
-                        </div>
-                        <div class="filter-field">
-                            <label class="field-label">Collection</label>
-                            <label class="color-checkbox">
-                                <input
-                                    type="checkbox"
-                                    id="filter-owned"
-                                    value="owned"
-                                />
-                                <span
-                                    class="color-checkbox-box"
-                                    style="
-                                        padding: 0.5rem 1rem;
-                                        min-width: auto;
-                                    "
-                                >
-                                    <i class="ph ph-check-square"></i>
-                                    <span style="margin-left: 0.25rem"
-                                        >Owned Only</span
-                                    >
-                                </span>
-                            </label>
-                        </div>
+                    </div>
+                    <div class="filter-field">
+                        <span class="field-label">Sets</span>
+                        <button id="filter-sets-btn" class="btn btn-ghost"><span id="selected-sets-count">All Sets</span></button>
+                    </div>
+                    <div class="filter-field">
+                        <span class="field-label">Subtypes</span>
+                        <button id="filter-subtypes-btn" class="btn btn-ghost"><span id="selected-subtypes-count">All Subtypes</span></button>
+                    </div>
+                    <div class="filter-field">
+                        <span class="field-label">Collection</span>
+                        <label class="owned-toggle"><input type="checkbox" id="filter-owned" value="owned" /> Only cards I own</label>
                     </div>
                 </div>
                 <div id="cards-grid" class="cards-grid"></div>
@@ -1399,64 +1211,27 @@
 
             <!-- Export Deck Modal -->
             <div id="export-deck-modal" class="modal hidden">
-                <div class="modal-content">
-                    <span class="modal-close" id="export-modal-close"
-                        >&times;</span
-                    >
-                    <h2 style="margin-bottom: 1.5rem">Export Deck</h2>
-                    <div class="export-options">
-                        <button
-                            class="export-format-btn"
-                            data-format="moxfield"
-                        >
-                            <h3>Moxfield</h3>
-                            <p>Format: 1 Card Name (SET) #</p>
-                        </button>
-                        <button class="export-format-btn" data-format="arena">
-                            <h3>Arena</h3>
-                            <p>Format: 1 Card Name</p>
-                        </button>
-                        <button class="export-format-btn" data-format="mtgo">
-                            <h3>MTGO</h3>
-                            <p>Format: 1 Card Name</p>
-                        </button>
-                        <button class="export-format-btn" data-format="text">
-                            <h3>Plain Text</h3>
-                            <p>Format: 1 Card Name</p>
-                        </button>
-                    </div>
-                    <div id="export-preview" class="export-preview hidden">
-                        <div
-                            style="
-                                display: flex;
-                                justify-content: space-between;
-                                align-items: center;
-                                margin-bottom: 0.5rem;
-                            "
-                        >
-                            <h4>Deck List:</h4>
-                            <button
-                                class="btn btn-primary btn-sm"
-                                id="copy-export"
-                            >
-                                Copy to Clipboard
-                            </button>
+                <div class="modal-content modal-xl export-modal">
+                    <span class="modal-close" id="export-modal-close">&times;</span>
+                    <h2 class="export-title">Export <span id="export-deck-name"></span></h2>
+                    <div class="export-layout">
+                        <div id="export-format-list" class="export-format-list"></div>
+                        <div class="export-main">
+                            <div class="export-options-row">
+                                <label class="export-option"><input type="checkbox" id="export-opt-sideboard" checked /> Sideboard</label>
+                                <label class="export-option" id="export-opt-maybeboard-wrap"><input type="checkbox" id="export-opt-maybeboard" /> Maybeboard</label>
+                                <label class="export-option"><input type="checkbox" id="export-opt-basics" /> Skip basic lands</label>
+                                <label class="export-option" id="export-opt-unowned-wrap"><input type="checkbox" id="export-opt-unowned" /> Only cards I don't own</label>
+                                <span id="export-count" class="export-count"></span>
+                            </div>
+                            <textarea id="export-text" class="export-text" readonly spellcheck="false" aria-label="Exported deck list"></textarea>
+                            <p id="export-note" class="export-note"></p>
+                            <div class="export-actions">
+                                <button class="btn btn-ghost" id="download-export"><i class="ph ph-download-simple"></i> Download</button>
+                                <button class="btn btn-secondary" id="copy-export"><i class="ph ph-copy"></i> Copy</button>
+                                <button class="btn btn-primary hidden" id="open-export"><i class="ph ph-arrow-square-out"></i> <span id="open-export-label"></span></button>
+                            </div>
                         </div>
-                        <textarea
-                            id="export-text"
-                            readonly
-                            style="
-                                width: 100%;
-                                min-height: 300px;
-                                padding: 1rem;
-                                background: var(--bg-tertiary);
-                                border: 1px solid var(--border);
-                                border-radius: 0.5rem;
-                                color: var(--text);
-                                font-family: monospace;
-                                font-size: 0.875rem;
-                            "
-                        ></textarea>
                     </div>
                 </div>
             </div>
@@ -1590,6 +1365,9 @@
                                 style="margin-left: 1rem"
                             ></span>
                             <div class="deck-actions" style="margin-left: auto">
+                                <button id="export-shared-deck-btn" class="btn btn-ghost">
+                                    <i class="ph ph-export"></i> Export
+                                </button>
                                 <button
                                     id="import-shared-deck-btn"
                                     class="btn btn-primary hidden"

@@ -11,6 +11,7 @@ import {
   getDeckStats,
   createDeckShare,
   getDeckByShareToken,
+  formatSharedDeckAsText,
   deleteDeckShare,
   importSharedDeck,
   checkDeckLegality,
@@ -307,6 +308,25 @@ router.get('/share/:token', optionalAuthenticate, (req, res, next) => {
       deck,
       isAuthenticated: !!req.user
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * GET /api/decks/share/:token/export/text
+ * Plain "quantity name" list of a shared deck (public, no auth required). Tools that import
+ * from a URL can read this directly, the same way they read Scryfall's export/text endpoint.
+ */
+router.get('/share/:token/export/text', (req, res, next) => {
+  try {
+    const deck = getDeckByShareToken(req.params.token);
+
+    if (!deck) {
+      return res.status(404).type('text/plain').send('Shared deck not found or no longer available');
+    }
+
+    res.type('text/plain').send(formatSharedDeckAsText(deck));
   } catch (error) {
     next(error);
   }

@@ -49,7 +49,17 @@ app.use(express.json({ limit: '10mb' })); // JSON body parser with increased lim
 // IMPORTANT: Must come before API routes to serve assets correctly
 if (process.env.NODE_ENV === 'production') {
   const clientBuildPath = join(__dirname, '../client/dist');
-  app.use(express.static(clientBuildPath));
+  app.use(express.static(clientBuildPath, {
+    setHeaders(res, filePath) {
+      // Vite fingerprints everything in /assets, so those files can be cached forever. The
+      // HTML that points at them must always be revalidated or users get stuck on old builds.
+      if (filePath.includes(`${join('dist', 'assets')}`)) {
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      } else if (filePath.endsWith('.html')) {
+        res.setHeader('Cache-Control', 'no-cache');
+      }
+    },
+  }));
 }
 
 // Health check endpoint
@@ -72,7 +82,7 @@ app.use('/api/admin', adminRoutes);
 if (process.env.NODE_ENV === 'production') {
   const clientBuildPath = join(__dirname, '../client/dist');
   app.get('*', (req, res) => {
-    res.sendFile(join(clientBuildPath, 'index.html'));
+    res.sendFile(join(clientBuildPath, 'index.html'), { headers: { 'Cache-Control': 'no-cache' } });
   });
 }
 

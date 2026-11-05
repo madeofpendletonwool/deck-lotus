@@ -101,6 +101,36 @@ export function debounce(func, wait) {
   };
 }
 
+/**
+ * Copy text to the clipboard. navigator.clipboard only exists on HTTPS and localhost, and
+ * self-hosted installs are often reached over plain HTTP, so fall back to execCommand.
+ * Resolves to whether the copy worked.
+ */
+export async function copyText(text) {
+  if (navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      // Fall through: the browser refused (usually a permission or focus issue).
+    }
+  }
+  const field = document.createElement('textarea');
+  field.value = text;
+  field.setAttribute('readonly', '');
+  field.style.cssText = 'position:fixed;opacity:0;';
+  document.body.appendChild(field);
+  field.select();
+  let copied = false;
+  try {
+    copied = document.execCommand('copy');
+  } catch {
+    copied = false;
+  }
+  field.remove();
+  return copied;
+}
+
 export function formatMana(manaCost) {
   if (!manaCost) return '';
 

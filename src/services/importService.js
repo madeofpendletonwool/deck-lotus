@@ -192,8 +192,8 @@ export function importDeck(userId, deckName, format, cardList) {
 
   // Add cards to deck
   const insertCard = db.prepare(
-    `INSERT INTO deck_cards (deck_id, printing_id, quantity, is_sideboard, is_commander)
-     VALUES (?, ?, ?, ?, ?)`
+    `INSERT INTO deck_cards (deck_id, printing_id, quantity, is_sideboard, is_commander, board_type)
+     VALUES (?, ?, ?, ?, ?, ?)`
   );
 
   // Process each card in the list
@@ -209,7 +209,8 @@ export function importDeck(userId, deckName, format, cardList) {
         card.printing_id,
         cardData.quantity,
         cardData.isSideboard ? 1 : 0,
-        cardData.isCommander ? 1 : 0
+        cardData.isCommander ? 1 : 0,
+        cardData.isSideboard ? 'sideboard' : 'mainboard'
       );
       imported++;
     } else {

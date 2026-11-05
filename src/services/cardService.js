@@ -17,58 +17,88 @@ function generateImageUrls(uuid) {
   };
 }
 
+// better-sqlite3 runs on the main thread, so a slow query here stalls every other request.
+// Each step below only touches a small index, which also keeps it fast on a cold disk cache.
+const BY_POPULARITY = 'c.edhrec_rank IS NULL, c.edhrec_rank, c.name COLLATE NOCASE';
+const statements = new Map();
+function statement(sql) {
+  if (!statements.has(sql)) statements.set(sql, db.prepare(sql));
+  return statements.get(sql);
+}
+
 /**
- * Search cards by name (autocomplete) - returns individual printings
- * Supports English and foreign names, plus second parts of split cards.
+ * Search cards by name (autocomplete). Returns one row per card, best matches first:
+ * an exact name, names starting with the query, then a word in the name starting with it, then
+ * anywhere in the name, most played first within each. Foreign names (including the second part of split cards) are only checked when
+ * English names leave room, so typing an English name never pays for them.
  */
 export function searchCards(query, limit = 20, typeFilter = null) {
-  const prefix = `${query}%`;
-  const infix = `%${query}%`;
-  // Optional card-type filter (used by the price-watch type filter) must apply to the
-  // whole name-match group, hence the parenthesised OR block below.
+  const term = query.trim();
+  if (!term) return [];
+
   const typeClause = typeFilter ? 'AND c.type_line LIKE ?' : '';
+  const typeParam = typeFilter ? [`%${typeFilter}%`] : [];
+  const ids = new Set();
 
-  // Placeholder order: 4 for match_priority CASE, 4 for the WHERE name group,
-  // then [type filter], then LIMIT.
-  const params = [prefix, infix, prefix, infix, prefix, infix, prefix, infix];
-  if (typeFilter) params.push(`%${typeFilter}%`);
-  params.push(limit);
+  // Placeholders must run: name match, type filter, then anything in ORDER BY, then LIMIT.
+  const collect = (sql, nameParam, orderParams = []) => {
+    if (ids.size >= limit) return;
+    // Ask for `limit` rows, since earlier steps may already hold some of these matches.
+    for (const row of statement(sql).all(nameParam, ...typeParam, ...orderParams, limit)) {
+      if (ids.size >= limit) break;
+      ids.add(row.id);
+    }
+  };
 
-  const rows = db.all(
-    `SELECT c.id, c.name, c.mana_cost, c.cmc, c.colors, c.type_line, c.oracle_text,
-            p.image_url,
-            p.set_code,
-            s.name as set_name,
-            p.collector_number,
-            p.rarity,
-            p.uuid as sample_uuid,
-            CASE
-              WHEN c.name LIKE ? THEN 0
-              WHEN c.name LIKE '%//%' AND c.name LIKE ? THEN 1
-              WHEN EXISTS(SELECT 1 FROM card_foreign_data f WHERE f.card_name = c.name AND f.foreign_name LIKE ?) THEN 2
-              WHEN EXISTS(SELECT 1 FROM card_foreign_data f WHERE f.card_name = c.name AND f.foreign_name LIKE '%//%' AND f.foreign_name LIKE ?) THEN 3
-              ELSE 4
-            END as match_priority
-     FROM cards c
-     LEFT JOIN printings p ON p.card_id = c.id
-     LEFT JOIN sets s ON p.set_code = s.code
-     WHERE (
-            c.name LIKE ?
-         OR (c.name LIKE '%//%' AND c.name LIKE ?)
-         OR EXISTS(SELECT 1 FROM card_foreign_data f WHERE f.card_name = c.name AND f.foreign_name LIKE ?)
-         OR EXISTS(SELECT 1 FROM card_foreign_data f WHERE f.card_name = c.name AND f.foreign_name LIKE '%//%' AND f.foreign_name LIKE ?)
-       ) ${typeClause}
-     ORDER BY match_priority, c.name, p.set_code, p.collector_number
-     LIMIT ?`,
-    params
+  collect(
+    `SELECT c.id FROM cards c WHERE c.name LIKE ? ${typeClause}
+     ORDER BY c.name = ? COLLATE NOCASE DESC, ${BY_POPULARITY} LIMIT ?`,
+    `${term}%`,
+    [term]
+  );
+  collect(
+    `SELECT c.id FROM cards c WHERE c.name LIKE ? ${typeClause}
+     ORDER BY CASE WHEN c.name LIKE '% ' || ? || '%' THEN 0 ELSE 1 END, ${BY_POPULARITY} LIMIT ?`,
+    `%${term}%`,
+    [term]
+  );
+  collect(
+    `SELECT DISTINCT c.id FROM card_foreign_data f JOIN cards c ON c.name = f.card_name
+     WHERE f.foreign_name LIKE ? ${typeClause} LIMIT ?`,
+    `${term}%`
+  );
+  collect(
+    `SELECT DISTINCT c.id FROM card_foreign_data f JOIN cards c ON c.name = f.card_name
+     WHERE f.foreign_name LIKE '%//%' AND f.foreign_name LIKE ? ${typeClause} LIMIT ?`,
+    `%// ${term}%`
   );
 
-  return rows.map(row => ({
-    ...row,
-    image_url: row.image_url,
-    large_image_url: row.image_url ? row.image_url.replace('/normal/', '/large/') : null,
-    art_crop_url: row.image_url ? row.image_url.replace('/normal/', '/art_crop/') : null
+  const cardQuery = statement(
+    `SELECT id, name, mana_cost, cmc, colors, type_line, oracle_text FROM cards WHERE id = ?`
+  );
+  // Same order addCardToDeck picks from, so the thumbnail matches the printing that gets added.
+  const printingQuery = statement(
+    `SELECT p.id as printing_id, p.image_url, p.set_code, s.name as set_name, p.collector_number, p.rarity, p.uuid as sample_uuid
+     FROM printings p LEFT JOIN sets s ON p.set_code = s.code
+     WHERE p.card_id = ?
+     ORDER BY p.set_code, p.collector_number
+     LIMIT 1`
+  );
+
+  return [...ids].map((id) => ({
+    ...cardQuery.get(id),
+    ...withImageSizes(printingQuery.get(id)),
   }));
+}
+
+function withImageSizes(row) {
+  const imageUrl = row?.image_url;
+  return {
+    ...row,
+    small_image_url: imageUrl ? imageUrl.replace('/normal/', '/small/') : null,
+    large_image_url: imageUrl ? imageUrl.replace('/normal/', '/large/') : null,
+    art_crop_url: imageUrl ? imageUrl.replace('/normal/', '/art_crop/') : null,
+  };
 }
 
 /**
@@ -199,298 +229,180 @@ export function getPrintingByUuid(uuid) {
   );
 }
 
+const RANDOM_MODULUS = 104729; // prime, so multiplying by a seed shuffles without collisions
+const PRICE_CACHE_TTL_MS = 60 * 60 * 1000;
+let priceCache = { byCard: null, loadedAt: 0 };
+
+/**
+ * Highest TCGplayer normal price per card. Aggregating every price takes around half a second,
+ * so it is shared between requests. Prices only change on a sync, so an hour stale is fine.
+ */
+function getMaxPriceByCard() {
+  if (priceCache.byCard && Date.now() - priceCache.loadedAt < PRICE_CACHE_TTL_MS) {
+    return priceCache.byCard;
+  }
+  const rows = db.all(
+    `SELECT p.card_id, MAX(pr.price) as price
+     FROM printings p
+     JOIN prices pr ON pr.printing_uuid = p.uuid AND pr.provider = 'tcgplayer' AND pr.price_type = 'normal'
+     GROUP BY p.card_id`
+  );
+  priceCache = { byCard: new Map(rows.map((r) => [r.card_id, r.price])), loadedAt: Date.now() };
+  return priceCache.byCard;
+}
+
+function buildBrowseFilter({ name, colors, type, rarities, sets, subtypes, cmcMin, cmcMax, onlyOwned, userId }) {
+  const where = ['1=1'];
+  const params = [];
+
+  if (name && name.trim()) {
+    where.push('c.name LIKE ?');
+    params.push(`%${name.trim()}%`);
+  }
+
+  // Cards containing ALL selected colors. Colorless ("C") also lets colorless cards through.
+  if (colors.length > 0) {
+    const noColor = `c.colors IS NULL OR c.colors = '' OR c.colors = '[]'`;
+    const actualColors = colors.filter((c) => c !== 'C');
+    const allColors = actualColors.map(() => 'c.colors LIKE ?').join(' AND ');
+    if (colors.includes('C')) {
+      where.push(actualColors.length ? `((${allColors}) OR ${noColor})` : `(${noColor})`);
+    } else {
+      where.push(allColors);
+    }
+    params.push(...actualColors.map((c) => `%${c}%`));
+  }
+
+  if (type && type.trim() && type !== 'all') {
+    where.push('c.type_line LIKE ?');
+    params.push(`%${type}%`);
+  }
+
+  // A single printing has to satisfy both the rarity and the set filter.
+  if (rarities.length > 0 || sets.length > 0) {
+    const printingWhere = ['p.card_id = c.id'];
+    if (rarities.length > 0) {
+      printingWhere.push(`LOWER(p.rarity) IN (${rarities.map(() => '?').join(',')})`);
+      params.push(...rarities.map((r) => r.toLowerCase()));
+    }
+    if (sets.length > 0) {
+      printingWhere.push(`p.set_code IN (${sets.map(() => '?').join(',')})`);
+      params.push(...sets);
+    }
+    where.push(`EXISTS (SELECT 1 FROM printings p WHERE ${printingWhere.join(' AND ')})`);
+  }
+
+  if (subtypes.length > 0) {
+    where.push(`(${subtypes.map(() => 'c.subtypes LIKE ?').join(' OR ')})`);
+    params.push(...subtypes.map((s) => `%${s}%`));
+  }
+
+  if (cmcMin !== null && cmcMin !== undefined) {
+    where.push('c.cmc >= ?');
+    params.push(cmcMin);
+  }
+  if (cmcMax !== null && cmcMax !== undefined) {
+    where.push('c.cmc <= ?');
+    params.push(cmcMax);
+  }
+
+  if (onlyOwned && userId) {
+    where.push('EXISTS (SELECT 1 FROM owned_cards oc WHERE oc.card_id = c.id AND oc.user_id = ?)');
+    params.push(userId);
+  }
+
+  return { whereSql: where.join(' AND '), params };
+}
+
+/**
+ * Pick the ids for one page. Filtering and sorting only ever touch ids; images and ownership
+ * are looked up afterwards for just those rows.
+ */
+function selectBrowsePage({ whereSql, params }, { sort, name, seed, limit, offset }) {
+  if (sort === 'price') {
+    const prices = getMaxPriceByCard();
+    const matches = db.all(`SELECT c.id, c.name FROM cards c WHERE ${whereSql}`, params);
+    matches.sort((a, b) => (prices.get(b.id) ?? -1) - (prices.get(a.id) ?? -1) || a.name.localeCompare(b.name));
+    return matches.slice(offset, offset + limit).map((m) => m.id);
+  }
+
+  const orderParams = [];
+  let orderSql;
+  const term = name && name.trim();
+
+  if (sort === 'name') {
+    orderSql = 'c.name ASC';
+  } else if (sort === 'cmc') {
+    orderSql = 'c.cmc ASC, c.name ASC';
+  } else if (sort === 'color') {
+    orderSql = 'c.colors ASC, c.name ASC';
+  } else if (term) {
+    // Random order is no use when someone typed a name: show the closest matches first.
+    orderSql = `CASE WHEN c.name LIKE ? THEN 0 WHEN c.name LIKE ? THEN 1 ELSE 2 END, c.name ASC`;
+    orderParams.push(`${term}%`, `% ${term}%`);
+  } else {
+    // Seeded, so paging through "random" neither repeats nor skips cards.
+    const multiplier = (Number.isInteger(seed) && seed > 0 ? seed : Math.floor(Math.random() * 90000) + 10007) % RANDOM_MODULUS;
+    const hash = `((c.id * ${multiplier}) % ${RANDOM_MODULUS})`;
+    orderSql = `(${hash} * ${hash}) % ${RANDOM_MODULUS}, c.id`;
+  }
+
+  return db
+    .all(`SELECT c.id FROM cards c WHERE ${whereSql} ORDER BY ${orderSql} LIMIT ? OFFSET ?`, [...params, ...orderParams, limit, offset])
+    .map((row) => row.id);
+}
+
 /**
  * Browse cards with filters, sorting, and pagination
  */
 export function browseCards(filters = {}) {
+  const asArray = (value) => (Array.isArray(value) ? value : []);
   const {
     name,
-    colors = [],
     type,
-    rarities = [],
     sort = 'random',
-    sets = [],
-    subtypes = [],
+    seed = null,
     cmcMin = null,
     cmcMax = null,
     onlyOwned = false,
     userId = null,
     limit = 50,
-    offset = 0
+    offset = 0,
   } = filters;
 
-  // Ensure colors, sets, and subtypes are arrays
-  const colorsArray = Array.isArray(colors) ? colors : [];
-  const setsArray = Array.isArray(sets) ? sets : [];
-  const subtypesArray = Array.isArray(subtypes) ? subtypes : [];
+  const filter = buildBrowseFilter({
+    name,
+    type,
+    colors: asArray(filters.colors),
+    rarities: asArray(filters.rarities),
+    sets: asArray(filters.sets),
+    subtypes: asArray(filters.subtypes),
+    cmcMin,
+    cmcMax,
+    onlyOwned,
+    userId,
+  });
 
-  const raritiesArray = Array.isArray(rarities) ? rarities : [];
+  const { total } = db.get(`SELECT COUNT(*) as total FROM cards c WHERE ${filter.whereSql}`, filter.params);
+  const ids = selectBrowsePage(filter, { sort, name, seed, limit, offset });
 
-  console.log('Browse cards filters:', { name, colors: colorsArray, type, rarities: raritiesArray, sort, sets: setsArray, subtypes: subtypesArray, cmcMin, cmcMax, limit, offset });
-
-  // Need LEFT JOIN for price sorting
-  const needsPriceJoin = sort === 'price';
-  const needsRarityJoin = raritiesArray && raritiesArray.length > 0;
-  const needsSetJoin = (setsArray && setsArray.length > 0) || needsRarityJoin;
-  const needsOwnedJoin = onlyOwned && userId;
-
-  let sql = `SELECT DISTINCT c.id, c.name, c.mana_cost, c.cmc, c.colors, c.type_line, c.oracle_text,
-             (SELECT p.image_url FROM printings p WHERE p.card_id = c.id AND p.image_url IS NOT NULL LIMIT 1) as image_url`;
-
-  // Add owned status to query
-  if (userId) {
-    sql += `,
-             (SELECT CASE WHEN oc.id IS NOT NULL THEN 1 ELSE 0 END FROM owned_cards oc WHERE oc.user_id = ? AND oc.card_id = c.id LIMIT 1) as is_owned`;
-  }
-
-  if (needsPriceJoin) {
-    sql += `,
-             (SELECT pr.price FROM printings p2
-              LEFT JOIN prices pr ON p2.uuid = pr.printing_uuid
-              WHERE p2.card_id = c.id AND pr.provider = 'tcgplayer' AND pr.price_type = 'normal'
-              ORDER BY pr.price DESC LIMIT 1) as max_price`;
-  }
-
-  sql += `
-             FROM cards c`;
-
-  if (needsSetJoin) {
-    sql += ` LEFT JOIN printings p ON p.card_id = c.id`;
-  }
-
-  if (needsOwnedJoin) {
-    sql += ` INNER JOIN owned_cards oc ON oc.card_id = c.id AND oc.user_id = ?`;
-  }
-
-  sql += `
-             WHERE 1=1`;
-
-  const params = [];
-
-  // Add userId param if needed
-  if (userId) {
-    params.push(userId);
-  }
-
-  // Add it again for the owned join if needed
-  if (needsOwnedJoin) {
-    params.push(userId);
-  }
-
-  // Name filter
-  if (name && name.trim()) {
-    sql += ` AND c.name LIKE ?`;
-    params.push(`%${name}%`);
-  }
-
-  // Color filter - cards that contain ALL selected colors (based on actual colors, not color identity)
-  if (colorsArray && colorsArray.length > 0) {
-    // Check if colorless (C) is in the filter
-    const hasColorless = colorsArray.includes('C');
-    const actualColors = colorsArray.filter(c => c !== 'C');
-
-    if (hasColorless && actualColors.length === 0) {
-      // Only colorless selected - show cards with no colors
-      sql += ` AND (c.colors IS NULL OR c.colors = '' OR c.colors = '[]')`;
-    } else if (hasColorless && actualColors.length > 0) {
-      // Colorless AND other colors - show cards matching colors OR colorless cards
-      sql += ` AND (`;
-      const colorConditions = [];
-      actualColors.forEach(color => {
-        colorConditions.push(`c.colors LIKE ?`);
-        params.push(`%${color}%`);
-      });
-      sql += colorConditions.join(' AND ');
-      sql += ` OR c.colors IS NULL OR c.colors = '' OR c.colors = '[]')`;
-    } else {
-      // Only actual colors selected
-      actualColors.forEach(color => {
-        sql += ` AND c.colors LIKE ?`;
-        params.push(`%${color}%`);
-      });
-    }
-  }
-
-  // Type filter
-  if (type && type.trim() && type !== 'all') {
-    sql += ` AND c.type_line LIKE ?`;
-    params.push(`%${type}%`);
-  }
-
-  // Rarity filter - cards that have printings with any of the selected rarities
-  if (raritiesArray && raritiesArray.length > 0) {
-    const placeholders = raritiesArray.map(() => '?').join(',');
-    sql += ` AND LOWER(p.rarity) IN (${placeholders})`;
-    params.push(...raritiesArray.map(r => r.toLowerCase()));
-  }
-
-  // Set filter - cards that have printings in any of the selected sets
-  if (setsArray && setsArray.length > 0) {
-    const placeholders = setsArray.map(() => '?').join(',');
-    sql += ` AND p.set_code IN (${placeholders})`;
-    params.push(...setsArray);
-  }
-
-  // Subtype filter - cards that have ANY of the selected subtypes
-  if (subtypesArray && subtypesArray.length > 0) {
-    sql += ` AND (`;
-    const subtypeConditions = [];
-    subtypesArray.forEach(subtype => {
-      subtypeConditions.push(`c.subtypes LIKE ?`);
-      params.push(`%${subtype}%`);
-    });
-    sql += subtypeConditions.join(' OR ');
-    sql += `)`;
-  }
-
-  // CMC filter
-  if (cmcMin !== null && cmcMin !== undefined) {
-    sql += ` AND c.cmc >= ?`;
-    params.push(cmcMin);
-  }
-
-  if (cmcMax !== null && cmcMax !== undefined) {
-    sql += ` AND c.cmc <= ?`;
-    params.push(cmcMax);
-  }
-
-  // Get total count for pagination - build count query from scratch
-  let countSql = `SELECT COUNT(DISTINCT c.id) as total FROM cards c`;
-
-  if (needsSetJoin) {
-    countSql += ` LEFT JOIN printings p ON p.card_id = c.id`;
-  }
-
-  if (needsOwnedJoin) {
-    countSql += ` INNER JOIN owned_cards oc ON oc.card_id = c.id AND oc.user_id = ?`;
-  }
-
-  countSql += ` WHERE 1=1`;
-  const countParams = [];
-
-  // Add userId for owned join if needed
-  if (needsOwnedJoin) {
-    countParams.push(userId);
-  }
-
-  if (name && name.trim()) {
-    countSql += ` AND c.name LIKE ?`;
-    countParams.push(`%${name}%`);
-  }
-
-  if (colorsArray && colorsArray.length > 0) {
-    const hasColorless = colorsArray.includes('C');
-    const actualColors = colorsArray.filter(c => c !== 'C');
-
-    if (hasColorless && actualColors.length === 0) {
-      countSql += ` AND (c.colors IS NULL OR c.colors = '' OR c.colors = '[]')`;
-    } else if (hasColorless && actualColors.length > 0) {
-      countSql += ` AND (`;
-      const colorConditions = [];
-      actualColors.forEach(color => {
-        colorConditions.push(`c.colors LIKE ?`);
-        countParams.push(`%${color}%`);
-      });
-      countSql += colorConditions.join(' AND ');
-      countSql += ` OR c.colors IS NULL OR c.colors = '' OR c.colors = '[]')`;
-    } else {
-      actualColors.forEach(color => {
-        countSql += ` AND c.colors LIKE ?`;
-        countParams.push(`%${color}%`);
-      });
-    }
-  }
-
-  if (type && type.trim() && type !== 'all') {
-    countSql += ` AND c.type_line LIKE ?`;
-    countParams.push(`%${type}%`);
-  }
-
-  // Rarity filter for count query
-  if (raritiesArray && raritiesArray.length > 0) {
-    const placeholders = raritiesArray.map(() => '?').join(',');
-    countSql += ` AND LOWER(p.rarity) IN (${placeholders})`;
-    countParams.push(...raritiesArray.map(r => r.toLowerCase()));
-  }
-
-  if (setsArray && setsArray.length > 0) {
-    const placeholders = setsArray.map(() => '?').join(',');
-    countSql += ` AND p.set_code IN (${placeholders})`;
-    countParams.push(...setsArray);
-  }
-
-  // Subtype filter for count query
-  if (subtypesArray && subtypesArray.length > 0) {
-    countSql += ` AND (`;
-    const subtypeConditions = [];
-    subtypesArray.forEach(subtype => {
-      subtypeConditions.push(`c.subtypes LIKE ?`);
-      countParams.push(`%${subtype}%`);
-    });
-    countSql += subtypeConditions.join(' OR ');
-    countSql += `)`;
-  }
-
-  if (cmcMin !== null && cmcMin !== undefined) {
-    countSql += ` AND c.cmc >= ?`;
-    countParams.push(cmcMin);
-  }
-
-  if (cmcMax !== null && cmcMax !== undefined) {
-    countSql += ` AND c.cmc <= ?`;
-    countParams.push(cmcMax);
-  }
-
-  const countResult = db.get(countSql, countParams);
-  const total = countResult ? countResult.total : 0;
-
-  console.log('Count SQL:', countSql);
-  console.log('Count Params:', countParams);
-  console.log('Total cards found:', total);
-
-  // Sorting
-  switch(sort) {
-    case 'name':
-      sql += ` ORDER BY c.name ASC`;
-      break;
-    case 'cmc':
-      sql += ` ORDER BY c.cmc ASC, c.name ASC`;
-      break;
-    case 'color':
-      sql += ` ORDER BY c.colors ASC, c.name ASC`;
-      break;
-    case 'price':
-      sql += ` ORDER BY max_price DESC, c.name ASC`;
-      break;
-    case 'random':
-    default:
-      sql += ` ORDER BY RANDOM()`;
-      break;
-  }
-
-  // Pagination
-  sql += ` LIMIT ? OFFSET ?`;
-  params.push(limit, offset);
-
-  console.log('Main SQL:', sql);
-  console.log('Main Params:', params);
-
-  const cards = db.all(sql, params);
-  console.log('Cards returned:', cards.length);
-
-  // Add image URL variations
-  const cardsWithImages = cards.map(card => ({
-    ...card,
-    large_image_url: card.image_url ? card.image_url.replace('/normal/', '/large/') : null,
-    art_crop_url: card.image_url ? card.image_url.replace('/normal/', '/art_crop/') : null
-  }));
+  const rows = db.all(
+    `SELECT c.id, c.name, c.mana_cost, c.cmc, c.colors, c.type_line, c.oracle_text,
+            (SELECT p.image_url FROM printings p WHERE p.card_id = c.id AND p.image_url IS NOT NULL LIMIT 1) as image_url,
+            EXISTS (SELECT 1 FROM owned_cards oc WHERE oc.user_id = ? AND oc.card_id = c.id) as is_owned
+     FROM cards c
+     WHERE c.id IN (SELECT value FROM json_each(?))`,
+    [userId, JSON.stringify(ids)]
+  );
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  const cards = ids.map((id) => withImageSizes(byId.get(id)));
 
   return {
-    cards: cardsWithImages,
+    cards,
     total,
     page: Math.floor(offset / limit) + 1,
     totalPages: Math.ceil(total / limit),
-    limit
+    limit,
   };
 }
 

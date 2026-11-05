@@ -16,7 +16,8 @@ export function getUserDecks(userId) {
     [userId]
   );
 
-  // Get a random card image for each deck (prefer creatures)
+  // Cover image: the commander if there is one, otherwise the highest mana value creature.
+  // Stable on purpose, so a deck's tile doesn't change every time the page loads.
   return decks.map(deck => {
     const randomCard = db.get(
       `SELECT p.image_url, p.uuid
@@ -25,8 +26,10 @@ export function getUserDecks(userId) {
        JOIN cards c ON p.card_id = c.id
        WHERE dc.deck_id = ? AND (dc.board_type = 'mainboard' OR (dc.board_type IS NULL AND dc.is_sideboard = 0)) AND p.image_url IS NOT NULL
        ORDER BY
+         dc.is_commander DESC,
          CASE WHEN c.type_line LIKE '%Creature%' THEN 0 ELSE 1 END,
-         RANDOM()
+         c.cmc DESC,
+         c.name
        LIMIT 1`,
       [deck.id]
     );
@@ -78,6 +81,7 @@ export function getDeckById(deckId, userId) {
       c.power,
       c.toughness,
       c.loyalty,
+      c.layout,
       (SELECT CASE WHEN oc.id IS NOT NULL THEN 1 ELSE 0 END FROM owned_cards oc WHERE oc.user_id = ? AND oc.card_id = c.id LIMIT 1) as is_owned
      FROM deck_cards dc
      JOIN printings p ON dc.printing_id = p.id
@@ -491,7 +495,8 @@ export function getDeckByShareToken(shareToken) {
       c.oracle_text,
       c.power,
       c.toughness,
-      c.loyalty
+      c.loyalty,
+      c.layout
      FROM deck_cards dc
      JOIN printings p ON dc.printing_id = p.id
      JOIN cards c ON p.card_id = c.id
@@ -507,6 +512,23 @@ export function getDeckByShareToken(shareToken) {
     cards,
     is_shared: true,
   };
+}
+
+/**
+ * Render a shared deck as "quantity name" lines, commander first. Multi-face names follow what
+ * MPC Autofill can find: "Fire // Ice" becomes "Fire Ice", anything else uses its front name.
+ */
+export function formatSharedDeckAsText(deck) {
+  const splitLayouts = new Set(['split', 'aftermath']);
+  const totals = new Map();
+
+  const ordered = [...deck.cards].sort((a, b) => (b.is_commander || 0) - (a.is_commander || 0));
+  for (const card of ordered) {
+    const name = splitLayouts.has(card.layout) ? card.name.replace(' // ', ' ') : card.name.split(' // ')[0];
+    totals.set(name, (totals.get(name) || 0) + card.quantity);
+  }
+
+  return [...totals].map(([name, quantity]) => `${quantity} ${name}`).join('\n');
 }
 
 /**
@@ -544,9 +566,9 @@ export function importSharedDeck(shareToken, userId) {
   // Copy all cards to the new deck
   for (const card of sharedDeck.cards) {
     db.run(
-      `INSERT INTO deck_cards (deck_id, printing_id, quantity, is_sideboard, is_commander)
-       VALUES (?, ?, ?, ?, ?)`,
-      [newDeck.id, card.printing_id, card.quantity, card.is_sideboard, card.is_commander]
+      `INSERT INTO deck_cards (deck_id, printing_id, quantity, is_sideboard, is_commander, board_type)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [newDeck.id, card.printing_id, card.quantity, card.is_sideboard, card.is_commander, card.board_type]
     );
   }
 

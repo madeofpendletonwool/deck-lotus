@@ -1,10 +1,13 @@
 import api from '../services/api.js';
-import { showLoading, hideLoading, debounce, formatMana, showToast, hideModal } from '../utils/ui.js';
+import { showLoading, hideLoading, debounce, formatMana, showToast, hideModal, copyText } from '../utils/ui.js';
 import { showCardDetail } from './cards.js';
+import { setupExportModal, openExportModal } from './exportModal.js';
 
 let currentDeck = null;
 let currentDeckId = null;
-let searchTimeout = null;
+let searchController = null; // Aborts the in-flight search when a newer one starts
+let activeResultIndex = -1;
+let saveTimer = null;
 let currentFilter = { cmc: null, color: null, ownership: null }; // Filter state for deck cards (null, 'owned', 'not-owned')
 let deckFilterQuery = ''; // Name filter for deck cards
 let exampleHand = []; // Current example hand
@@ -37,7 +40,6 @@ function isTouchDevice() {
 export function setupDeckBuilder() {
   const cardSearch = document.getElementById('card-search');
   const searchResults = document.getElementById('search-results');
-  const saveDeckBtn = document.getElementById('save-deck-btn');
   const backToDecksBtn = document.getElementById('back-to-decks-btn');
   const buyDeckBtn = document.getElementById('buy-deck-btn');
   const deckNameInput = document.getElementById('deck-name');
@@ -51,23 +53,33 @@ export function setupDeckBuilder() {
     });
   });
 
-  // Card search with debounce
-  const debouncedSearch = debounce(async (query) => {
-    if (query.length < 2) {
-      searchResults.classList.add('hidden');
-      return;
+  // Card search. Results are fast enough to feel live, so the debounce only needs to skip
+  // the keystrokes inside a word.
+  const debouncedSearch = debounce(runCardSearch, 90);
+  cardSearch.addEventListener('input', (e) => debouncedSearch(e.target.value));
+  cardSearch.addEventListener('keydown', handleSearchKeydown);
+  cardSearch.addEventListener('focus', () => {
+    if (cardSearch.value.trim().length >= 2 && searchResults.children.length > 0) {
+      setSearchResultsOpen(true);
     }
+  });
+  searchResults.addEventListener('click', (e) => {
+    const item = e.target.closest('.search-result-item');
+    if (item) addSearchResult(item);
+  });
+  searchResults.addEventListener('mousemove', (e) => {
+    const item = e.target.closest('.search-result-item');
+    if (item) setActiveResult([...searchResults.querySelectorAll('.search-result-item')].indexOf(item));
+  });
 
-    try {
-      const result = await api.searchCards(query);
-      displaySearchResults(result.cards);
-    } catch (error) {
-      console.error('Search error:', error);
+  // "/" jumps to the card search from anywhere in the deck builder
+  document.addEventListener('keydown', (e) => {
+    const builderOpen = !document.getElementById('deck-builder-page').classList.contains('hidden');
+    const typing = e.target.closest?.('input, textarea, select, [contenteditable]');
+    if (e.key === '/' && builderOpen && !typing && !e.metaKey && !e.ctrlKey && !document.querySelector('.modal:not(.hidden)')) {
+      e.preventDefault();
+      cardSearch.focus();
     }
-  }, 200);
-
-  cardSearch.addEventListener('input', (e) => {
-    debouncedSearch(e.target.value);
   });
 
   // Deck filter search
@@ -95,31 +107,23 @@ export function setupDeckBuilder() {
   // Click outside to close search results
   document.addEventListener('click', (e) => {
     if (!cardSearch.contains(e.target) && !searchResults.contains(e.target)) {
-      searchResults.classList.add('hidden');
+      setSearchResultsOpen(false);
     }
   });
 
-  // Save deck
-  saveDeckBtn.addEventListener('click', async () => {
-    if (!currentDeckId) return;
-
-    const name = deckNameInput.value;
-    const format = deckFormatSelect.value;
-
-    if (!name) {
-      showToast('Please enter a deck name', 'warning');
-      return;
+  // Name and format save themselves
+  const queueSave = () => {
+    clearTimeout(saveTimer);
+    setSaveStatus('Saving…');
+    saveTimer = setTimeout(saveDeckDetails, 500);
+  };
+  deckNameInput.addEventListener('input', queueSave);
+  deckFormatSelect.addEventListener('change', () => {
+    if (currentDeck) {
+      currentDeck.format = deckFormatSelect.value;
+      renderDeckCards(); // Commander controls depend on the format
     }
-
-    try {
-      showLoading();
-      await api.updateDeck(currentDeckId, { name, format });
-      hideLoading();
-      showToast('Deck saved!', 'success');
-    } catch (error) {
-      hideLoading();
-      showToast('Failed to save deck: ' + error.message, 'error');
-    }
+    queueSave();
   });
 
   // Buy Deck Modal
@@ -229,82 +233,40 @@ export function setupDeckBuilder() {
   // Copy decklist button
   document.getElementById('copy-decklist').addEventListener('click', () => {
     const deckText = generateDeckList();
-    navigator.clipboard.writeText(deckText).then(() => {
-      showToast('Deck list copied to clipboard!', 'success', 2000);
-      // Show preview
+    copyText(deckText).then((copied) => {
+      showToast(copied ? 'Deck list copied to clipboard!' : 'Failed to copy', copied ? 'success' : 'error', 2000);
       document.getElementById('decklist-preview').classList.remove('hidden');
       document.getElementById('decklist-text').value = deckText;
-    }).catch(() => {
-      showToast('Failed to copy', 'error');
     });
   });
 
-  // Layout view toggle - cycles through: full -> compact -> ultra-compact
+  // Layout view toggle - cycles through: compact -> ultra-compact -> full
+  updateLayoutButton();
   document.getElementById('toggle-compact-btn').addEventListener('click', () => {
-    // Cycle through three states: 'full' -> 'compact' -> 'ultra-compact' -> 'full'
-    if (layoutView === 'full') {
-      layoutView = 'compact';
-    } else if (layoutView === 'compact') {
-      layoutView = 'ultra-compact';
-    } else {
-      layoutView = 'full';
+    const order = ['compact', 'ultra-compact', 'full'];
+    layoutView = order[(order.indexOf(layoutView) + 1) % order.length];
+    try {
+      localStorage.setItem(LAYOUT_PREFERENCE_KEY, layoutView);
+    } catch {
+      // A remembered density is only a convenience.
     }
-
-    const btn = document.getElementById('toggle-compact-btn');
-    btn.classList.toggle('active', layoutView !== 'full');
-
-    // Update icon based on current layout
-    let icon = 'ph-rows'; // full view
-    if (layoutView === 'compact') {
-      icon = 'ph-rows-plus-bottom';
-    } else if (layoutView === 'ultra-compact') {
-      icon = 'ph-list';
-    }
-
-    btn.innerHTML = `<i class="ph ${icon}"></i>`;
+    updateLayoutButton();
     renderDeckCards();
   });
 
   // Export deck button
+  setupExportModal();
   document.getElementById('export-deck-btn').addEventListener('click', () => {
-    if (!currentDeck || !currentDeck.cards || currentDeck.cards.length === 0) {
+    if (!currentDeck?.cards?.length) {
       showToast('Add some cards first', 'warning');
       return;
     }
-    document.getElementById('export-deck-modal').classList.remove('hidden');
-    document.getElementById('export-preview').classList.add('hidden');
-  });
-
-  // Export modal close
-  document.getElementById('export-modal-close').addEventListener('click', () => {
-    document.getElementById('export-deck-modal').classList.add('hidden');
-  });
-
-  // Export format buttons
-  document.querySelectorAll('.export-format-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const format = btn.dataset.format;
-      const exportText = generateExport(format);
-      document.getElementById('export-text').value = exportText;
-      document.getElementById('export-preview').classList.remove('hidden');
-    });
-  });
-
-  // Copy export
-  document.getElementById('copy-export').addEventListener('click', () => {
-    const exportText = document.getElementById('export-text').value;
-    navigator.clipboard.writeText(exportText).then(() => {
-      showToast('Deck list copied!', 'success', 2000);
-    }).catch(() => {
-      showToast('Failed to copy', 'error');
-    });
+    openExportModal(currentDeck);
   });
 
   // Back to decks
   backToDecksBtn.addEventListener('click', () => {
-    document.getElementById('deck-builder-page').classList.add('hidden');
-    document.getElementById('decks-page').classList.remove('hidden');
-    window.dispatchEvent(new CustomEvent('page:decks'));
+    window.dispatchEvent(new CustomEvent('navigate', { detail: { path: '/decks' } }));
   });
 
   // Share deck button
@@ -322,10 +284,8 @@ export function setupDeckBuilder() {
   document.getElementById('copy-share-link').addEventListener('click', () => {
     const input = document.getElementById('share-link-input');
     input.select();
-    navigator.clipboard.writeText(input.value).then(() => {
-      showToast('Share link copied to clipboard!', 'success', 2000);
-    }).catch(() => {
-      showToast('Failed to copy', 'error');
+    copyText(input.value).then((copied) => {
+      showToast(copied ? 'Share link copied to clipboard!' : 'Failed to copy', copied ? 'success' : 'error', 2000);
     });
   });
 
@@ -426,8 +386,8 @@ export function setupDeckBuilder() {
   // Listen for open deck event
   window.addEventListener('open-deck', async (e) => {
     const { deckId } = e.detail;
-    await loadDeck(deckId);
     showDeckBuilder();
+    await loadDeck(deckId);
   });
 
   // Example Hand buttons
@@ -476,6 +436,8 @@ async function loadDeck(deckId) {
     // Populate deck info
     document.getElementById('deck-name').value = currentDeck.name;
     document.getElementById('deck-format').value = currentDeck.format || '';
+    document.title = `${currentDeck.name} · Deck Lotus`;
+    setSaveStatus('');
 
     // Render deck cards
     renderDeckCards();
@@ -490,6 +452,71 @@ async function loadDeck(deckId) {
   } catch (error) {
     hideLoading();
     showToast('Failed to load deck: ' + error.message, 'error');
+    window.dispatchEvent(new CustomEvent('navigate', { detail: { path: '/decks', replace: true } }));
+  }
+}
+
+/**
+ * Persist the deck's name and format. Shows progress quietly next to the title, since this runs
+ * on its own and shouldn't interrupt anything.
+ */
+async function saveDeckDetails() {
+  if (!currentDeckId) return;
+  const name = document.getElementById('deck-name').value.trim();
+  if (!name) {
+    setSaveStatus('A deck needs a name');
+    return;
+  }
+  try {
+    await api.updateDeck(currentDeckId, { name, format: document.getElementById('deck-format').value });
+    currentDeck.name = name;
+    document.title = `${name} · Deck Lotus`;
+    setSaveStatus('Saved');
+  } catch (error) {
+    setSaveStatus('');
+    showToast('Failed to save deck: ' + error.message, 'error');
+  }
+}
+
+function setSaveStatus(text) {
+  document.getElementById('deck-save-status').textContent = text;
+}
+
+function setSearchResultsOpen(open) {
+  document.getElementById('search-results').classList.toggle('hidden', !open);
+  document.getElementById('card-search').setAttribute('aria-expanded', String(open));
+}
+
+function showSearchMessage(html) {
+  document.getElementById('search-results').innerHTML = `<div class="search-message">${html}</div>`;
+  activeResultIndex = -1;
+  setSearchResultsOpen(true);
+}
+
+async function runCardSearch(rawQuery) {
+  const query = rawQuery.trim();
+  searchController?.abort();
+
+  if (query.length < 2) {
+    setSearchResultsOpen(false);
+    return;
+  }
+
+  const controller = new AbortController();
+  searchController = controller;
+
+  // Only shows up if the server is actually slow, so normal typing never flickers.
+  const slowNotice = setTimeout(() => showSearchMessage('Searching…'), 250);
+
+  try {
+    const result = await api.searchCards(query, 20, null, { signal: controller.signal });
+    if (!controller.signal.aborted) displaySearchResults(result.cards);
+  } catch (error) {
+    if (error.name === 'AbortError') return;
+    console.error('Search error:', error);
+    showSearchMessage(`Search failed: ${escapeHtml(error.message)}. Keep typing to try again.`);
+  } finally {
+    clearTimeout(slowNotice);
   }
 }
 
@@ -497,83 +524,117 @@ function displaySearchResults(cards) {
   const searchResults = document.getElementById('search-results');
 
   if (cards.length === 0) {
-    searchResults.innerHTML = '<div style="padding: 1rem; color: var(--text-secondary);">No cards found</div>';
-    searchResults.classList.remove('hidden');
+    showSearchMessage('No cards found');
     return;
   }
 
-  searchResults.innerHTML = cards.map(card => `
-    <div class="search-result-item" data-card-id="${card.id}" style="display: flex; gap: 1rem; align-items: center;">
-      ${card.image_url ? `<img src="${card.large_image_url || card.image_url}"
-           class="search-result-image"
-           data-fallback="${card.image_url}"
-           style="width: 50px; height: 70px; border-radius: 4px; object-fit: cover;"
-           alt="${card.name}">` : ''}
-      <div style="flex: 1;">
-        <div class="card-name">${card.name}</div>
-        <div class="card-type" style="font-size: 0.875rem; color: var(--text-secondary);">${card.type_line || ''}</div>
+  searchResults.innerHTML = cards.map((card, index) => `
+    <div class="search-result-item" role="option" id="search-result-${index}" data-card-id="${card.id}" data-printing-id="${card.printing_id ?? ''}" data-card-name="${escapeHtml(card.name)}">
+      ${card.small_image_url ? `<img src="${card.small_image_url}" class="search-result-image" width="36" height="50" alt="" loading="lazy" decoding="async" onerror="this.style.visibility='hidden'">` : '<span class="search-result-image"></span>'}
+      <div class="search-result-text">
+        <div class="card-name">${escapeHtml(card.name)}</div>
+        <div class="card-type">${escapeHtml(card.type_line || '')}</div>
       </div>
-      <div class="card-mana" style="font-size: 1.2rem;">${formatMana(card.mana_cost)}</div>
+      <div class="card-mana">${formatMana(card.mana_cost)}</div>
     </div>
   `).join('');
 
-  searchResults.classList.remove('hidden');
+  setActiveResult(0);
+  setSearchResultsOpen(true);
+}
 
-  // Add error handlers for search result images
-  searchResults.querySelectorAll('.search-result-image').forEach(img => {
-    img.addEventListener('error', function() {
-      const fallback = this.dataset.fallback;
-      if (fallback && this.src !== fallback) {
-        this.src = fallback;
-      } else {
-        this.style.display = 'none';
-      }
-    });
-  });
+function setActiveResult(index) {
+  const items = document.querySelectorAll('#search-results .search-result-item');
+  if (index === activeResultIndex && items[index]?.classList.contains('active')) return;
+  activeResultIndex = items.length ? (index + items.length) % items.length : -1;
 
-  // Add click handlers
-  searchResults.querySelectorAll('.search-result-item').forEach(item => {
-    item.addEventListener('click', async () => {
-      const cardId = item.dataset.cardId;
-      await addCardToDeck(cardId);
-      searchResults.classList.add('hidden');
-      document.getElementById('card-search').value = '';
-    });
+  items.forEach((item, i) => {
+    const isActive = i === activeResultIndex;
+    item.classList.toggle('active', isActive);
+    item.setAttribute('aria-selected', String(isActive));
+    if (isActive) {
+      document.getElementById('card-search').setAttribute('aria-activedescendant', item.id);
+      item.scrollIntoView({ block: 'nearest' });
+    }
   });
 }
 
-async function addCardToDeck(cardId) {
-  try {
-    // Get card printings
-    const result = await api.getCardPrintings(cardId);
-    const printings = result.printings;
+function handleSearchKeydown(e) {
+  const results = document.getElementById('search-results');
+  const isOpen = !results.classList.contains('hidden');
 
-    if (printings.length === 0) {
-      showToast('No printings found for this card', 'warning');
-      return;
+  if (e.key === 'Escape') {
+    if (isOpen) {
+      e.stopPropagation();
+      setSearchResultsOpen(false);
+    }
+  } else if (isOpen && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+    e.preventDefault();
+    setActiveResult(activeResultIndex + (e.key === 'ArrowDown' ? 1 : -1));
+  } else if (isOpen && e.key === 'Enter') {
+    e.preventDefault();
+    const active = results.querySelectorAll('.search-result-item')[activeResultIndex];
+    if (active) addSearchResult(active);
+  }
+}
+
+function addSearchResult(item) {
+  const input = document.getElementById('card-search');
+  searchController?.abort();
+  input.value = '';
+  setSearchResultsOpen(false);
+  input.focus(); // Ready for the next card
+  addCardToDeck(item.dataset.cardId, item.dataset.printingId, item.dataset.cardName);
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text ?? '';
+  return div.innerHTML.replace(/"/g, '&quot;');
+}
+
+async function addCardToDeck(cardId, knownPrintingId = null, cardName = 'Card') {
+  try {
+    let printingId = knownPrintingId;
+    if (!printingId) {
+      const { printings } = await api.getCardPrintings(cardId);
+      if (printings.length === 0) {
+        showToast('No printings found for this card', 'warning');
+        return;
+      }
+      printingId = printings[0].id;
     }
 
-    // Use first printing by default (could show modal to choose)
-    const printingId = printings[0].id;
-
     // Add card to the currently active tab (mainboard, sideboard, or maybeboard)
-    const isSideboard = activeTab === 'sideboard';
-    const boardType = activeTab; // Use the active tab as board type
-
-    showLoading();
-    const updatedDeck = await api.addCardToDeck(currentDeckId, printingId, 1, isSideboard, false, boardType);
+    const updatedDeck = await api.addCardToDeck(currentDeckId, printingId, 1, activeTab === 'sideboard', false, activeTab);
     currentDeck = updatedDeck.deck;
     renderDeckCards();
+    showToast(`Added ${cardName} to ${activeTab}`, 'success', 1500);
     await loadDeckStats();
-    hideLoading();
-    showToast(`Card added to ${activeTab}`, 'success', 2000);
   } catch (error) {
-    hideLoading();
     showToast('Failed to add card: ' + error.message, 'error');
   }
 }
 
-let layoutView = 'full'; // Can be 'full', 'compact', or 'ultra-compact'
+const smallImage = (url) => (url ? url.replace('/normal/', '/small/') : '');
+
+const LAYOUT_PREFERENCE_KEY = 'deckListLayout';
+const LAYOUT_ICONS = { compact: 'ph-rows', 'ultra-compact': 'ph-list', full: 'ph-squares-four' };
+
+function loadLayoutPreference() {
+  try {
+    const saved = localStorage.getItem(LAYOUT_PREFERENCE_KEY);
+    return LAYOUT_ICONS[saved] ? saved : 'compact';
+  } catch {
+    return 'compact';
+  }
+}
+
+let layoutView = loadLayoutPreference(); // Can be 'compact', 'ultra-compact', or 'full'
+
+function updateLayoutButton() {
+  document.getElementById('toggle-compact-btn').innerHTML = `<i class="ph ${LAYOUT_ICONS[layoutView]}"></i>`;
+}
 
 function renderDeckCards() {
   const mainboard = document.getElementById('mainboard');
@@ -655,6 +716,9 @@ function renderDeckCards() {
   mainboard.innerHTML = renderCardsList(mainboardCards);
   sideboard.innerHTML = renderCardsList(sideboardCards);
   maybeboard.innerHTML = renderCardsList(maybeboardCards);
+  [mainboard, sideboard, maybeboard].forEach((list) => {
+    list.dataset.layout = layoutView;
+  });
 
   // Add event listeners
   setupCardControls();
@@ -662,7 +726,10 @@ function renderDeckCards() {
 
 function renderCardsList(cards) {
   if (cards.length === 0) {
-    return '<div style="padding: 2rem; text-align: center; color: var(--text-secondary);">No cards yet</div>';
+    return `<div class="deck-list-empty">
+      <i class="ph ph-cards"></i>
+      <p>${deckFilterQuery || currentFilter.cmc !== null || currentFilter.color !== null || currentFilter.ownership ? 'No cards match this filter' : 'Nothing here yet. Search above to add your first card.'}</p>
+    </div>`;
   }
 
   // Separate commanders from other cards
@@ -717,7 +784,7 @@ function renderCardsList(cards) {
   if (commanders.length > 0) {
     html += `
       <div class="card-type-group">
-        <div class="card-type-header">Commander (${commanders.length})</div>
+        <div class="card-type-header"><span>Commander</span><span class="card-type-count">${commanders.length}</span></div>
         ${commanders.map(card => renderCardItem(card)).join('')}
       </div>
     `;
@@ -751,7 +818,7 @@ function renderCardsList(cards) {
 
       html += `
         <div class="card-type-group">
-          <div class="card-type-header">${headerLabel} (${count})</div>
+          <div class="card-type-header"><span>${headerLabel}</span><span class="card-type-count">${count}</span></div>
           ${cardsToRender.map(card => renderCardItem(card)).join('')}
         </div>
       `;
@@ -814,6 +881,13 @@ function canPairCommanders(a, b) {
   return false;
 }
 
+function renderOwnershipToggle(card) {
+  const label = card.is_owned ? 'In your collection' : 'Add to collection';
+  return `<button class="ownership-toggle-btn ${card.is_owned ? 'owned' : ''}" data-card-id="${card.card_id}" title="${label}" aria-label="${label}">
+    <i class="${card.is_owned ? 'ph-fill ph-check-circle' : 'ph ph-circle'}"></i>
+  </button>`;
+}
+
 function renderCardItem(card) {
   const isCommanderDeck = currentDeck.format === 'commander';
   const showCommanderIcon = isCommanderDeck && canBeCommander(card) && isMainboardCard(card);
@@ -822,9 +896,7 @@ function renderCardItem(card) {
   if (layoutView === 'ultra-compact') {
     return `
       <div class="deck-card-item ultra-compact ${card.is_commander ? 'is-commander' : ''}" data-deck-card-id="${card.deck_card_id}" data-printing-id="${card.printing_id}" data-is-sideboard="${card.is_sideboard}" data-board-type="${card.board_type || (card.is_sideboard ? 'sideboard' : 'mainboard')}" data-card-id="${card.card_id}" draggable="true">
-        <button class="ownership-toggle-btn ${card.is_owned ? 'owned' : ''}" data-card-id="${card.card_id}" style="position: absolute; top: 2px; left: 2px; background: ${card.is_owned ? 'rgba(16, 185, 129, 0.9)' : 'rgba(0,0,0,0.8)'}; color: white; border: none; border-radius: 50%; width: 16px; height: 16px; cursor: pointer; font-size: 10px; display: flex; align-items: center; justify-content: center; z-index: 10; transition: all 0.2s;">
-          <i class="ph ${card.is_owned ? 'ph-check-circle' : 'ph-circle'}"></i>
-        </button>
+        ${renderOwnershipToggle(card)}
         <span class="card-quantity-badge">${card.quantity}</span>
         <div class="deck-card-info-ultra-compact">
           <span class="card-name">${card.name}</span>
@@ -867,20 +939,19 @@ function renderCardItem(card) {
   if (layoutView === 'compact') {
     return `
       <div class="deck-card-item compact ${card.is_commander ? 'is-commander' : ''}" data-deck-card-id="${card.deck_card_id}" data-printing-id="${card.printing_id}" data-is-sideboard="${card.is_sideboard}" data-board-type="${card.board_type || (card.is_sideboard ? 'sideboard' : 'mainboard')}" data-card-id="${card.card_id}" draggable="true" style="position: relative;">
-        <button class="ownership-toggle-btn ${card.is_owned ? 'owned' : ''}" data-card-id="${card.card_id}" style="position: absolute; top: 4px; left: 4px; background: ${card.is_owned ? 'rgba(16, 185, 129, 0.9)' : 'rgba(0,0,0,0.8)'}; color: white; border: none; border-radius: 50%; width: 20px; height: 20px; cursor: pointer; font-size: 12px; display: flex; align-items: center; justify-content: center; z-index: 10; transition: all 0.2s;">
-          <i class="ph ${card.is_owned ? 'ph-check-circle' : 'ph-circle'}"></i>
-        </button>
+        ${renderOwnershipToggle(card)}
         ${showCommanderIcon ? `
           <button class="commander-toggle-btn ${card.is_commander ? 'active' : ''}"
                   data-deck-card-id="${card.deck_card_id}"
-                  title="${card.is_commander ? 'Remove as Commander' : 'Set as Commander'}">
-            ⚔️
+                  title="${card.is_commander ? 'Remove as commander' : 'Set as commander'}"
+                  aria-label="${card.is_commander ? 'Remove as commander' : 'Set as commander'}">
+            <i class="${card.is_commander ? 'ph-fill' : 'ph'} ph-crown-simple"></i>
           </button>
         ` : ''}
-        <img src="${card.image_url}"
+        <img src="${smallImage(card.image_url)}"
              class="deck-card-image-compact"
-             alt="${card.name}"
-             onerror="this.style.display='none'">
+             alt="" width="29" height="40" loading="lazy" decoding="async"
+             onerror="this.style.visibility='hidden'">
         <div class="deck-card-info-compact">
           <span class="card-name">${card.name}</span>
           <span class="card-mana">${formatMana(card.mana_cost || '')}</span>
@@ -891,7 +962,7 @@ function renderCardItem(card) {
             <input type="number" class="quantity-input" data-deck-card-id="${card.deck_card_id}" value="${card.quantity}" min="1" max="99">
             <button class="quantity-btn btn-increase" data-deck-card-id="${card.deck_card_id}">+</button>
           </div>
-          <button class="remove-btn" data-deck-card-id="${card.deck_card_id}">×</button>
+          <button class="remove-btn" data-deck-card-id="${card.deck_card_id}" title="Remove" aria-label="Remove ${card.name}"><i class="ph ph-x"></i></button>
         </div>
       </div>
     `;
@@ -904,27 +975,26 @@ function renderCardItem(card) {
 
   return `
     <div class="deck-card-item ${card.is_commander ? 'is-commander' : ''}" data-deck-card-id="${card.deck_card_id}" data-printing-id="${card.printing_id}" data-is-sideboard="${card.is_sideboard}" data-board-type="${card.board_type || (card.is_sideboard ? 'sideboard' : 'mainboard')}" data-card-id="${card.card_id}" draggable="true" style="position: relative;">
-      <button class="ownership-toggle-btn ${card.is_owned ? 'owned' : ''}" data-card-id="${card.card_id}" style="position: absolute; top: 8px; left: 8px; background: ${card.is_owned ? 'rgba(16, 185, 129, 0.9)' : 'rgba(0,0,0,0.8)'}; color: white; border: none; border-radius: 50%; width: 24px; height: 24px; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; z-index: 10; transition: all 0.2s;">
-        <i class="ph ${card.is_owned ? 'ph-check-circle' : 'ph-circle'}"></i>
-      </button>
+      ${renderOwnershipToggle(card)}
       ${showCommanderIcon ? `
         <button class="commander-toggle-btn ${card.is_commander ? 'active' : ''}"
-                data-deck-card-id="${card.deck_card_id}"
-                title="${card.is_commander ? 'Remove as Commander' : 'Set as Commander'}">
-          ⚔️
-        </button>
+                  data-deck-card-id="${card.deck_card_id}"
+                  title="${card.is_commander ? 'Remove as commander' : 'Set as commander'}"
+                  aria-label="${card.is_commander ? 'Remove as commander' : 'Set as commander'}">
+            <i class="${card.is_commander ? 'ph-fill' : 'ph'} ph-crown-simple"></i>
+          </button>
       ` : ''}
-      <img src="${card.image_url}"
+      <img src="${smallImage(card.image_url)}"
            class="deck-card-image"
-           alt="${card.name}"
-           onerror="this.style.display='none'">
+           alt="" width="50" height="70" loading="lazy" decoding="async"
+           onerror="this.style.visibility='hidden'">
       <div class="deck-card-info">
         <div class="card-name">${card.name}</div>
         <div class="card-type">${card.type_line || ''}</div>
-        <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">
+        <div class="deck-card-meta">
           ${pricingMode
-            ? `<span style="color: var(--primary); font-weight: 600;">$${cardPrice.toFixed(2)}</span>`
-            : `<span class="set-code-link" data-card-id="${card.card_id}" data-deck-card-id="${card.deck_card_id}" style="cursor: pointer; text-decoration: underline;">${card.set_code}</span> • ${card.artist || 'Unknown'}`
+            ? `<span class="deck-card-price">$${cardPrice.toFixed(2)}</span>`
+            : `<span class="set-code-link" data-card-id="${card.card_id}" data-deck-card-id="${card.deck_card_id}" title="Change printing">${card.set_code}</span> · ${card.artist || 'Unknown'}`
           }
         </div>
       </div>
@@ -934,7 +1004,7 @@ function renderCardItem(card) {
           <input type="number" class="quantity-input" data-deck-card-id="${card.deck_card_id}" value="${card.quantity}" min="1" max="99">
           <button class="quantity-btn btn-increase" data-deck-card-id="${card.deck_card_id}">+</button>
         </div>
-        <button class="remove-btn" data-deck-card-id="${card.deck_card_id}">Remove</button>
+        <button class="remove-btn" data-deck-card-id="${card.deck_card_id}" title="Remove" aria-label="Remove ${card.name}"><i class="ph ph-trash"></i></button>
       </div>
     </div>
   `;
@@ -1396,12 +1466,10 @@ async function toggleCardOwnership(cardId, buttonEl) {
     // Update the button appearance
     if (result.owned) {
       buttonEl.classList.add('owned');
-      buttonEl.style.background = 'rgba(16, 185, 129, 0.9)';
-      buttonEl.innerHTML = '<i class="ph ph-check-circle"></i>';
+      buttonEl.innerHTML = '<i class="ph-fill ph-check-circle"></i>';
       showToast('Added to collection', 'success', 1500);
     } else {
       buttonEl.classList.remove('owned');
-      buttonEl.style.background = 'rgba(0,0,0,0.8)';
       buttonEl.innerHTML = '<i class="ph ph-circle"></i>';
       showToast('Removed from collection', 'success', 1500);
     }
@@ -1452,10 +1520,8 @@ async function loadDeckStats() {
 function displayDeckPrice(price) {
   const priceEl = document.getElementById('deck-total-price');
   if (priceEl) {
-    priceEl.innerHTML = `
-      <span style="color: var(--text-secondary);">Deck Est. Value:</span>
-      <span style="margin-left: 0.5rem;">$${price.total.toFixed(2)}</span>
-    `;
+    priceEl.textContent = `$${price.total.toFixed(2)}`;
+    priceEl.title = 'Estimated deck value';
   }
 
   // Add pricing statistics section under color distribution
@@ -1603,17 +1669,16 @@ function exportToTCGPlayer() {
     }
 
     // Copy to clipboard
-    navigator.clipboard.writeText(deckText).then(() => {
-      // Open TCGPlayer mass entry page
+    copyText(deckText).then((copied) => {
+      if (!copied) {
+        document.getElementById('decklist-preview').classList.remove('hidden');
+        document.getElementById('decklist-text').value = deckText;
+        showToast('Copy the deck list below and paste into TCGPlayer', 'warning', 4000);
+        return;
+      }
       window.open('https://www.tcgplayer.com/massentry', '_blank');
-
       document.getElementById('buy-deck-modal').classList.add('hidden');
       showToast('Deck list copied! Paste it into TCGPlayer Mass Entry.', 'success', 4000);
-    }).catch(() => {
-      // Fallback: just show the text
-      document.getElementById('decklist-preview').classList.remove('hidden');
-      document.getElementById('decklist-text').value = deckText;
-      showToast('Copy the deck list below and paste into TCGPlayer', 'warning', 4000);
     });
   } catch (error) {
     showToast('Failed to export', 'error');
@@ -1635,63 +1700,20 @@ function exportToManapool() {
     }
 
     // Copy to clipboard
-    navigator.clipboard.writeText(deckText).then(() => {
-      // Open Manapool mass entry page
+    copyText(deckText).then((copied) => {
+      if (!copied) {
+        document.getElementById('decklist-preview').classList.remove('hidden');
+        document.getElementById('decklist-text').value = deckText;
+        showToast('Copy the deck list below and paste into Manapool', 'warning', 4000);
+        return;
+      }
       window.open('https://manapool.com/add-deck', '_blank');
-
       document.getElementById('buy-deck-modal').classList.add('hidden');
       showToast('Deck list copied! Paste it into Manapool Mass Entry.', 'success', 4000);
-    }).catch(() => {
-      // Fallback: just show the text
-      document.getElementById('decklist-preview').classList.remove('hidden');
-      document.getElementById('decklist-text').value = deckText;
-      showToast('Copy the deck list below and paste into Manapool', 'warning', 4000);
     });
   } catch (error) {
     showToast('Failed to export', 'error');
   }
-}
-
-function generateExport(format) {
-  const mainboard = currentDeck.cards.filter(isMainboardCard);
-  const sideboard = currentDeck.cards.filter(isSideboardCard);
-
-  let text = '';
-
-  switch (format) {
-    case 'moxfield':
-      // Format: 1 Card Name (SET) collector_number *F* (for foil)
-      text = mainboard.map(c => {
-        let line = `${c.quantity} ${c.name} (${c.set_code.toUpperCase()}) ${c.collector_number || ''}`;
-        if (c.finishes && c.finishes.includes('foil')) line += ' *F*';
-        return line.trim();
-      }).join('\n');
-      if (sideboard.length > 0) {
-        text += '\n\n';
-        text += sideboard.map(c => {
-          let line = `${c.quantity} ${c.name} (${c.set_code.toUpperCase()}) ${c.collector_number || ''}`;
-          if (c.finishes && c.finishes.includes('foil')) line += ' *F*';
-          return line.trim();
-        }).join('\n');
-      }
-      break;
-
-    case 'arena':
-    case 'mtgo':
-    case 'text':
-      // Simple format: quantity name
-      text = 'Deck\n' + mainboard.map(c => `${c.quantity} ${c.name}`).join('\n');
-      if (sideboard.length > 0) {
-        text += '\n\n' + sideboard.map(c => `${c.quantity} ${c.name}`).join('\n');
-      }
-      if (currentDeck.cards.find(c => c.is_commander)) {
-        const commander = currentDeck.cards.find(c => c.is_commander);
-        text = `Commander\n1 ${commander.name}\n\n` + text;
-      }
-      break;
-  }
-
-  return text;
 }
 
 let lastMouseX = 0;
@@ -1708,7 +1730,7 @@ function showCardPreview(imageSrc, event) {
   const img = document.getElementById('card-preview-img');
 
   // Use large image if available
-  const largeImageSrc = imageSrc.replace('/normal/', '/large/') || imageSrc;
+  const largeImageSrc = imageSrc.replace(/\/(small|normal)\//, '/large/');
   img.src = largeImageSrc;
 
   // Position preview away from mouse
@@ -1798,7 +1820,7 @@ async function showPrintingSelectionModal(cardId, deckCardId) {
                 </div>
               ` : ''}
               ${printing.id == currentPrintingId ? `
-                <div style="margin-top: 0.5rem; padding: 0.25rem 0.5rem; background: var(--primary); color: white; border-radius: 4px; font-size: 0.75rem; text-align: center; font-weight: 600;">
+                <div style="margin-top: 0.5rem; padding: 0.25rem 0.5rem; background: var(--primary); color: var(--on-primary); border-radius: 4px; font-size: 0.75rem; text-align: center; font-weight: 600;">
                   Current
                 </div>
               ` : ''}
@@ -1990,13 +2012,13 @@ function renderStats(stats) {
 
   ownedStatSection.innerHTML = `
     <h4>Collection Status</h4>
-    <div class="owned-stat-bar ${ownedFilterClass}" style="cursor: pointer; padding: 1rem; background: var(--bg-tertiary); border-radius: 8px; transition: all 0.2s;" title="Click to filter by ownership">
+    <div class="owned-stat-bar ${ownedFilterClass}" style="cursor: pointer;" title="Click to filter by ownership">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-        <span style="font-weight: 600; font-size: 1rem;">${ownedPercentage}% Owned</span>
-        <span style="font-size: 0.875rem; color: var(--text-secondary);">${ownedCards} / ${totalCards} cards</span>
+        <span style="font-weight: 600; font-size: 0.8125rem;">${ownedPercentage}% owned</span>
+        <span style="font-size: 0.75rem; color: var(--text-muted);">${ownedCards} / ${totalCards} cards</span>
       </div>
-      <div style="width: 100%; height: 8px; background: var(--border); border-radius: 4px; overflow: hidden;">
-        <div style="width: ${ownedPercentage}%; height: 100%; background: linear-gradient(90deg, #10b981, #059669); transition: width 0.3s;"></div>
+      <div style="width: 100%; height: 4px; background: var(--border); border-radius: 2px; overflow: hidden;">
+        <div style="width: ${ownedPercentage}%; height: 100%; background: var(--success); transition: width 0.3s;"></div>
       </div>
       ${currentFilter.ownership ? `
         <div style="margin-top: 0.5rem; font-size: 0.75rem; color: var(--primary); font-weight: 600;">
@@ -2083,7 +2105,7 @@ function renderStats(stats) {
             `;
           }).join('')}
         </div>
-        <div class="mana-stats" style="margin-top: 1rem; padding: 1rem; background: var(--bg-tertiary); border-radius: 8px; font-size: 0.875rem; line-height: 1.6;">
+        <div class="mana-stats" style="margin-top: 0.75rem; color: var(--text-secondary); font-size: 0.75rem; line-height: 1.6;">
           <div>The average mana value of your main deck is <strong>${avgWithLands}</strong> with lands and <strong>${avgWithoutLands}</strong> without lands.</div>
           <div style="margin-top: 0.25rem;">The median mana value of your main deck is <strong>${medianWithLands}</strong> with lands and <strong>${medianWithoutLands}</strong> without lands.</div>
           <div style="margin-top: 0.25rem;">This deck's total mana value is <strong>${totalManaValue}</strong>.</div>
@@ -2461,7 +2483,7 @@ function renderExampleHand() {
   const handContainer = document.getElementById('example-hand');
 
   if (exampleHand.length === 0) {
-    handContainer.innerHTML = '<div class="example-hand-empty">Click "Deal New Hand" to draw 7 random cards from your deck</div>';
+    handContainer.innerHTML = '<div class="example-hand-empty">Press New hand to draw 7 random cards from your deck</div>';
     return;
   }
 

@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "start": "node src/server.js",
+    "test": "node --test client/src/utils/",
     "dev": "nodemon src/server.js",
     "import-cards": "node scripts/import-mtgjson.js",
     "init-db": "node scripts/init-db.js",

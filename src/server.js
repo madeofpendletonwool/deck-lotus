@@ -19,7 +19,7 @@ import shoppingRoutes from './routes/shopping.js';
 import inventoryRoutes from './routes/inventory.js';
 import priceMonitoringRoutes from './routes/priceMonitoring.js';
 import manapoolRoutes from './routes/manapool.js';
-import { setupDailySync } from './services/syncService.js';
+import { setupDailySync, isDatabaseLocked } from './services/syncService.js';
 import { setupPriceMonitoringSchedule } from './services/priceMonitoringService.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -68,6 +68,14 @@ app.get('/health', (req, res) => {
 });
 
 // API routes
+// A sync holds SQLite's write lock while it swaps card data in. A write would block the whole
+// server until it timed out, so turn them away. Reads carry on against the old data.
+const WRITES_DURING_SYNC = new Set(['/auth/login', '/auth/refresh']);
+app.use('/api', (req, res, next) => {
+  if (req.method === 'GET' || !isDatabaseLocked() || WRITES_DURING_SYNC.has(req.path)) return next();
+  res.status(503).json({ error: 'Card data is updating, so changes are paused. Try again in a minute.' });
+});
+
 app.use('/api/auth', authRoutes);
 app.use('/api/cards', cardRoutes);
 app.use('/api/decks', deckRoutes);

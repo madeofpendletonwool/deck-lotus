@@ -876,21 +876,20 @@
                 </div>
                 <div class="settings-content">
                     <section id="database-section" class="settings-section">
-                        <h3>Database</h3>
-                        <p>
-                            Refresh card database, pricing, and sets from
-                            MTGJSON (runs Sunday at 3 AM automatically)
-                        </p>
-                        <button id="refresh-db-btn" class="btn btn-primary">
-                            Refresh Database Now
-                        </button>
-                        <div
-                            id="sync-status"
-                            style="
-                                margin-top: 1rem;
-                                color: var(--text-secondary);
-                            "
-                        ></div>
+                        <div class="sync-header">
+                            <div>
+                                <h3>Card data</h3>
+                                <p>
+                                    Cards, prices, and sets from MTGJSON. Updates
+                                    automatically on Sundays at 3 AM.
+                                </p>
+                            </div>
+                            <button id="refresh-db-btn" class="btn btn-primary">
+                                <i class="ph ph-arrows-clockwise"></i>
+                                <span>Refresh now</span>
+                            </button>
+                        </div>
+                        <div id="sync-panel" aria-live="polite"></div>
                     </section>
 
                     <section class="settings-section" style="margin-top: 2rem">

@@ -1,5 +1,6 @@
 import api from '../services/api.js';
 import { showLoading, hideLoading, showModal, showToast, confirmDialog } from '../utils/ui.js';
+import { setupSyncPanel, loadSyncStatus } from './syncPanel.js';
 
 export function setupSettings() {
   const generateApiKeyBtn = document.getElementById('generate-api-key-btn');
@@ -132,33 +133,7 @@ export function setupSettings() {
     }
   });
 
-  // Refresh database
-  refreshDbBtn.addEventListener('click', async () => {
-    const ok = await confirmDialog({
-      title: 'Refresh database?',
-      message: 'This updates all card data, prices, and sets. It may take several minutes.',
-      confirmText: 'Refresh',
-    });
-    if (!ok) return;
-
-    try {
-      refreshDbBtn.disabled = true;
-      refreshDbBtn.textContent = 'Syncing...';
-      showLoading();
-
-      await api.syncDatabase();
-
-      hideLoading();
-      showToast('Database refreshed successfully!', 'success');
-      await loadSyncStatus();
-    } catch (error) {
-      hideLoading();
-      showToast('Failed to refresh database: ' + error.message, 'error');
-    } finally {
-      refreshDbBtn.disabled = false;
-      refreshDbBtn.textContent = 'Refresh Database Now';
-    }
-  });
+  setupSyncPanel(refreshDbBtn);
 
   // Create backup now
   createBackupNowBtn.addEventListener('click', async () => {
@@ -428,24 +403,6 @@ window.resetUserPassword = async function(userId, username) {
     showToast('Failed to reset password: ' + error.message, 'error');
   }
 };
-
-async function loadSyncStatus() {
-  try {
-    const status = await api.getSyncStatus();
-    const statusEl = document.getElementById('sync-status');
-
-    if (status.isRunning) {
-      statusEl.innerHTML = '🔄 Sync in progress...';
-    } else if (status.lastRun) {
-      const date = new Date(status.lastRun);
-      statusEl.innerHTML = `Last synced: ${date.toLocaleString()}`;
-    } else {
-      statusEl.innerHTML = 'Never synced';
-    }
-  } catch (error) {
-    console.error('Failed to load sync status:', error);
-  }
-}
 
 async function loadApiKeys() {
   try {

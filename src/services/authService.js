@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import db from '../db/connection.js';
 import { generateTokens } from '../utils/jwt.js';
 import { isValidEmail, isValidUsername, isValidPassword, sanitizeInput } from '../utils/validators.js';
+import { isDatabaseLocked } from './syncService.js';
 
 const SALT_ROUNDS = 10;
 
@@ -115,7 +116,7 @@ export function validateApiKey(apiKey) {
     [keyHash]
   );
 
-  if (result) {
+  if (result && !isDatabaseLocked()) {
     // Update last_used timestamp
     db.run('UPDATE api_keys SET last_used = CURRENT_TIMESTAMP WHERE id = ?', [result.key_id]);
   }

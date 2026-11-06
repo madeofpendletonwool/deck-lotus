@@ -232,6 +232,43 @@ export function addCardToDeck(deckId, userId, printingId, quantity = 1, isSidebo
 }
 
 /**
+ * A deck can only hold a printing once per is_sideboard value. When a row is switched to a printing
+ * another row already uses, combine the two so the copies aren't lost.
+ * Returns true if the rows were merged, false if the row can simply take the new printing.
+ */
+function mergeIntoExistingPrinting(deckId, deckCardId, printingId) {
+  const row = db.get(
+    `SELECT id, quantity, is_sideboard, is_commander, board_type FROM deck_cards WHERE id = ? AND deck_id = ?`,
+    [deckCardId, deckId]
+  );
+  if (!row) return false;
+
+  const other = db.get(
+    `SELECT id, board_type FROM deck_cards
+     WHERE deck_id = ? AND printing_id = ? AND is_sideboard = ? AND id != ?`,
+    [deckId, printingId, row.is_sideboard, row.id]
+  );
+  if (!other) return false;
+
+  // The mainboard and maybeboard share is_sideboard = 0, so the constraint stops them holding the
+  // same printing. Merging would silently move copies between boards, so refuse instead.
+  if (other.board_type !== row.board_type) {
+    const error = new Error(`That printing is already in your ${other.board_type}`);
+    error.statusCode = 409;
+    throw error;
+  }
+
+  db.transaction(() => {
+    db.run(
+      `UPDATE deck_cards SET quantity = quantity + ?, is_commander = MAX(is_commander, ?) WHERE id = ?`,
+      [row.quantity, row.is_commander, other.id]
+    );
+    db.run(`DELETE FROM deck_cards WHERE id = ?`, [row.id]);
+  });
+  return true;
+}
+
+/**
  * Update card quantity in deck
  */
 export function updateDeckCard(deckId, userId, deckCardId, updates) {
@@ -276,6 +313,10 @@ export function updateDeckCard(deckId, userId, deckCardId, updates) {
     params.push(isCommander ? 1 : 0);
   }
   if (printingId !== undefined) {
+    if (mergeIntoExistingPrinting(deckId, deckCardId, printingId)) {
+      db.run(`UPDATE decks SET updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [deckId]);
+      return getDeckById(deckId, userId);
+    }
     fields.push('printing_id = ?');
     params.push(printingId);
   }

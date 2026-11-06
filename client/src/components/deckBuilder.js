@@ -1784,7 +1784,7 @@ async function showCardModal(printingId) {
   try {
     const card = currentDeck.cards.find(c => c.printing_id == printingId);
     if (card && card.card_id) {
-      await showCardDetail(card.card_id);
+      await showCardDetail(card.card_id, card.printing_id);
     } else {
       console.error('Card not found or missing card_id:', { printingId, card, currentDeck: currentDeck?.cards?.length });
       showToast('Card details not available', 'warning');
@@ -2516,8 +2516,9 @@ function renderExampleHand() {
     // Click to show modal
     cardEl.addEventListener('click', async () => {
       const cardId = cardEl.dataset.cardId;
+      const printingId = cardEl.dataset.printingId;
       if (cardId) {
-        await showCardDetail(cardId);
+        await showCardDetail(cardId, printingId || null);
       }
     });
 

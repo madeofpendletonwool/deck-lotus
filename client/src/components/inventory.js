@@ -19,8 +19,9 @@ let selectedCards = new Set(); // Track selected card IDs for multi-select
 let selectMode = false; // Whether multi-select mode is active
 
 export function setupInventory() {
-  // Load inventory data when page is shown
+  // Load inventory data when page is shown or when a printing swap changes ownership.
   window.addEventListener('page:inventory', loadInventoryData);
+  window.addEventListener('inventory:refresh', loadInventoryData);
 
   // Setup filter listeners
   setupFilterListeners();
@@ -887,7 +888,8 @@ function renderGridView(container) {
           cb.innerHTML = `<i class="ph ${selectedCards.has(cardId) ? 'ph-check-square' : 'ph-square'}"></i>`;
         }
       } else {
-        await showCardDetail(cardId);
+        const card = inventoryData.cards.find(c => c.card_id === cardId);
+        await showCardDetail(cardId, card?.selected_printing_id || null);
       }
     });
   });
@@ -960,7 +962,8 @@ function renderListView(container) {
           cb.innerHTML = `<i class="ph ${selectedCards.has(cardId) ? 'ph-check-square' : 'ph-square'}"></i>`;
         }
       } else {
-        await showCardDetail(cardId);
+        const card = inventoryData.cards.find(c => c.card_id === cardId);
+        await showCardDetail(cardId, card?.selected_printing_id || null);
       }
     });
   });

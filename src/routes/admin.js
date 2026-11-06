@@ -1,5 +1,5 @@
 import express from 'express';
-import { runSync, getSyncStatus } from '../services/syncService.js';
+import { startSync, getSyncStatus } from '../services/syncService.js';
 import {
   createBackup,
   restoreBackup,
@@ -43,12 +43,11 @@ router.put('/settings', authenticate, requireAdmin, (req, res, next) => {
 
 /**
  * POST /api/admin/sync
- * Trigger manual database sync (admin only)
+ * Start a database sync (admin only). It runs in the background: poll /sync-status for progress.
  */
-router.post('/sync', authenticate, requireAdmin, async (req, res, next) => {
+router.post('/sync', authenticate, requireAdmin, (req, res, next) => {
   try {
-    const result = await runSync();
-    res.json(result);
+    res.status(202).json(startSync());
   } catch (error) {
     if (error.message === 'Sync already in progress') {
       return res.status(409).json({ error: error.message });

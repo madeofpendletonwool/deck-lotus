@@ -3,6 +3,7 @@ import { getDb } from '../db/connection.js';
 import { getLowestPrice as manaPoolPrice, isConfigured as manaPoolConfigured } from './manaPoolService.js';
 import { getLowestPrice as tcgPlayerPrice, isConfigured as tcgConfigured } from './tcgplayerService.js';
 import { sendPriceAlert, isConfigured as ntfyConfigured } from './notificationService.js';
+import { isDatabaseLocked } from './syncService.js';
 
 async function getLowestPrice(cardName, condition, scryfallId = null) {
   if (manaPoolConfigured()) return manaPoolPrice(cardName, condition, scryfallId);
@@ -159,6 +160,11 @@ async function checkWatch(watch) {
 }
 
 export async function runPriceChecks() {
+  if (isDatabaseLocked()) {
+    console.log('Skipping price checks: card data is updating');
+    return;
+  }
+
   const db = getDb();
 
   const watches = db.prepare(`

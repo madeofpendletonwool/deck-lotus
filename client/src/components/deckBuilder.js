@@ -2,6 +2,7 @@ import api from '../services/api.js';
 import { showLoading, hideLoading, debounce, formatMana, showToast, hideModal, copyText } from '../utils/ui.js';
 import { showCardDetail } from './cards.js';
 import { setupExportModal, openExportModal } from './exportModal.js';
+import { PRINTING_SORTS, printingPrice, printingFinishNote, formatPrice, sortPrintings, uniquePrintings, printingMatches, priceRange } from '../utils/printings.js';
 
 let currentDeck = null;
 let currentDeckId = null;
@@ -15,6 +16,7 @@ let activeTab = 'mainboard'; // Track which tab is currently active ('mainboard'
 let pricingMode = false; // Track if pricing mode is enabled
 let setGroupMode = false; // Track if set grouping mode is enabled
 let currentPriceData = null; // Store current price data for cards
+let printingSort = PRINTING_SORTS[0].value; // Printing picker sort, kept between cards
 let optimizerState = {
   suggestions: [],
   currentIndex: 0,
@@ -888,6 +890,24 @@ function renderOwnershipToggle(card) {
   </button>`;
 }
 
+function renderPrintingLink(card) {
+  return `<button type="button" class="set-code-link" data-card-id="${card.card_id}" data-deck-card-id="${card.deck_card_id}" title="Change printing" aria-label="Change printing, currently ${escapeHtml(card.set_code)}">${escapeHtml(card.set_code)}</button>`;
+}
+
+function renderCardPrice(card) {
+  if (!pricingMode) return '';
+  const price = currentPriceData?.cardPrices?.[card.deck_card_id];
+  if (!price) return '<span class="deck-card-price deck-card-price-none" title="No price available for this card">—</span>';
+  return currentPriceData.estimatedCards?.includes(card.deck_card_id)
+    ? `<span class="deck-card-price deck-card-price-estimate" title="This printing has no price, so this is the card's cheapest paper price">~${formatPrice(price)}</span>`
+    : `<span class="deck-card-price">${formatPrice(price)}</span>`;
+}
+
+// The set code and price for the dense layouts, which have no room for a second line.
+function renderCompactPrinting(card) {
+  return `<div class="deck-card-printing">${renderCardPrice(card)}${renderPrintingLink(card)}</div>`;
+}
+
 function renderCardItem(card) {
   const isCommanderDeck = currentDeck.format === 'commander';
   const showCommanderIcon = isCommanderDeck && canBeCommander(card) && isMainboardCard(card);
@@ -902,6 +922,7 @@ function renderCardItem(card) {
           <span class="card-name">${card.name}</span>
           <span class="card-mana">${formatMana(card.mana_cost || '')}</span>
         </div>
+        ${renderCompactPrinting(card)}
         <div class="card-actions-dropdown">
           <button class="card-actions-menu-btn" data-deck-card-id="${card.deck_card_id}" onclick="event.stopPropagation(); this.nextElementSibling.classList.toggle('hidden')">
             <i class="ph ph-dots-three-vertical"></i>
@@ -956,6 +977,7 @@ function renderCardItem(card) {
           <span class="card-name">${card.name}</span>
           <span class="card-mana">${formatMana(card.mana_cost || '')}</span>
         </div>
+        ${renderCompactPrinting(card)}
         <div class="deck-card-controls">
           <div class="quantity-control">
             <button class="quantity-btn btn-decrease" data-deck-card-id="${card.deck_card_id}">-</button>
@@ -967,11 +989,6 @@ function renderCardItem(card) {
       </div>
     `;
   }
-
-  // Get price for this card if pricing mode is on
-  const cardPrice = pricingMode && currentPriceData?.cardPrices
-    ? currentPriceData.cardPrices[card.deck_card_id] || 0
-    : 0;
 
   return `
     <div class="deck-card-item ${card.is_commander ? 'is-commander' : ''}" data-deck-card-id="${card.deck_card_id}" data-printing-id="${card.printing_id}" data-is-sideboard="${card.is_sideboard}" data-board-type="${card.board_type || (card.is_sideboard ? 'sideboard' : 'mainboard')}" data-card-id="${card.card_id}" draggable="true" style="position: relative;">
@@ -992,10 +1009,7 @@ function renderCardItem(card) {
         <div class="card-name">${card.name}</div>
         <div class="card-type">${card.type_line || ''}</div>
         <div class="deck-card-meta">
-          ${pricingMode
-            ? `<span class="deck-card-price">$${cardPrice.toFixed(2)}</span>`
-            : `<span class="set-code-link" data-card-id="${card.card_id}" data-deck-card-id="${card.deck_card_id}" title="Change printing">${card.set_code}</span> · ${card.artist || 'Unknown'}`
-          }
+          ${renderPrintingLink(card)} · ${card.artist || 'Unknown'}${pricingMode ? ` · ${renderCardPrice(card)}` : ''}
         </div>
       </div>
       <div class="deck-card-controls">
@@ -1514,6 +1528,8 @@ async function loadDeckStats() {
     const price = await api.getDeckPrice(currentDeckId);
     currentPriceData = price;
     displayDeckPrice(price);
+    // Rows render before this fetch returns, so without this they'd show the previous prices
+    if (pricingMode) renderDeckCards();
   } catch (error) {
     console.error('Failed to load stats:', error);
   }
@@ -1544,6 +1560,12 @@ function displayDeckPrice(price) {
         <span style="color: var(--text-secondary);">Deck Total:</span>
         <span style="font-weight: 600; font-size: 1.1rem;">$${price.total.toFixed(2)}</span>
       </div>
+      ${price.estimatedCount || price.unpricedCount ? `
+        <p class="deck-price-note">${[
+          price.estimatedCount ? `Estimated for ${price.estimatedCount} ${price.estimatedCount === 1 ? 'card' : 'cards'} whose printing has no price.` : '',
+          price.unpricedCount ? `Leaves out ${price.unpricedCount} ${price.unpricedCount === 1 ? 'card' : 'cards'} with no price at all.` : '',
+        ].filter(Boolean).join(' ')}</p>
+      ` : ''}
       ${price.mostExpensive ? `
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
           <span style="color: var(--text-secondary);">Most Expensive:</span>
@@ -1773,121 +1795,115 @@ async function showCardModal(printingId) {
   }
 }
 
+function renderPrintingOption(printing, isCurrent) {
+  const price = printingPrice(printing);
+  const finishNote = printingFinishNote(printing);
+  const setCode = escapeHtml(printing.set_code.toUpperCase());
+  const setName = escapeHtml(printing.set_name || printing.set_code.toUpperCase());
+
+  return `
+    <button type="button" class="printing-option ${isCurrent ? 'is-current' : ''}" data-printing-id="${printing.id}" ${isCurrent ? 'aria-current="true"' : ''}>
+      <span class="printing-option-image">
+        ${printing.image_url ? `<img src="${escapeHtml(printing.image_url)}" alt="" loading="lazy" decoding="async" onerror="this.style.visibility='hidden'">` : ''}
+        ${isCurrent ? '<span class="printing-option-current">Current</span>' : ''}
+      </span>
+      <span class="printing-option-price-row">
+        ${price != null
+          ? `<span class="printing-option-price">${formatPrice(price)}</span>`
+          : '<span class="printing-option-no-price">No price</span>'}
+        ${finishNote ? `<span class="printing-option-foil">${finishNote}</span>` : ''}
+      </span>
+      <span class="printing-option-set">${setName}</span>
+      <span class="printing-option-meta">${setCode} #${escapeHtml(printing.collector_number || '?')}${printing.rarity ? ` · ${escapeHtml(printing.rarity)}` : ''}</span>
+    </button>
+  `;
+}
+
 async function showPrintingSelectionModal(cardId, deckCardId) {
+  hideCardPreview();
+  let printings;
   try {
     showLoading();
-    const result = await api.getCardPrintings(cardId);
-    const printings = result.printings || [];
-    hideLoading();
-
-    if (printings.length === 0) {
-      showToast('No printings found for this card', 'warning');
-      return;
-    }
-
-    // Get the current printing for this deck card
-    const currentCard = currentDeck.cards.find(c => c.deck_card_id == deckCardId);
-    const currentPrintingId = currentCard?.printing_id;
-
-    // Create modal content
-    const modalBody = document.getElementById('modal-body');
-    modalBody.innerHTML = `
-      <div style="max-width: 900px; margin: 0 auto;">
-        <h2 style="margin: 0 0 1rem 0;">Select a Printing</h2>
-        <input type="text"
-               id="printing-search"
-               placeholder="Search by set code (e.g., INR, J25)..."
-               style="width: 100%; padding: 0.75rem; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-secondary); color: var(--text-primary); font-size: 0.95rem; margin-bottom: 1.5rem;"
-               autocomplete="off">
-        <div id="printing-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem; max-height: 60vh; overflow-y: auto;">
-          ${printings.map(printing => `
-            <div class="printing-option ${printing.id == currentPrintingId ? 'current-printing' : ''}"
-                 data-printing-id="${printing.id}"
-                 data-set-code="${printing.set_code.toUpperCase()}"
-                 data-set-name="${(printing.set_name || '').toLowerCase()}"
-                 style="cursor: pointer; padding: 1rem; background: var(--bg-tertiary); border-radius: 8px; transition: all 0.2s; border: 2px solid ${printing.id == currentPrintingId ? 'var(--primary)' : 'transparent'};">
-              <img src="${printing.image_url}"
-                   alt="${printing.set_name || printing.set_code}"
-                   style="width: 100%; border-radius: 8px; margin-bottom: 0.5rem;"
-                   onerror="this.style.display='none'">
-              <div style="font-weight: 600; font-size: 0.9rem; margin-bottom: 0.25rem;">
-                ${printing.set_name || printing.set_code.toUpperCase()}
-              </div>
-              <div style="font-size: 0.75rem; color: var(--text-secondary);">
-                ${printing.set_code.toUpperCase()} #${printing.collector_number || '?'}
-              </div>
-              ${printing.rarity ? `
-                <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">
-                  ${printing.rarity}
-                </div>
-              ` : ''}
-              ${printing.id == currentPrintingId ? `
-                <div style="margin-top: 0.5rem; padding: 0.25rem 0.5rem; background: var(--primary); color: var(--on-primary); border-radius: 4px; font-size: 0.75rem; text-align: center; font-weight: 600;">
-                  Current
-                </div>
-              ` : ''}
-            </div>
-          `).join('')}
-        </div>
-      </div>
-    `;
-
-    // Add search functionality
-    const searchInput = document.getElementById('printing-search');
-    const printingOptions = modalBody.querySelectorAll('.printing-option');
-
-    searchInput.addEventListener('input', (e) => {
-      const searchTerm = e.target.value.toUpperCase().trim();
-
-      printingOptions.forEach(option => {
-        const setCode = option.dataset.setCode;
-        const setName = option.dataset.setName;
-
-        // Match against set code or set name
-        const matches = setCode.includes(searchTerm) || setName.includes(searchTerm.toLowerCase());
-
-        if (matches || searchTerm === '') {
-          option.style.display = '';
-        } else {
-          option.style.display = 'none';
-        }
-      });
-    });
-
-    // Focus the search input
-    setTimeout(() => searchInput.focus(), 100);
-
-    // Add click handlers for printing selection
-    printingOptions.forEach(option => {
-      // Hover effect
-      option.addEventListener('mouseenter', function() {
-        if (!this.classList.contains('current-printing')) {
-          this.style.background = 'var(--bg-secondary)';
-          this.style.borderColor = 'var(--primary)';
-        }
-      });
-      option.addEventListener('mouseleave', function() {
-        if (!this.classList.contains('current-printing')) {
-          this.style.background = 'var(--bg-tertiary)';
-          this.style.borderColor = 'transparent';
-        }
-      });
-
-      // Click to select
-      option.addEventListener('click', async function() {
-        const printingId = this.dataset.printingId;
-        await swapPrinting(deckCardId, printingId);
-        hideModal();
-      });
-    });
-
-    // Show the modal
-    document.getElementById('modal').classList.remove('hidden');
+    ({ printings = [] } = await api.getCardPrintings(cardId));
   } catch (error) {
-    hideLoading();
     console.error('Failed to load printings:', error);
     showToast('Failed to load printings', 'error');
+    return;
+  } finally {
+    hideLoading();
   }
+
+  if (printings.length === 0) {
+    showToast('No printings found for this card', 'warning');
+    return;
+  }
+
+  const currentCard = currentDeck.cards.find(c => c.deck_card_id == deckCardId);
+  const currentPrintingId = currentCard?.printing_id;
+  printings = uniquePrintings(printings, currentPrintingId);
+  const range = priceRange(printings);
+  const rangeLabel = range
+    ? ` · ${range.min === range.max ? formatPrice(range.min) : `${formatPrice(range.min)} – ${formatPrice(range.max)}`}`
+    : '';
+
+  const modalBody = document.getElementById('modal-body');
+  modalBody.innerHTML = `
+    <div class="printing-picker">
+      <h2>Change printing</h2>
+      <p class="printing-picker-summary">
+        ${escapeHtml(printings[0].card_name || currentCard?.name)} · ${printings.length} ${printings.length === 1 ? 'printing' : 'printings'}${rangeLabel}
+      </p>
+      <div class="printing-picker-controls">
+        <input type="text" id="printing-search" placeholder="Filter by set name or code" aria-label="Filter printings by set" autocomplete="off">
+        <label class="printing-picker-sort">
+          <span>Sort by</span>
+          <select id="printing-sort">
+            ${PRINTING_SORTS.map(({ value, label }) => `<option value="${value}" ${value === printingSort ? 'selected' : ''}>${label}</option>`).join('')}
+          </select>
+        </label>
+      </div>
+      <div id="printing-grid" class="printing-grid">
+        ${sortPrintings(printings, printingSort).map(p => renderPrintingOption(p, p.id == currentPrintingId)).join('')}
+      </div>
+      <p id="printing-none" class="printing-picker-none hidden">No printings match that filter.</p>
+    </div>
+  `;
+
+  const grid = document.getElementById('printing-grid');
+  const searchInput = document.getElementById('printing-search');
+  const sortSelect = document.getElementById('printing-sort');
+  const optionsById = new Map([...grid.children].map(option => [option.dataset.printingId, option]));
+
+  // Moves and hides the existing elements, so images that have already loaded don't load again
+  const applyFilter = () => {
+    let shown = 0;
+    printings.forEach(printing => {
+      const matches = printingMatches(printing, searchInput.value);
+      optionsById.get(String(printing.id)).classList.toggle('hidden', !matches);
+      if (matches) shown++;
+    });
+    document.getElementById('printing-none').classList.toggle('hidden', shown > 0);
+  };
+
+  searchInput.addEventListener('input', applyFilter);
+
+  sortSelect.addEventListener('change', () => {
+    printingSort = sortSelect.value;
+    grid.append(...sortPrintings(printings, printingSort).map(p => optionsById.get(String(p.id))));
+    grid.scrollTop = 0;
+  });
+
+  grid.addEventListener('click', async (e) => {
+    const option = e.target.closest('.printing-option');
+    if (!option) return;
+    if (option.dataset.printingId != currentPrintingId) {
+      await swapPrinting(deckCardId, option.dataset.printingId);
+    }
+    hideModal();
+  });
+
+  document.getElementById('modal').classList.remove('hidden');
+  searchInput.focus();
 }
 
 async function swapPrinting(deckCardId, newPrintingId) {

@@ -1,4 +1,5 @@
 import db from '../db/connection.js';
+import { PRINTING_PRICE_SQL, DEFAULT_PRINTING_ORDER_SQL } from './pricingService.js';
 
 /**
  * Get all owned cards for inventory display
@@ -187,7 +188,7 @@ export function getInventory(userId, filters = {}) {
         p.rarity,
         p.image_url,
         s.name as set_name,
-        (SELECT price FROM prices WHERE printing_uuid = p.uuid AND provider = 'tcgplayer' AND price_type = 'normal' LIMIT 1) as price
+        ${PRINTING_PRICE_SQL} as price
       FROM owned_printings op
       JOIN printings p ON op.printing_id = p.id
       LEFT JOIN sets s ON p.set_code = s.code
@@ -244,7 +245,7 @@ export function getInventoryStats(userId) {
   const estimatedValue = db.get(`
     SELECT COALESCE(SUM(
       op.quantity * COALESCE(
-        (SELECT price FROM prices WHERE printing_uuid = p.uuid AND provider = 'tcgplayer' AND price_type = 'normal' LIMIT 1),
+        ${PRINTING_PRICE_SQL},
         0
       )
     ), 0) as total
@@ -283,9 +284,7 @@ export function searchCardsForInventoryAdd(userId, query, limit = 10) {
       c.mana_cost,
       c.type_line,
       (SELECT p.image_url FROM printings p WHERE p.card_id = c.id AND p.image_url IS NOT NULL LIMIT 1) as image_url,
-      (SELECT p.id FROM printings p WHERE p.card_id = c.id ORDER BY
-        CASE WHEN (SELECT price FROM prices WHERE printing_uuid = p.uuid AND provider = 'tcgplayer' AND price_type = 'normal' LIMIT 1) IS NULL THEN 999999
-        ELSE (SELECT price FROM prices WHERE printing_uuid = p.uuid AND provider = 'tcgplayer' AND price_type = 'normal' LIMIT 1) END ASC
+      (SELECT p.id FROM printings p WHERE p.card_id = c.id ORDER BY ${DEFAULT_PRINTING_ORDER_SQL}
         LIMIT 1) as cheapest_printing_id,
       (
         SELECT COALESCE(SUM(op.quantity), 0)
@@ -354,14 +353,12 @@ export function bulkAddToInventory(userId, items) {
       }
 
       if (!printing) {
-        // Get cheapest printing
+        // Get the default printing
         printing = db.get(`
           SELECT p.id
           FROM printings p
           WHERE p.card_id = ?
-          ORDER BY
-            CASE WHEN (SELECT price FROM prices WHERE printing_uuid = p.uuid AND provider = 'tcgplayer' AND price_type = 'normal' LIMIT 1) IS NULL THEN 999999
-            ELSE (SELECT price FROM prices WHERE printing_uuid = p.uuid AND provider = 'tcgplayer' AND price_type = 'normal' LIMIT 1) END ASC
+          ORDER BY ${DEFAULT_PRINTING_ORDER_SQL}
           LIMIT 1
         `, [card.id]);
       }

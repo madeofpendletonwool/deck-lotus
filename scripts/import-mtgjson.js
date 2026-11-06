@@ -18,6 +18,15 @@ const DOWNLOAD_PATH = path.join(DATA_DIR, 'AllPrintings.sqlite.bz2');
 const EXTRACTED_PATH = path.join(DATA_DIR, 'AllPrintings.sqlite');
 const PRICES_PATH = path.join(DATA_DIR, 'AllPricesToday.json');
 const TARGET_DB_PATH = process.env.DATABASE_PATH || path.join(DATA_DIR, 'deck-lotus.db');
+const PRICE_PROVIDERS = ['tcgplayer', 'cardmarket', 'cardkingdom', 'manapool'];
+const PRICE_TYPES = ['normal', 'foil', 'etched'];
+const DOWNLOAD_STALL_MS = 60 * 1000;
+
+// When the server runs this as a sync it listens for these messages (see utils/syncProgress.js)
+const report = (message) => {
+  if (process.connected) process.send(message);
+};
+const summary = {};
 
 /**
  * Download file from URL
@@ -25,19 +34,24 @@ const TARGET_DB_PATH = process.env.DATABASE_PATH || path.join(DATA_DIR, 'deck-lo
 async function downloadFile(url, dest) {
   return new Promise((resolve, reject) => {
     console.log(`Downloading from ${url}...`);
+    let settled = false;
 
     const file = fs.createWriteStream(dest);
     const client = url.startsWith('https') ? https : http;
 
-    client.get(url, (response) => {
+    const request = client.get(url, (response) => {
       if (response.statusCode === 302 || response.statusCode === 301) {
-        // Follow redirect
+        // Follow redirect. This request is finished with, so its timeout mustn't touch the new one.
+        settled = true;
+        response.resume();
         file.close();
         fs.unlinkSync(dest);
         return downloadFile(response.headers.location, dest).then(resolve).catch(reject);
       }
 
       if (response.statusCode !== 200) {
+        settled = true;
+        response.resume();
         file.close();
         fs.unlinkSync(dest);
         return reject(new Error(`Failed to download: ${response.statusCode}`));
@@ -46,23 +60,39 @@ async function downloadFile(url, dest) {
       let downloaded = 0;
       const total = parseInt(response.headers['content-length'], 10);
 
+      let lastReport = 0;
       response.on('data', (chunk) => {
         downloaded += chunk.length;
-        const percent = ((downloaded / total) * 100).toFixed(2);
-        process.stdout.write(`\rProgress: ${percent}% (${(downloaded / 1024 / 1024).toFixed(2)} MB)`);
+        if (Date.now() - lastReport >= 250) {
+          lastReport = Date.now();
+          report({ type: 'progress', done: downloaded, total: total || null, unit: 'bytes' });
+        }
       });
+      response.on('error', fail);
 
       response.pipe(file);
 
       file.on('finish', () => {
         file.close();
-        console.log('\n✓ Download complete');
+        if (settled) return;
+        settled = true;
+        console.log('✓ Download complete');
         resolve();
       });
-    }).on('error', (err) => {
-      file.close();
-      fs.unlinkSync(dest);
+    });
+
+    function fail(err) {
+      if (settled) return;
+      settled = true;
+      file.destroy();
+      fs.rmSync(dest, { force: true });
       reject(err);
+    }
+
+    request.on('error', fail);
+    // A dropped connection can go silent instead of erroring, which would hang the sync forever
+    request.setTimeout(DOWNLOAD_STALL_MS, () => {
+      request.destroy(new Error(`Download stalled: no data from ${new URL(url).hostname} for 60 seconds`));
     });
   });
 }
@@ -77,12 +107,20 @@ async function decompressBz2(source, dest) {
   const util = await import('util');
   const execPromise = util.promisify(exec);
 
+  const sizeReporter = setInterval(() => {
+    fs.stat(dest, (err, stats) => {
+      if (!err) report({ type: 'progress', done: stats.size, total: null, unit: 'bytes' });
+    });
+  }, 500);
+
   try {
     // Try using system bzip2
     await execPromise(`bzip2 -d -k -c "${source}" > "${dest}"`);
     console.log('✓ Decompression complete');
   } catch (error) {
     throw new Error('Failed to decompress. Please install bzip2: brew install bzip2 (macOS) or apt-get install bzip2 (Linux)');
+  } finally {
+    clearInterval(sizeReporter);
   }
 }
 
@@ -97,6 +135,7 @@ async function importCards(sourceDb, targetDb) {
 
   // Get all unique cards with all metadata
   console.log('Importing atomic cards...');
+  report({ type: 'progress', done: 0, total: 7, unit: 'stages', detail: 'Reading cards' });
   const sourceCards = srcDb.prepare(`
     SELECT DISTINCT
       c.name, c.manaCost, c.manaValue, c.colors, c.colorIdentity,
@@ -242,9 +281,11 @@ async function importCards(sourceDb, targetDb) {
   const uniqueCards = mergeCardRows(sourceCards);
   insertMany(uniqueCards);
   console.log(`✓ Imported ${uniqueCards.length} unique cards`);
+  summary.cards = uniqueCards.length;
 
   // Import printings
   console.log('Importing card printings...');
+  report({ type: 'progress', done: 1, total: 7, unit: 'stages', detail: 'Importing printings' });
   const sourcePrintings = srcDb.prepare(`
     SELECT c.uuid, c.name, c.setCode, c.number, c.rarity, c.artist,
            c.flavorText, c.finishes, c.isPromo, c.isFullArt,
@@ -319,9 +360,11 @@ async function importCards(sourceDb, targetDb) {
 
   insertPrintingsMany(sourcePrintings);
   console.log(`✓ Imported ${sourcePrintings.length} card printings`);
+  summary.printings = sourcePrintings.length;
 
   // Import sets
   console.log('Importing sets...');
+  report({ type: 'progress', done: 2, total: 7, unit: 'stages', detail: 'Importing sets' });
   const sourceSets = srcDb.prepare(`
     SELECT code, name, type, releaseDate, block, baseSetSize, totalSetSize,
            keyruneCode, tcgplayerGroupId, isOnlineOnly, isFoilOnly
@@ -356,9 +399,11 @@ async function importCards(sourceDb, targetDb) {
 
   insertSetsMany(sourceSets);
   console.log(`✓ Imported ${sourceSets.length} sets`);
+  summary.sets = sourceSets.length;
 
   // Import purchase URLs
   console.log('Importing purchase URLs...');
+  report({ type: 'progress', done: 3, total: 7, unit: 'stages', detail: 'Importing purchase links' });
   const purchaseUrls = srcDb.prepare(`
     SELECT uuid, tcgplayer, cardmarket, cardKingdom
     FROM cardPurchaseUrls
@@ -382,6 +427,7 @@ async function importCards(sourceDb, targetDb) {
 
   // Import rulings
   console.log('Importing card rulings...');
+  report({ type: 'progress', done: 4, total: 7, unit: 'stages', detail: 'Importing rulings' });
   const rulings = srcDb.prepare(`
     SELECT uuid, date, text
     FROM cardRulings
@@ -404,6 +450,7 @@ async function importCards(sourceDb, targetDb) {
 
   // Import related cards
   console.log('Importing related cards...');
+  report({ type: 'progress', done: 5, total: 7, unit: 'stages', detail: 'Importing related cards' });
   const relatedCards = srcDb.prepare(`
     SELECT name, relatedCards
     FROM cards
@@ -446,6 +493,7 @@ async function importCards(sourceDb, targetDb) {
 
   // Import foreign data
   console.log('Importing foreign card data...');
+  report({ type: 'progress', done: 6, total: 7, unit: 'stages', detail: 'Importing translations' });
   const foreignData = srcDb.prepare(`
     SELECT c.name as english_name, fd.language, fd.name as faceName, fd.text, fd.type, fd.flavorText
     FROM cardForeignData fd
@@ -492,11 +540,6 @@ async function importCards(sourceDb, targetDb) {
 async function importPricing(targetDb) {
   console.log('Importing pricing data...');
 
-  // Download pricing data if not exists
-  if (!fs.existsSync(PRICES_PATH)) {
-    await downloadFile(PRICES_URL, PRICES_PATH);
-  }
-
   const pricesData = JSON.parse(fs.readFileSync(PRICES_PATH, 'utf8'));
   const data = pricesData.data;
 
@@ -536,42 +579,18 @@ async function importPricing(targetDb) {
         return null;
       };
 
-      // TCGPlayer prices
-      if (prices.paper?.tcgplayer) {
-        const tcp = prices.paper.tcgplayer;
-        if (tcp.retail) {
-          const normalPrice = extractPrice(tcp.retail.normal);
-          const foilPrice = extractPrice(tcp.retail.foil);
-          if (normalPrice) insertPrice.run(uuid, 'tcgplayer', 'normal', normalPrice);
-          if (foilPrice) insertPrice.run(uuid, 'tcgplayer', 'foil', foilPrice);
-        }
-      }
-
-      // Cardmarket prices
-      if (prices.paper?.cardmarket) {
-        const cm = prices.paper.cardmarket;
-        if (cm.retail) {
-          const normalPrice = extractPrice(cm.retail.normal);
-          const foilPrice = extractPrice(cm.retail.foil);
-          if (normalPrice) insertPrice.run(uuid, 'cardmarket', 'normal', normalPrice);
-          if (foilPrice) insertPrice.run(uuid, 'cardmarket', 'foil', foilPrice);
-        }
-      }
-
-      // Card Kingdom prices
-      if (prices.paper?.cardkingdom) {
-        const ck = prices.paper.cardkingdom;
-        if (ck.retail) {
-          const normalPrice = extractPrice(ck.retail.normal);
-          const foilPrice = extractPrice(ck.retail.foil);
-          if (normalPrice) insertPrice.run(uuid, 'cardkingdom', 'normal', normalPrice);
-          if (foilPrice) insertPrice.run(uuid, 'cardkingdom', 'foil', foilPrice);
+      for (const provider of PRICE_PROVIDERS) {
+        const retail = prices.paper?.[provider]?.retail;
+        if (!retail) continue;
+        for (const priceType of PRICE_TYPES) {
+          const price = extractPrice(retail[priceType]);
+          if (price) insertPrice.run(uuid, provider, priceType, price);
         }
       }
 
       count++;
       if (count % 5000 === 0) {
-        process.stdout.write(`\rProcessed ${count} cards...`);
+        report({ type: 'progress', done: count + skipped, total: entries.length, unit: 'printings' });
       }
     }
     if (skipped > 0) {
@@ -580,13 +599,15 @@ async function importPricing(targetDb) {
   });
 
   insertPricesMany(Object.entries(data));
-  console.log(`\n✓ Imported pricing for ${Object.keys(data).length} printings`);
+  console.log(`✓ Imported pricing for ${Object.keys(data).length} printings`);
+  summary.prices = targetDb.prepare('SELECT COUNT(*) as count FROM prices').get().count;
 }
 
 /**
  * Main import process
  */
 async function main() {
+  let targetDb;
   try {
     // Ensure data directory exists
     if (!fs.existsSync(DATA_DIR)) {
@@ -595,7 +616,7 @@ async function main() {
 
     // Open target database to check if we need force reimport
     console.log('Opening target database...');
-    const targetDb = new Database(TARGET_DB_PATH);
+    targetDb = new Database(TARGET_DB_PATH);
     targetDb.pragma('journal_mode = WAL');
 
     // Check if cards table exists, if not run migrations
@@ -620,7 +641,52 @@ async function main() {
       return;
     }
 
-    if (cardCount.count > 0 && forceReimport) {
+    const replacingData = cardCount.count > 0 && forceReimport;
+
+    // Fetch everything before touching the database, so a failed download changes nothing.
+    if (replacingData) {
+      // Delete stale MTGJSON source files to force fresh download
+      if (fs.existsSync(EXTRACTED_PATH)) {
+        console.log('  🗑️  Deleting stale AllPrintings.sqlite...');
+        fs.unlinkSync(EXTRACTED_PATH);
+      }
+      if (fs.existsSync(DOWNLOAD_PATH)) {
+        console.log('  🗑️  Deleting stale AllPrintings.sqlite.bz2...');
+        fs.unlinkSync(DOWNLOAD_PATH);
+      }
+      if (fs.existsSync(PRICES_PATH)) {
+        console.log('  🗑️  Deleting stale AllPricesToday.json...');
+        fs.unlinkSync(PRICES_PATH);
+      }
+    }
+
+    if (!fs.existsSync(EXTRACTED_PATH)) {
+      if (!fs.existsSync(DOWNLOAD_PATH)) {
+        report({ type: 'step', id: 'download' });
+        await downloadFile(MTGJSON_URL, DOWNLOAD_PATH);
+      }
+
+      report({ type: 'step', id: 'unpack' });
+      await decompressBz2(DOWNLOAD_PATH, EXTRACTED_PATH);
+
+      // Clean up compressed file
+      fs.unlinkSync(DOWNLOAD_PATH);
+    } else {
+      console.log('✓ MTGJSON database already exists, skipping download');
+    }
+
+    if (!fs.existsSync(PRICES_PATH)) {
+      report({ type: 'step', id: 'prices-download' });
+      await downloadFile(PRICES_URL, PRICES_PATH);
+    }
+
+    // The swap is one transaction. Readers keep seeing the old data until it commits, and if
+    // anything fails or the process dies, the database is left exactly as it was.
+    report({ type: 'lock', locked: true });
+    targetDb.exec('BEGIN IMMEDIATE');
+
+    if (replacingData) {
+      report({ type: 'step', id: 'backup' });
       console.log(`\n⚠️  FORCE_REIMPORT=true detected`);
       console.log(`Clearing existing MTGJSON data (preserving user data)...`);
 
@@ -667,24 +733,11 @@ async function main() {
       };
 
       fs.writeFileSync(safetyBackupPath, JSON.stringify(safetyBackup, null, 2), 'utf8');
+      summary.safetyBackup = path.basename(safetyBackupPath);
       console.log(`  ✓ Safety backup saved to: ${path.basename(safetyBackupPath)}`);
       console.log(`  ✓ Backed up ${deckCardsBackup.length} deck card entries`);
       console.log(`  ✓ Backed up ${ownedCardsBackup.length} owned card entries`);
       console.log(`  ✓ Backed up ${ownedPrintingsBackup.length} owned printing entries`);
-
-      // Delete stale MTGJSON source files to force fresh download
-      if (fs.existsSync(EXTRACTED_PATH)) {
-        console.log('  🗑️  Deleting stale AllPrintings.sqlite...');
-        fs.unlinkSync(EXTRACTED_PATH);
-      }
-      if (fs.existsSync(DOWNLOAD_PATH)) {
-        console.log('  🗑️  Deleting stale AllPrintings.sqlite.bz2...');
-        fs.unlinkSync(DOWNLOAD_PATH);
-      }
-      if (fs.existsSync(PRICES_PATH)) {
-        console.log('  🗑️  Deleting stale AllPricesToday.json...');
-        fs.unlinkSync(PRICES_PATH);
-      }
 
       // STEP 2: Delete MTGJSON-sourced data in correct order (preserve user data)
       targetDb.prepare('DELETE FROM prices').run();
@@ -719,26 +772,15 @@ async function main() {
       targetDb._safetyBackupPath = safetyBackupPath;
     }
 
-    // Download MTGJSON database if not exists
-    if (!fs.existsSync(EXTRACTED_PATH)) {
-      if (!fs.existsSync(DOWNLOAD_PATH)) {
-        await downloadFile(MTGJSON_URL, DOWNLOAD_PATH);
-      }
-
-      await decompressBz2(DOWNLOAD_PATH, EXTRACTED_PATH);
-
-      // Clean up compressed file
-      fs.unlinkSync(DOWNLOAD_PATH);
-    } else {
-      console.log('✓ MTGJSON database already exists, skipping download');
-    }
-
+    report({ type: 'step', id: 'cards' });
     // Import cards and sets
     await importCards(EXTRACTED_PATH, targetDb);
 
+    report({ type: 'step', id: 'prices' });
     // Import pricing data
     await importPricing(targetDb);
 
+    report({ type: 'step', id: 'restore' });
     // STEP 4: Restore user deck data if we backed it up
     if (targetDb._deckCardsBackup && targetDb._deckCardsBackup.length > 0) {
       console.log('\n🔄 Restoring user deck data...');
@@ -785,6 +827,8 @@ async function main() {
 
       const result = restoreMany(backup);
       console.log(`✓ Restored ${result.restored} deck card entries`);
+      summary.deckCardsRestored = result.restored;
+      summary.deckCardsLost = result.notFound;
       if (result.notFound > 0) {
         console.log(`  ⚠️  ${result.notFound} cards not found in new import (may have been removed from MTGJSON)`);
       }
@@ -833,6 +877,8 @@ async function main() {
 
       const ownedResult = restoreOwnedMany(backup);
       console.log(`✓ Restored ${ownedResult.restored} owned card entries`);
+      summary.ownedCardsRestored = ownedResult.restored;
+      summary.ownedCardsLost = ownedResult.notFound;
       if (ownedResult.notFound > 0) {
         console.log(`  ⚠️  ${ownedResult.notFound} cards not found in new import (may have been removed from MTGJSON)`);
       }
@@ -881,11 +927,17 @@ async function main() {
 
       const ownedPrintingsResult = restoreOwnedPrintingsMany(backup);
       console.log(`✓ Restored ${ownedPrintingsResult.restored} owned printing entries`);
+      summary.ownedPrintingsRestored = ownedPrintingsResult.restored;
+      summary.ownedPrintingsLost = ownedPrintingsResult.notFound;
       if (ownedPrintingsResult.notFound > 0) {
         console.log(`  ⚠️  ${ownedPrintingsResult.notFound} printings not found in new import (may have been removed from MTGJSON)`);
       }
     }
 
+    targetDb.exec('COMMIT');
+    report({ type: 'committed' });
+
+    report({ type: 'step', id: 'finish' });
     // Refresh query planner stats and fold the import's write-ahead log back into the database.
     targetDb.exec('ANALYZE');
     targetDb.pragma('wal_checkpoint(TRUNCATE)');
@@ -902,11 +954,25 @@ async function main() {
       console.log('  ✓ Deleted AllPricesToday.json');
     }
 
+    report({ type: 'summary', summary });
+    report({ type: 'lock', locked: false });
     console.log('\n✓ All done! Card data imported successfully.');
+    // Exit only once the messages are sent, or the server misses the summary.
+    if (process.connected) process.send({ type: 'done' }, () => process.exit(0));
   } catch (error) {
     console.error('Error:', error.message);
-    process.exit(1);
+    if (targetDb?.inTransaction) targetDb.exec('ROLLBACK');
+    targetDb?.close();
+    // Exit only once the message is sent, or the server never learns why this failed.
+    if (process.connected) {
+      process.send({ type: 'error', message: error.message }, () => process.exit(1));
+    } else {
+      process.exit(1);
+    }
   }
 }
+
+// If the server dies, stop rather than keep writing with nobody watching. SQLite rolls back.
+if (process.connected) process.on('disconnect', () => process.exit(1));
 
 main();

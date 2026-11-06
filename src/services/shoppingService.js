@@ -1,4 +1,5 @@
 import db from '../db/connection.js';
+import { PRINTING_PRICE_SQL } from './pricingService.js';
 
 /**
  * Get shopping list for selected decks
@@ -35,7 +36,7 @@ export function getShoppingList(userId, deckIds) {
       d.name as deck_name,
       dc.quantity,
       COALESCE(dc.board_type, CASE WHEN dc.is_sideboard = 1 THEN 'sideboard' ELSE 'mainboard' END) as board_type,
-      (SELECT price FROM prices WHERE printing_uuid = p.uuid AND provider = 'tcgplayer' AND price_type = 'normal' LIMIT 1) as price
+      ${PRINTING_PRICE_SQL} as price
     FROM deck_cards dc
     JOIN decks d ON dc.deck_id = d.id
     JOIN printings p ON dc.printing_id = p.id

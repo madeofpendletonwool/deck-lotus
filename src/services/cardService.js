@@ -1,4 +1,5 @@
 import db from '../db/connection.js';
+import { NORMAL_PRICE_SQL, FOIL_PRICE_SQL, ETCHED_PRICE_SQL, DEFAULT_PRINTING_ORDER_SQL } from './pricingService.js';
 
 /**
  * Generate Scryfall CDN image URLs (no rate limits on *.scryfall.io domains)
@@ -76,12 +77,12 @@ export function searchCards(query, limit = 20, typeFilter = null) {
   const cardQuery = statement(
     `SELECT id, name, mana_cost, cmc, colors, type_line, oracle_text FROM cards WHERE id = ?`
   );
-  // Same order addCardToDeck picks from, so the thumbnail matches the printing that gets added.
+  // The default printing, so the thumbnail matches the printing that gets added.
   const printingQuery = statement(
     `SELECT p.id as printing_id, p.image_url, p.set_code, s.name as set_name, p.collector_number, p.rarity, p.uuid as sample_uuid
      FROM printings p LEFT JOIN sets s ON p.set_code = s.code
      WHERE p.card_id = ?
-     ORDER BY p.set_code, p.collector_number
+     ORDER BY ${DEFAULT_PRINTING_ORDER_SQL}
      LIMIT 1`
   );
 
@@ -115,21 +116,16 @@ export function getCardById(cardId) {
   }
 
   // Get all printings for this card with prices and set names
-  // Order by lowest price first, so users see the cheapest available printing
+  // The default printing comes first
   const printings = db.all(
     `SELECT p.*,
             s.name as set_name,
-            (SELECT price FROM prices WHERE printing_uuid = p.uuid AND provider = 'tcgplayer' AND price_type = 'normal' LIMIT 1) as price_normal,
-            (SELECT price FROM prices WHERE printing_uuid = p.uuid AND provider = 'tcgplayer' AND price_type = 'foil' LIMIT 1) as price_foil
+            ${NORMAL_PRICE_SQL} as price_normal,
+            ${FOIL_PRICE_SQL} as price_foil
      FROM printings p
      LEFT JOIN sets s ON p.set_code = s.code
      WHERE p.card_id = ?
-     ORDER BY
-       CASE
-         WHEN (SELECT price FROM prices WHERE printing_uuid = p.uuid AND provider = 'tcgplayer' AND price_type = 'normal' LIMIT 1) IS NULL THEN 999999
-         ELSE (SELECT price FROM prices WHERE printing_uuid = p.uuid AND provider = 'tcgplayer' AND price_type = 'normal' LIMIT 1)
-       END ASC,
-       p.set_code, p.collector_number`,
+     ORDER BY ${DEFAULT_PRINTING_ORDER_SQL}`,
     [cardId]
   );
 
@@ -195,16 +191,19 @@ export function getCardByName(name) {
 }
 
 /**
- * Get printings for a card
+ * Get printings for a card, default printing first. Callers adding a card use the first one.
  */
 export function getCardPrintings(cardId) {
   const printings = db.all(
-    `SELECT p.*, c.name as card_name, s.name as set_name
+    `SELECT p.*, c.name as card_name, s.name as set_name, s.release_date as set_release_date,
+            ${NORMAL_PRICE_SQL} as price_normal,
+            ${FOIL_PRICE_SQL} as price_foil,
+            ${ETCHED_PRICE_SQL} as price_etched
      FROM printings p
      JOIN cards c ON p.card_id = c.id
      LEFT JOIN sets s ON p.set_code = s.code
      WHERE p.card_id = ?
-     ORDER BY p.set_code, p.collector_number`,
+     ORDER BY ${DEFAULT_PRINTING_ORDER_SQL}`,
     [cardId]
   );
 
@@ -489,16 +488,16 @@ export function toggleCardOwnership(userId, cardId) {
     );
     return { owned: false, message: 'Card removed from collection' };
   } else {
-    // Add the first printing with quantity 1
-    const firstPrinting = db.get(
-      `SELECT id FROM printings WHERE card_id = ? ORDER BY set_code, collector_number LIMIT 1`,
+    // Add the default printing with quantity 1
+    const defaultPrinting = db.get(
+      `SELECT p.id FROM printings p WHERE p.card_id = ? ORDER BY ${DEFAULT_PRINTING_ORDER_SQL} LIMIT 1`,
       [cardId]
     );
 
-    if (firstPrinting) {
+    if (defaultPrinting) {
       db.run(
         `INSERT INTO owned_printings (user_id, printing_id, quantity) VALUES (?, ?, 1)`,
-        [userId, firstPrinting.id]
+        [userId, defaultPrinting.id]
       );
       // Also add to owned_cards for backward compatibility
       db.run(

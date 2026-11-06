@@ -1,4 +1,5 @@
 import db from '../db/connection.js';
+import { DEFAULT_PRINTING_ORDER_SQL } from './pricingService.js';
 
 /**
  * Parse deck list from various formats
@@ -137,6 +138,7 @@ export function findCard(name, setCode = null, collectorNumber = null) {
        FROM cards c
        JOIN printings p ON c.id = p.card_id
        WHERE c.name = ? AND p.set_code = ?
+       ORDER BY ${DEFAULT_PRINTING_ORDER_SQL}
        LIMIT 1`,
       [normalizedName, setCode]
     );
@@ -148,6 +150,7 @@ export function findCard(name, setCode = null, collectorNumber = null) {
        FROM cards c
        JOIN printings p ON c.id = p.card_id
        WHERE c.name LIKE ? AND p.set_code = ?
+       ORDER BY ${DEFAULT_PRINTING_ORDER_SQL}
        LIMIT 1`,
       [normalizedName + ' //%', setCode]
     );
@@ -160,6 +163,7 @@ export function findCard(name, setCode = null, collectorNumber = null) {
      FROM cards c
      JOIN printings p ON c.id = p.card_id
      WHERE c.name = ?
+     ORDER BY ${DEFAULT_PRINTING_ORDER_SQL}
      LIMIT 1`,
     [normalizedName]
   );
@@ -171,6 +175,7 @@ export function findCard(name, setCode = null, collectorNumber = null) {
      FROM cards c
      JOIN printings p ON c.id = p.card_id
      WHERE c.name LIKE ?
+     ORDER BY ${DEFAULT_PRINTING_ORDER_SQL}
      LIMIT 1`,
     [normalizedName + ' //%']
   );

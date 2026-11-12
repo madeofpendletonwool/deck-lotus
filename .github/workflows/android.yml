@@ -1,0 +1,143 @@
+name: Android app
+
+# Pull requests: unit tests and a debug build.
+# main (and weekly, for newly released cards): a signed release APK, published to
+# the "android-latest" GitHub release at a fixed URL:
+#   https://github.com/<owner>/<repo>/releases/download/android-latest/deck-lotus.apk
+
+on:
+  pull_request:
+    branches: [main]
+    paths: ['android/**', '.github/workflows/android.yml']
+  push:
+    branches: [main]
+    paths: ['android/**', '.github/workflows/android.yml']
+  schedule:
+    # Mondays, so the scanner knows cards from sets released the week before
+    - cron: '0 9 * * 1'
+  workflow_dispatch:
+    inputs:
+      full_index:
+        description: Fingerprint every card again instead of reusing the last release's index
+        type: boolean
+        default: false
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+defaults:
+  run:
+    working-directory: android
+
+jobs:
+  check:
+    name: Test and build (debug)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      # No card index here: it's only needed to scan, and the app says so when it's missing
+      - name: Unit tests and debug APK
+        run: ./gradlew test :app:assembleDebug
+
+  release:
+    name: Signed release APK
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      # The last release's index holds a fingerprint for every printing it knew, so only
+      # cards released since then need their images downloaded. Without one (the first
+      # run, or a full rebuild) every card is fingerprinted, which takes about 15 minutes.
+      - name: Fetch the last release's card index
+        if: ${{ !inputs.full_index }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/previous"
+          gh release download android-latest --pattern card-index.bin --dir "$RUNNER_TEMP/previous" \
+            || echo "No earlier index to reuse; fingerprinting every card"
+
+      - name: Build the card index
+        run: |
+          ./gradlew :indexer:installDist
+          ./indexer/build/install/indexer/bin/indexer build --reuse "$RUNNER_TEMP/previous/card-index.bin"
+
+      - name: Decode the signing key
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$ANDROID_KEYSTORE_BASE64" ]; then
+            echo "::error::The ANDROID_KEYSTORE_BASE64 secret is missing, so the APK can't be signed"
+            exit 1
+          fi
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
+
+      - name: Build the release APK
+        env:
+          RELEASE_STORE_FILE: ${{ runner.temp }}/release.jks
+          RELEASE_STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          # Every build must have a higher versionCode than the last, or phones won't update
+          export VERSION_CODE=$((1000 + GITHUB_RUN_NUMBER))
+          export VERSION_SUFFIX="-b${GITHUB_RUN_NUMBER}"
+          ./gradlew :app:assembleRelease
+          echo "VERSION_CODE=$VERSION_CODE" >> "$GITHUB_ENV"
+
+      - name: Remove the signing key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/release.jks"
+
+      - name: Check the APK is signed with the release key
+        run: |
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)/apksigner"
+          APK=app/build/outputs/apk/release/app-release.apk
+          "$APKSIGNER" verify --print-certs "$APK" | tee "$RUNNER_TEMP/certs.txt"
+          if grep -q "CN=Android Debug" "$RUNNER_TEMP/certs.txt"; then
+            echo "::error::The APK is signed with a debug key"
+            exit 1
+          fi
+          VERSION_NAME=$("$(dirname "$APKSIGNER")/aapt2" dump badging "$APK" | sed -n "s/.* versionName='\([^']*\)'.*/\1/p")
+          echo "VERSION_NAME=$VERSION_NAME" >> "$GITHUB_ENV"
+          cp "$APK" "$RUNNER_TEMP/deck-lotus.apk"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: deck-lotus-${{ env.VERSION_NAME }}
+          path: |
+            ${{ runner.temp }}/deck-lotus.apk
+            android/app/src/main/assets/card-index.bin
+          if-no-files-found: error
+
+      # One rolling release with a fixed download URL. The card index rides along so the
+      # next build can reuse it.
+      - name: Publish to the android-latest release
+        run: |
+          gh release delete android-latest --cleanup-tag --yes || true
+          gh release create android-latest \
+            "$RUNNER_TEMP/deck-lotus.apk" app/src/main/assets/card-index.bin \
+            --target "$GITHUB_SHA" \
+            --prerelease \
+            --title "Deck Lotus for Android $VERSION_NAME" \
+            --notes "Built from ${GITHUB_SHA::7} (versionCode $VERSION_CODE). Install deck-lotus.apk on your phone; it updates in place over earlier builds from here. card-index.bin is the scanner's card data, bundled in the APK."

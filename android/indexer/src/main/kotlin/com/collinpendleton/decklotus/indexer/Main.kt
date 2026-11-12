@@ -20,9 +20,11 @@ import kotlin.random.Random
 
 private const val USAGE = """
 Usage:
-  indexer build [--out FILE] [--sets neo,one] [--cache DIR] [--jobs N] [--refresh]
+  indexer build [--out FILE] [--sets neo,one] [--cache DIR] [--jobs N] [--refresh] [--reuse FILE]
       Fingerprint every paper printing on Scryfall (or just --sets) into FILE
-      (default app/src/main/assets/card-index.bin).
+      (default app/src/main/assets/card-index.bin). With --reuse, printings
+      already in that index keep their fingerprint and only new ones are
+      downloaded; an index from another hash version is ignored.
 
   indexer eval --index FILE [--sets neo,one] [--samples N] [--seed S] [--cache DIR]
       Take Scryfall's larger images of cards in --sets, degrade them the way a
@@ -77,7 +79,8 @@ fun decode(bytes: ByteArray): GrayImage {
 private fun build(cache: File, opts: Map<String, String>) {
     val sc = Scryfall(cache)
     val faces = sc.faces(sc.defaultCards(opts["refresh"] == "true"), sets(opts))
-    log("${faces.size} faces to fingerprint")
+    val reused = reusableHashes(opts["reuse"])
+    log("${faces.size} faces to fingerprint" + if (reused.isEmpty()) "" else ", ${faces.count { (it.id to it.face) in reused }} already in the reused index")
     val jobs = opts["jobs"]?.toInt() ?: 8
     val done = AtomicInteger()
     val failed = AtomicInteger()
@@ -89,8 +92,8 @@ private fun build(cache: File, opts: Map<String, String>) {
             async {
                 gate.withPermit {
                     try {
-                        val bytes = sc.image(f.smallUrl, "small/${f.id}-${f.face}.jpg")
-                        val hash = CardHasher.hash(decode(bytes))
+                        // Names, finishes and the rest come fresh from Scryfall either way
+                        val hash = reused[f.id to f.face] ?: CardHasher.hash(decode(sc.image(f.smallUrl, "small/${f.id}-${f.face}.jpg")))
                         synchronized(builder) {
                             builder.add(IndexEntry(f.id, f.face, f.cardName, f.faceName, f.setCode, f.collectorNumber, f.finishes, f.border, hash))
                         }
@@ -112,6 +115,21 @@ private fun build(cache: File, opts: Map<String, String>) {
     out.parentFile?.mkdirs()
     out.outputStream().use { index.write(it) }
     log("Wrote ${index.size} entries (${failed.get()} failed) to $out, ${out.length() / 1024} KiB")
+}
+
+/**
+ * Fingerprints from an earlier index, by (Scryfall id, face). Empty when there's no file, or it
+ * was built with another hash version, in which case everything is fingerprinted again.
+ */
+private fun reusableHashes(path: String?): Map<Pair<java.util.UUID, Int>, LongArray> {
+    val file = path?.let(::File)?.takeIf { it.exists() } ?: return emptyMap()
+    val index = try {
+        file.inputStream().use { CardIndex.read(it) }
+    } catch (e: IllegalArgumentException) {
+        log("Not reusing $file: ${e.message}")
+        return emptyMap()
+    }
+    return (0 until index.size).associate { i -> index.entry(i).let { (it.scryfallId to it.face) to it.hash } }
 }
 
 private fun eval(cache: File, opts: Map<String, String>) {

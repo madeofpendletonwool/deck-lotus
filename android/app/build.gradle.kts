@@ -12,12 +12,26 @@ android {
         applicationId = "com.collinpendleton.decklotus"
         minSdk = 26
         targetSdk = 36
-        versionCode = 4
-        versionName = "0.4.0"
+        // CI sets these for release builds: the code must grow with every build so a new APK
+        // installs over the old one. Local builds keep the base numbers.
+        versionCode = System.getenv("VERSION_CODE")?.toInt() ?: 4
+        versionName = "0.4.0" + (System.getenv("VERSION_SUFFIX") ?: "")
         ndk {
             // Real phones only: OpenCV's native lib is 24-60 MB per ABI, and the
             // emulator's camera is no use for testing a scanner anyway.
             abiFilters += setOf("arm64-v8a")
+        }
+    }
+
+    // The release key lives outside the repo (CI decodes it from a secret). Without it, local
+    // release builds fall back to the debug key so they can still be side-loaded for testing.
+    val releaseKeystore = System.getenv("RELEASE_STORE_FILE")?.let(::file)?.takeIf { it.exists() }
+    signingConfigs {
+        if (releaseKeystore != null) create("release") {
+            storeFile = releaseKeystore
+            storePassword = System.getenv("RELEASE_STORE_PASSWORD")
+            keyAlias = System.getenv("RELEASE_KEY_ALIAS")
+            keyPassword = System.getenv("RELEASE_KEY_PASSWORD")
         }
     }
 
@@ -29,9 +43,8 @@ android {
         release {
             isMinifyEnabled = false
             // Not debuggable, so ART compiles it properly: the debug build runs
-            // the index loader many times slower. Signed with the local debug
-            // key so it can be side-loaded for testing.
-            signingConfig = signingConfigs.getByName("debug")
+            // the index loader many times slower.
+            signingConfig = signingConfigs.getByName(if (releaseKeystore != null) "release" else "debug")
         }
     }
 

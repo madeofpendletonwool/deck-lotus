@@ -25,6 +25,25 @@ button. Inventory sync and the rest of the app come later.
 5. The same card lying there isn't counted again. Once no card has been seen
    for a few frames, the scanner re-arms, so repeat copies count.
 
+## Release builds
+
+Every merge to `main` that touches `android/`, and a weekly run on Mondays for newly
+released cards, builds a signed release APK (`.github/workflows/android.yml`). It's
+published to the `android-latest` GitHub release, always at the same URL:
+
+    https://github.com/madeofpendletonwool/deck-lotus/releases/download/android-latest/deck-lotus.apk
+
+Each build has a higher `versionCode`, so it installs over the last one. The release key is
+in the repo's Actions secrets (`ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`,
+`ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`). Keep a backup of the keystore: a phone won't
+update an app signed with a different key. Builds made without it (debug, or a local
+release build) are signed with the debug key and won't install over a CI build without
+uninstalling first.
+
+The workflow reuses the last release's `card-index.bin` (`indexer build --reuse FILE`), so
+only cards new since then are downloaded and fingerprinted. Run the workflow by hand with
+**full_index** to fingerprint everything again, for example after changing `CardHasher`.
+
 ## Build the card index
 
 The app needs `card-index.bin` (about 6 MB, holds every paper printing):
@@ -43,7 +62,8 @@ wins over the bundled one:
 adb push app/src/main/assets/card-index.bin /sdcard/Android/data/com.collinpendleton.decklotus.debug/files/card-index.bin
 ```
 
-Cached downloads live in `indexer-cache/` (gitignored).
+Cached downloads live in `indexer-cache/` (gitignored). `--reuse app/src/main/assets/card-index.bin`
+rebuilds from an existing index in seconds, fetching only printings it doesn't have.
 
 ## Measure accuracy
 

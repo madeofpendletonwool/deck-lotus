@@ -15,6 +15,20 @@ export const ETCHED_PRICE_SQL = priceSql('etched');
 // A printing's value: its normal price, or for foil-only and etched-only printings, that finish.
 export const PRINTING_PRICE_SQL = `COALESCE(${NORMAL_PRICE_SQL}, ${FOIL_PRICE_SQL}, ${ETCHED_PRICE_SQL})`;
 
+// What one owned copy is worth, for queries that alias owned_printings as op and printings as p:
+// the price for the copy's finish. A printing with no price for that finish (an etched copy
+// that only has a foil price, or older data without foil prices) falls back to the closest one,
+// and OWNED_PRICE_ESTIMATED_SQL says so. A nonfoil copy uses PRINTING_PRICE_SQL, which already
+// covers foil-only printings.
+export const OWNED_PRICE_SQL = `(CASE op.finish
+  WHEN 'foil' THEN COALESCE(${FOIL_PRICE_SQL}, ${PRINTING_PRICE_SQL})
+  WHEN 'etched' THEN COALESCE(${ETCHED_PRICE_SQL}, ${FOIL_PRICE_SQL}, ${PRINTING_PRICE_SQL})
+  ELSE ${PRINTING_PRICE_SQL} END)`;
+export const OWNED_PRICE_ESTIMATED_SQL = `(CASE op.finish
+  WHEN 'foil' THEN ${FOIL_PRICE_SQL} IS NULL
+  WHEN 'etched' THEN ${ETCHED_PRICE_SQL} IS NULL
+  ELSE 0 END)`;
+
 // ORDER BY for picking which printing a card gets when nobody chose one (queries alias printings
 // as p): the cheapest one you could play in a real deck. Gold and silver borders and memorabilia
 // sets are often cheapest but aren't legal, so they only win for cards with nothing else, like

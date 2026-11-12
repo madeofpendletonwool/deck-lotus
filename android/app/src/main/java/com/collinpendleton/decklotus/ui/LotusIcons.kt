@@ -61,6 +61,31 @@ object LotusIcons {
         }
     }
 
+    val Filter = icon("Filter") {
+        // Three sliders.
+        stroke {
+            moveTo(4f, 7f); lineTo(7f, 7f); moveTo(11f, 7f); lineTo(20f, 7f)
+            moveTo(4f, 12f); lineTo(13f, 12f); moveTo(17f, 12f); lineTo(20f, 12f)
+            moveTo(4f, 17f); lineTo(6f, 17f); moveTo(10f, 17f); lineTo(20f, 17f)
+        }
+        stroke { circle(9f, 7f, 2f) }
+        stroke { circle(15f, 12f, 2f) }
+        stroke { circle(8f, 17f, 2f) }
+    }
+
+    val Grid = icon("Grid") {
+        stroke { roundRect(4f, 4f, 6.5f, 6.5f, 1.2f) }
+        stroke { roundRect(13.5f, 4f, 6.5f, 6.5f, 1.2f) }
+        stroke { roundRect(4f, 13.5f, 6.5f, 6.5f, 1.2f) }
+        stroke { roundRect(13.5f, 13.5f, 6.5f, 6.5f, 1.2f) }
+    }
+
+    val List = icon("List") {
+        stroke { roundRect(4f, 5f, 3f, 4f, 0.8f) }
+        stroke { roundRect(4f, 15f, 3f, 4f, 0.8f) }
+        stroke { moveTo(10f, 7f); lineTo(20f, 7f); moveTo(10f, 17f); lineTo(20f, 17f) }
+    }
+
     val Account = icon("Account") {
         stroke { circle(12f, 8.5f, 4f) }
         stroke {

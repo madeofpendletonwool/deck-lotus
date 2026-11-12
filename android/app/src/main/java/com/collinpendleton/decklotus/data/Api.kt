@@ -44,6 +44,8 @@ data class InventoryCard(
     @SerialName("image_url") val imageUrl: String? = null,
     @SerialName("total_owned") val totalOwned: Int = 0,
     @SerialName("total_in_decks") val totalInDecks: Int = 0,
+    /** Every copy at the price for its finish. */
+    @SerialName("total_value") val totalValue: Double = 0.0,
     val available: Int = 0,
     val printings: List<OwnedPrinting> = emptyList(),
 )
@@ -58,7 +60,35 @@ data class OwnedPrinting(
     val rarity: String? = null,
     @SerialName("image_url") val imageUrl: String? = null,
     @SerialName("set_name") val setName: String? = null,
+    /** One copy at the price for its finish. */
     val price: Double? = null,
+    /** No price for this finish, so [price] is the closest one (usually the nonfoil price). */
+    @SerialName("price_estimated") val priceEstimated: Boolean = false,
+)
+
+@Serializable
+data class OwnedSet(
+    val code: String,
+    val name: String,
+    @SerialName("release_date") val releaseDate: String? = null,
+    @SerialName("owned_count") val ownedCount: Int = 0,
+)
+
+@Serializable
+data class OwnedSets(val sets: List<OwnedSet> = emptyList())
+
+/** What the collection is narrowed to. Empty values mean no filter. */
+data class InventoryQuery(
+    val name: String = "",
+    val sort: String = "name",
+    /** W, U, B, R, G and C (colorless). A card must have every color picked. */
+    val colors: Set<String> = emptySet(),
+    val type: String? = null,
+    val sets: Set<String> = emptySet(),
+    /** "all", "foil" (foil or etched) or "nonfoil". */
+    val finish: String = "all",
+    /** "all", "available" (copies not in decks) or "in_decks". */
+    val availability: String = "all",
 )
 
 @Serializable
@@ -200,15 +230,24 @@ class Api(private val auth: AuthStore) {
 
     fun logout() = auth.clear()
 
-    suspend fun inventory(name: String?, sort: String, page: Int, limit: Int = 50): InventoryPage {
+    suspend fun inventory(q: InventoryQuery, page: Int, limit: Int = 60): InventoryPage {
         val u = url(server(), "/api/inventory").toHttpUrlOrNull()!!.newBuilder()
-            .addQueryParameter("sort", sort)
+            .addQueryParameter("sort", q.sort)
             .addQueryParameter("page", page.toString())
             .addQueryParameter("limit", limit.toString())
-            .apply { if (!name.isNullOrBlank()) addQueryParameter("name", name.trim()) }
+            .apply {
+                if (q.name.isNotBlank()) addQueryParameter("name", q.name.trim())
+                if (q.colors.isNotEmpty()) addQueryParameter("colors", q.colors.joinToString(","))
+                q.type?.let { addQueryParameter("type", it) }
+                if (q.sets.isNotEmpty()) addQueryParameter("sets", q.sets.joinToString(","))
+                if (q.finish != "all") addQueryParameter("finish", q.finish)
+                if (q.availability != "all") addQueryParameter("availability", q.availability)
+            }
             .build()
         return call(Request.Builder().url(u).get().build())
     }
+
+    suspend fun ownedSets(): List<OwnedSet> = call<OwnedSets>(get("/api/inventory/sets")).sets
 
     suspend fun stats(): InventoryStats = call(get("/api/inventory/stats"))
 

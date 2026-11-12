@@ -1,10 +1,30 @@
 import db from '../db/connection.js';
-import { PRINTING_PRICE_SQL, DEFAULT_PRINTING_ORDER_SQL } from './pricingService.js';
+import { OWNED_PRICE_SQL, OWNED_PRICE_ESTIMATED_SQL, DEFAULT_PRINTING_ORDER_SQL } from './pricingService.js';
 import { parseFinish } from './cardService.js';
 
+const INVENTORY_SORTS = {
+  name: 'c.name ASC',
+  cmc: 'c.cmc ASC, c.name ASC',
+  color: 'c.colors ASC, c.name ASC',
+  quantity: 'pc.total_owned DESC, c.name ASC',
+  type: 'c.type_line ASC, c.name ASC',
+  value: 'pc.total_value DESC, c.name ASC',
+};
+
+const FINISH_FILTERS = {
+  foil: "o.finish <> 'nonfoil'", // foil or etched
+  nonfoil: "o.finish = 'nonfoil'",
+};
+
 /**
- * Get all owned cards for inventory display
- * Returns cards with printing details, quantities, and deck usage stats
+ * Get all owned cards for inventory display, one entry per card with its owned
+ * printings, quantities, value and deck usage.
+ *
+ * Filters: name, colors (W/U/B/R/G, C for colorless; a card must have every color
+ * picked), type (type line contains), sets (set codes), finish ('all' | 'foil' |
+ * 'nonfoil'), availability ('all' | 'available' | 'in_decks'). Set and finish are
+ * about your copies: with both, a card needs a copy that matches both.
+ * Sorts: name, cmc, color, quantity, type, value.
  */
 export function getInventory(userId, filters = {}) {
   const {
@@ -12,206 +32,145 @@ export function getInventory(userId, filters = {}) {
     colors = [],
     type,
     sets = [],
+    finish = 'all',
     sort = 'name',
-    availability = 'all', // 'all', 'available', 'in_decks'
+    availability = 'all',
     page = 1,
     limit = 50
   } = filters;
 
-  const offset = (page - 1) * limit;
-  const params = [userId];
-  const countParams = [userId];
+  const safeLimit = Math.min(Math.max(Number.isInteger(limit) ? limit : 50, 1), 200);
+  const safePage = Math.max(Number.isInteger(page) ? page : 1, 1);
 
-  // Base query - get all owned cards with their details
-  let sql = `
-    SELECT DISTINCT
-      c.id as card_id,
+  // owned: each of the user's owned rows with what it's worth in its finish.
+  // per_card and in_decks roll those up per card, so every filter and sort below
+  // works on whole-collection numbers rather than on the current page.
+  const ctes = `
+    WITH owned AS (
+      SELECT p.card_id, p.id AS printing_id, p.set_code, p.image_url, op.quantity, op.finish,
+             ${OWNED_PRICE_SQL} AS price
+      FROM owned_printings op
+      JOIN printings p ON op.printing_id = p.id
+      WHERE op.user_id = ?
+    ),
+    per_card AS (
+      SELECT card_id, SUM(quantity) AS total_owned, SUM(quantity * COALESCE(price, 0)) AS total_value
+      FROM owned
+      GROUP BY card_id
+    ),
+    in_decks AS (
+      SELECT p.card_id, SUM(dc.quantity) AS total_in_decks
+      FROM deck_cards dc
+      JOIN decks d ON dc.deck_id = d.id
+      JOIN printings p ON dc.printing_id = p.id
+      WHERE d.user_id = ?
+      GROUP BY p.card_id
+    )`;
+  const params = [userId, userId];
+
+  const where = [];
+  if (name && name.trim()) {
+    where.push('c.name LIKE ?');
+    params.push(`%${name.trim()}%`);
+  }
+
+  const colorsArray = (Array.isArray(colors) ? colors : []).filter(c => /^[WUBRGC]$/.test(c));
+  if (colorsArray.length > 0) {
+    const colorless = `(c.colors IS NULL OR c.colors = '' OR c.colors = '[]')`;
+    const actual = colorsArray.filter(c => c !== 'C');
+    const hasAll = actual.map(() => 'c.colors LIKE ?').join(' AND ');
+    params.push(...actual.map(color => `%${color}%`));
+    if (colorsArray.includes('C')) {
+      where.push(actual.length ? `((${hasAll}) OR ${colorless})` : colorless);
+    } else {
+      where.push(`(${hasAll})`);
+    }
+  }
+
+  if (type && type.trim() && type !== 'all') {
+    where.push('c.type_line LIKE ?');
+    params.push(`%${type.trim()}%`);
+  }
+
+  const setsArray = Array.isArray(sets) ? sets.filter(Boolean) : [];
+  const copyConditions = [];
+  if (setsArray.length > 0) {
+    copyConditions.push(`o.set_code IN (${setsArray.map(() => '?').join(',')})`);
+    params.push(...setsArray);
+  }
+  if (FINISH_FILTERS[finish]) copyConditions.push(FINISH_FILTERS[finish]);
+  if (copyConditions.length > 0) {
+    where.push(`EXISTS (SELECT 1 FROM owned o WHERE o.card_id = c.id AND ${copyConditions.join(' AND ')})`);
+  }
+
+  if (availability === 'available') {
+    where.push('pc.total_owned > COALESCE(idk.total_in_decks, 0)');
+  } else if (availability === 'in_decks') {
+    where.push('COALESCE(idk.total_in_decks, 0) > 0');
+  }
+
+  const from = `
+    FROM per_card pc
+    JOIN cards c ON c.id = pc.card_id
+    LEFT JOIN in_decks idk ON idk.card_id = c.id
+    ${where.length ? `WHERE ${where.join(' AND ')}` : ''}`;
+
+  const total = db.get(`${ctes} SELECT COUNT(*) AS total ${from}`, params)?.total || 0;
+
+  // The thumbnail is the printing you own the most copies of, not just any printing
+  const cards = db.all(`${ctes}
+    SELECT
+      c.id AS card_id,
       c.name,
       c.mana_cost,
       c.cmc,
       c.colors,
       c.type_line,
       c.oracle_text,
-      (SELECT p.image_url FROM printings p WHERE p.card_id = c.id AND p.image_url IS NOT NULL LIMIT 1) as image_url,
-      (
-        SELECT COALESCE(SUM(op.quantity), 0)
-        FROM owned_printings op
-        JOIN printings p ON op.printing_id = p.id
-        WHERE op.user_id = ? AND p.card_id = c.id
-      ) as total_owned,
-      (
-        SELECT COALESCE(SUM(dc.quantity), 0)
-        FROM deck_cards dc
-        JOIN printings p ON dc.printing_id = p.id
-        JOIN decks d ON dc.deck_id = d.id
-        WHERE d.user_id = ? AND p.card_id = c.id
-      ) as total_in_decks
-    FROM cards c
-    WHERE c.id IN (
-      SELECT DISTINCT p.card_id
-      FROM owned_printings op
-      JOIN printings p ON op.printing_id = p.id
-      WHERE op.user_id = ?
-    )
-  `;
+      COALESCE(
+        (SELECT o.image_url FROM owned o WHERE o.card_id = c.id AND o.image_url IS NOT NULL
+          ORDER BY o.quantity DESC, o.printing_id LIMIT 1),
+        (SELECT p.image_url FROM printings p WHERE p.card_id = c.id AND p.image_url IS NOT NULL LIMIT 1)
+      ) AS image_url,
+      pc.total_owned,
+      ROUND(pc.total_value, 2) AS total_value,
+      COALESCE(idk.total_in_decks, 0) AS total_in_decks
+    ${from}
+    ORDER BY ${INVENTORY_SORTS[sort] || INVENTORY_SORTS.name}
+    LIMIT ? OFFSET ?
+  `, [...params, safeLimit, (safePage - 1) * safeLimit]);
 
-  // Add userId params for the subqueries
-  params.push(userId, userId);
-
-  // Count query
-  let countSql = `
-    SELECT COUNT(DISTINCT c.id) as total
-    FROM cards c
-    WHERE c.id IN (
-      SELECT DISTINCT p.card_id
-      FROM owned_printings op
-      JOIN printings p ON op.printing_id = p.id
-      WHERE op.user_id = ?
-    )
-  `;
-
-  // Name filter
-  if (name && name.trim()) {
-    sql += ` AND c.name LIKE ?`;
-    countSql += ` AND c.name LIKE ?`;
-    params.push(`%${name}%`);
-    countParams.push(`%${name}%`);
-  }
-
-  // Color filter
-  const colorsArray = Array.isArray(colors) ? colors : [];
-  if (colorsArray.length > 0) {
-    const hasColorless = colorsArray.includes('C');
-    const actualColors = colorsArray.filter(c => c !== 'C');
-
-    if (hasColorless && actualColors.length === 0) {
-      sql += ` AND (c.colors IS NULL OR c.colors = '' OR c.colors = '[]')`;
-      countSql += ` AND (c.colors IS NULL OR c.colors = '' OR c.colors = '[]')`;
-    } else if (hasColorless && actualColors.length > 0) {
-      sql += ` AND (`;
-      countSql += ` AND (`;
-      const colorConditions = [];
-      actualColors.forEach(color => {
-        colorConditions.push(`c.colors LIKE ?`);
-        params.push(`%${color}%`);
-        countParams.push(`%${color}%`);
-      });
-      sql += colorConditions.join(' AND ');
-      countSql += colorConditions.join(' AND ');
-      sql += ` OR c.colors IS NULL OR c.colors = '' OR c.colors = '[]')`;
-      countSql += ` OR c.colors IS NULL OR c.colors = '' OR c.colors = '[]')`;
-    } else {
-      actualColors.forEach(color => {
-        sql += ` AND c.colors LIKE ?`;
-        countSql += ` AND c.colors LIKE ?`;
-        params.push(`%${color}%`);
-        countParams.push(`%${color}%`);
-      });
-    }
-  }
-
-  // Type filter
-  if (type && type.trim() && type !== 'all') {
-    sql += ` AND c.type_line LIKE ?`;
-    countSql += ` AND c.type_line LIKE ?`;
-    params.push(`%${type}%`);
-    countParams.push(`%${type}%`);
-  }
-
-  // Set filter - cards that have owned printings in the selected sets
-  const setsArray = Array.isArray(sets) ? sets : [];
-  if (setsArray.length > 0) {
-    const placeholders = setsArray.map(() => '?').join(',');
-    sql += ` AND c.id IN (
-      SELECT DISTINCT p2.card_id
-      FROM owned_printings op2
-      JOIN printings p2 ON op2.printing_id = p2.id
-      WHERE op2.user_id = ? AND p2.set_code IN (${placeholders})
-    )`;
-    countSql += ` AND c.id IN (
-      SELECT DISTINCT p2.card_id
-      FROM owned_printings op2
-      JOIN printings p2 ON op2.printing_id = p2.id
-      WHERE op2.user_id = ? AND p2.set_code IN (${placeholders})
-    )`;
-    params.push(userId, ...setsArray);
-    countParams.push(userId, ...setsArray);
-  }
-
-  // Get total count
-  const countResult = db.get(countSql, countParams);
-  const total = countResult ? countResult.total : 0;
-
-  // Sorting
-  switch (sort) {
-    case 'name':
-      sql += ` ORDER BY c.name ASC`;
-      break;
-    case 'cmc':
-      sql += ` ORDER BY c.cmc ASC, c.name ASC`;
-      break;
-    case 'color':
-      sql += ` ORDER BY c.colors ASC, c.name ASC`;
-      break;
-    case 'quantity':
-      sql += ` ORDER BY total_owned DESC, c.name ASC`;
-      break;
-    case 'type':
-      sql += ` ORDER BY c.type_line ASC, c.name ASC`;
-      break;
-    default:
-      sql += ` ORDER BY c.name ASC`;
-  }
-
-  // Pagination
-  sql += ` LIMIT ? OFFSET ?`;
-  params.push(limit, offset);
-
-  const cards = db.all(sql, params);
-
-  // Filter by availability after fetching (since it involves calculated fields)
-  let filteredCards = cards;
-  if (availability === 'available') {
-    filteredCards = cards.filter(card => (card.total_owned - card.total_in_decks) > 0);
-  } else if (availability === 'in_decks') {
-    filteredCards = cards.filter(card => card.total_in_decks > 0);
-  }
-
-  // Get printings for each card
-  const cardsWithPrintings = filteredCards.map(card => {
-    const printings = db.all(`
-      SELECT
-        op.id as owned_printing_id,
-        op.quantity,
-        op.finish,
-        p.id as printing_id,
-        p.set_code,
-        p.collector_number,
-        p.rarity,
-        p.image_url,
-        s.name as set_name,
-        ${PRINTING_PRICE_SQL} as price
-      FROM owned_printings op
-      JOIN printings p ON op.printing_id = p.id
-      LEFT JOIN sets s ON p.set_code = s.code
-      WHERE op.user_id = ? AND p.card_id = ?
-      ORDER BY p.set_code, p.collector_number, op.finish DESC
-    `, [userId, card.card_id]);
-
-    return {
-      ...card,
-      available: card.total_owned - card.total_in_decks,
-      printings
-    };
-  });
+  const printingsFor = db.prepare(`
+    SELECT
+      op.id as owned_printing_id,
+      op.quantity,
+      op.finish,
+      p.id as printing_id,
+      p.set_code,
+      p.collector_number,
+      p.rarity,
+      p.image_url,
+      s.name as set_name,
+      ${OWNED_PRICE_SQL} as price,
+      ${OWNED_PRICE_ESTIMATED_SQL} as price_estimated
+    FROM owned_printings op
+    JOIN printings p ON op.printing_id = p.id
+    LEFT JOIN sets s ON p.set_code = s.code
+    WHERE op.user_id = ? AND p.card_id = ?
+    ORDER BY p.set_code, p.collector_number, op.finish DESC
+  `);
 
   return {
-    cards: cardsWithPrintings,
+    cards: cards.map(card => ({
+      ...card,
+      available: card.total_owned - card.total_in_decks,
+      printings: printingsFor.all(userId, card.card_id).map(p => ({ ...p, price_estimated: !!p.price_estimated }))
+    })),
     pagination: {
-      page,
-      totalPages: Math.ceil(total / limit),
+      page: safePage,
+      totalPages: Math.ceil(total / safeLimit),
       totalCards: total,
-      limit
+      limit: safeLimit
     }
   };
 }
@@ -243,14 +202,9 @@ export function getInventoryStats(userId) {
     WHERE d.user_id = ?
   `, [userId]);
 
-  // Estimated total value
+  // Estimated total value, each copy at the price for its finish
   const estimatedValue = db.get(`
-    SELECT COALESCE(SUM(
-      op.quantity * COALESCE(
-        ${PRINTING_PRICE_SQL},
-        0
-      )
-    ), 0) as total
+    SELECT COALESCE(SUM(op.quantity * COALESCE(${OWNED_PRICE_SQL}, 0)), 0) as total
     FROM owned_printings op
     JOIN printings p ON op.printing_id = p.id
     WHERE op.user_id = ?

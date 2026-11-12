@@ -4,6 +4,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Icon
@@ -25,6 +27,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.collinpendleton.decklotus.AppViewModel
 import com.collinpendleton.decklotus.CollectionViewModel
 import com.collinpendleton.decklotus.ScanViewModel
+import com.collinpendleton.decklotus.UploadState
 import com.collinpendleton.decklotus.data.Account
 
 private enum class Tab(val label: String, val icon: ImageVector) {
@@ -57,8 +60,11 @@ private fun MainShell(account: Account, onSignOut: () -> Unit) {
 
     // Signing back in finishes uploads that stalled on an expired session.
     LaunchedEffect(account.username, account.serverUrl) { if (pending > 0) scan.retryUploads() }
-    // Freshly uploaded cards should be there when you look.
-    LaunchedEffect(tab, upload) { if (tab == Tab.COLLECTION.ordinal) collection.reload() }
+    // Freshly uploaded cards should be there when you look. Reloading only after an upload
+    // (not on every visit) keeps the pages you'd scrolled through, and where you were.
+    LaunchedEffect(upload) { if (upload is UploadState.Sent) collection.reload() }
+    val collectionGrid = rememberLazyGridState()
+    val collectionList = rememberLazyListState()
 
     Scaffold(
         containerColor = Lotus.bg,
@@ -88,7 +94,7 @@ private fun MainShell(account: Account, onSignOut: () -> Unit) {
         Box(Modifier.fillMaxSize().padding(padding)) {
             when (Tab.entries[tab]) {
                 Tab.SCAN -> ScanScreen(scan)
-                Tab.COLLECTION -> CollectionScreen(collection)
+                Tab.COLLECTION -> CollectionScreen(collection, collectionGrid, collectionList)
                 Tab.ACCOUNT -> AccountScreen(account, index, pending, onSignOut)
             }
         }

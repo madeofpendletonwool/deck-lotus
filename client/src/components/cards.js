@@ -807,27 +807,33 @@ export async function showCardDetail(cardId) {
               ${ownership && ownership.ownedPrintings.length > 0 ? `
                 <div style="display: grid; gap: 0.5rem;">
                   ${ownership.ownedPrintings.map(op => `
-                    <div class="owned-printing-item" data-printing-id="${op.printing_id}" style="padding: 0.75rem; background: var(--bg-secondary); border-radius: 8px; display: flex; align-items: center; gap: 0.75rem; border: 1px solid var(--border-color);">
+                    <div class="owned-printing-item" data-printing-id="${op.printing_id}" data-finish="${op.finish}" style="padding: 0.75rem; background: var(--bg-secondary); border-radius: 8px; display: flex; align-items: center; gap: 0.75rem; border: 1px solid var(--border-color);">
                       <img src="${op.image_url}" alt="${op.set_code}" class="printing-preview" data-image-url="${op.image_url}" data-fallback="${op.image_url}" style="width: 50px; height: 70px; border-radius: 4px; object-fit: cover; flex-shrink: 0; cursor: pointer;" onerror="this.style.display='none'">
                       <div style="flex: 1; min-width: 0;">
                         <div style="cursor: pointer;" class="printing-preview" data-image-url="${op.image_url}" data-fallback="${op.image_url}">
                           <div style="font-weight: 500;">
                             ${op.set_code.toUpperCase()}
                             <span style="margin-left: 0.5rem; color: var(--text-secondary); font-size: 0.875rem;">#${op.collector_number || '?'}</span>
+                            ${op.finish !== 'nonfoil' ? `<span class="finish-badge finish-${op.finish}">${op.finish === 'etched' ? 'Etched' : 'Foil'}</span>` : ''}
                           </div>
                           <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.25rem;">
                             ${op.set_name || op.set_code.toUpperCase()}${op.rarity ? ` • ${op.rarity}` : ''}
                           </div>
                         </div>
-                        <button class="swap-printing-btn" data-printing-id="${op.printing_id}" data-quantity="${op.quantity}" style="margin-top: 0.5rem; padding: 0.25rem 0.5rem; font-size: 0.75rem; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 4px; cursor: pointer; color: var(--text-secondary); display: flex; align-items: center; gap: 0.25rem;" onmouseenter="this.style.borderColor='var(--accent-color)'; this.style.color='var(--text-primary)';" onmouseleave="this.style.borderColor='var(--border-color)'; this.style.color='var(--text-secondary)';">
+                        <div style="display: flex; gap: 0.4rem; margin-top: 0.5rem; flex-wrap: wrap;">
+                        <button class="toggle-finish-btn" data-printing-id="${op.printing_id}" data-finish="${op.finish}" data-quantity="${op.quantity}" title="${op.finish === 'nonfoil' ? 'These copies are foil' : 'These copies are not foil'}" style="padding: 0.25rem 0.5rem; font-size: 0.75rem; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 4px; cursor: pointer; color: var(--text-secondary); display: flex; align-items: center; gap: 0.25rem;">
+                          <i class="ph ph-sparkle"></i> ${op.finish === 'nonfoil' ? 'Mark foil' : 'Mark nonfoil'}
+                        </button>
+                        <button class="swap-printing-btn" data-printing-id="${op.printing_id}" data-finish="${op.finish}" data-quantity="${op.quantity}" style="margin-top: 0.5rem; padding: 0.25rem 0.5rem; font-size: 0.75rem; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 4px; cursor: pointer; color: var(--text-secondary); display: flex; align-items: center; gap: 0.25rem;" onmouseenter="this.style.borderColor='var(--accent-color)'; this.style.color='var(--text-primary)';" onmouseleave="this.style.borderColor='var(--border-color)'; this.style.color='var(--text-secondary)';">
                           <i class="ph ph-swap"></i> Change Printing
                         </button>
+                        </div>
                       </div>
                       <div style="display: flex; align-items: center; gap: 0.75rem;">
                         <div style="display: flex; align-items: center; gap: 0.5rem; background: var(--bg-tertiary); border-radius: 6px; padding: 0.25rem;">
-                          <button class="owned-qty-decrease" data-printing-id="${op.printing_id}" data-current-qty="${op.quantity}" style="background: none; border: none; color: var(--text-primary); cursor: pointer; padding: 0.25rem 0.5rem; font-size: 1.1rem; line-height: 1; transition: all 0.2s;" onmouseenter="this.style.color='#ef4444'" onmouseleave="this.style.color='var(--text-primary)'">−</button>
+                          <button class="owned-qty-decrease" data-printing-id="${op.printing_id}" data-finish="${op.finish}" data-current-qty="${op.quantity}" style="background: none; border: none; color: var(--text-primary); cursor: pointer; padding: 0.25rem 0.5rem; font-size: 1.1rem; line-height: 1; transition: all 0.2s;" onmouseenter="this.style.color='#ef4444'" onmouseleave="this.style.color='var(--text-primary)'">−</button>
                           <span class="owned-qty-display" data-printing-id="${op.printing_id}" style="min-width: 2rem; text-align: center; font-weight: 600;">${op.quantity}</span>
-                          <button class="owned-qty-increase" data-printing-id="${op.printing_id}" data-current-qty="${op.quantity}" style="background: none; border: none; color: var(--text-primary); cursor: pointer; padding: 0.25rem 0.5rem; font-size: 1.1rem; line-height: 1; transition: all 0.2s;" onmouseenter="this.style.color='#10b981'" onmouseleave="this.style.color='var(--text-primary)'">+</button>
+                          <button class="owned-qty-increase" data-printing-id="${op.printing_id}" data-finish="${op.finish}" data-current-qty="${op.quantity}" style="background: none; border: none; color: var(--text-primary); cursor: pointer; padding: 0.25rem 0.5rem; font-size: 1.1rem; line-height: 1; transition: all 0.2s;" onmouseenter="this.style.color='#10b981'" onmouseleave="this.style.color='var(--text-primary)'">+</button>
                         </div>
                       </div>
                     </div>
@@ -1212,7 +1218,7 @@ export async function showCardDetail(cardId) {
         e.stopPropagation();
         const printingId = parseInt(this.dataset.printingId);
         const currentQty = parseInt(this.dataset.currentQty);
-        await updateOwnedPrintingQuantity(printingId, currentQty + 1, cardId);
+        await updateOwnedPrintingQuantity(printingId, currentQty + 1, cardId, this.dataset.finish);
       });
     });
 
@@ -1222,7 +1228,7 @@ export async function showCardDetail(cardId) {
         const printingId = parseInt(this.dataset.printingId);
         const currentQty = parseInt(this.dataset.currentQty);
         if (currentQty > 0) {
-          await updateOwnedPrintingQuantity(printingId, currentQty - 1, cardId);
+          await updateOwnedPrintingQuantity(printingId, currentQty - 1, cardId, this.dataset.finish);
         }
       });
     });
@@ -1233,7 +1239,30 @@ export async function showCardDetail(cardId) {
         e.stopPropagation();
         const fromPrintingId = parseInt(this.dataset.printingId);
         const quantity = parseInt(this.dataset.quantity);
-        await showSwapPrintingModal(card, fromPrintingId, quantity, cardId, ownership);
+        await showSwapPrintingModal(card, fromPrintingId, quantity, cardId, ownership, this.dataset.finish);
+      });
+    });
+
+    // Foil / nonfoil: move these copies to the other finish of the same printing
+    document.querySelectorAll('.toggle-finish-btn').forEach(btn => {
+      btn.addEventListener('click', async function(e) {
+        e.stopPropagation();
+        const printingId = parseInt(this.dataset.printingId);
+        const from = this.dataset.finish;
+        const to = from === 'nonfoil' ? 'foil' : 'nonfoil';
+        const quantity = parseInt(this.dataset.quantity);
+        const existing = ownership.ownedPrintings.find(op => op.printing_id === printingId && op.finish === to);
+        try {
+          showLoading();
+          await api.setOwnedPrintingQuantity(printingId, 0, from);
+          await api.setOwnedPrintingQuantity(printingId, (existing ? existing.quantity : 0) + quantity, to);
+          showToast(to === 'nonfoil' ? 'Marked nonfoil' : 'Marked foil', 'success', 2000);
+          await showCardDetail(cardId);
+          hideLoading();
+        } catch (error) {
+          hideLoading();
+          showToast('Failed to change finish', 'error');
+        }
       });
     });
 
@@ -1380,10 +1409,10 @@ async function addPrintingToCollection(printingId, cardId) {
   }
 }
 
-async function updateOwnedPrintingQuantity(printingId, newQuantity, cardId) {
+async function updateOwnedPrintingQuantity(printingId, newQuantity, cardId, finish = 'nonfoil') {
   try {
     showLoading();
-    await api.setOwnedPrintingQuantity(printingId, newQuantity);
+    await api.setOwnedPrintingQuantity(printingId, newQuantity, finish);
 
     // Check if we need to update the browse grid checkbox
     // If quantity is 0, we might need to uncheck if this was the last printing
@@ -1408,9 +1437,9 @@ async function updateOwnedPrintingQuantity(printingId, newQuantity, cardId) {
   }
 }
 
-async function showSwapPrintingModal(card, fromPrintingId, quantity, cardId, ownership) {
+async function showSwapPrintingModal(card, fromPrintingId, quantity, cardId, ownership, finish = 'nonfoil') {
   // Find the current printing info
-  const currentPrinting = ownership.ownedPrintings.find(op => op.printing_id === fromPrintingId);
+  const currentPrinting = ownership.ownedPrintings.find(op => op.printing_id === fromPrintingId && op.finish === finish);
   if (!currentPrinting) return;
 
   // Create the swap modal
@@ -1486,11 +1515,11 @@ async function showSwapPrintingModal(card, fromPrintingId, quantity, cardId, own
       try {
         showLoading();
         // Remove from old printing
-        await api.setOwnedPrintingQuantity(fromPrintingId, 0);
-        // Add to new printing (will add to existing if already owned)
-        const existingOwned = ownership.ownedPrintings.find(op => op.printing_id === toPrintingId);
+        await api.setOwnedPrintingQuantity(fromPrintingId, 0, finish);
+        // Add to new printing in the same finish (will add to existing if already owned)
+        const existingOwned = ownership.ownedPrintings.find(op => op.printing_id === toPrintingId && op.finish === finish);
         const newQuantity = (existingOwned ? existingOwned.quantity : 0) + quantity;
-        await api.setOwnedPrintingQuantity(toPrintingId, newQuantity);
+        await api.setOwnedPrintingQuantity(toPrintingId, newQuantity, finish);
 
         showToast('Printing changed!', 'success', 2000);
         // Reload card detail

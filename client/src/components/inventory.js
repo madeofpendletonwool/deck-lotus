@@ -440,7 +440,7 @@ function setupBulkActions() {
           const card = inventoryData.cards.find(c => c.card_id === cardId);
           if (card && card.printings) {
             for (const printing of card.printings) {
-              await api.setOwnedPrintingQuantity(printing.printing_id, 0);
+              await api.setOwnedPrintingQuantity(printing.printing_id, 0, printing.finish);
             }
           }
         }

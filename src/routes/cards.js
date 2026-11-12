@@ -14,6 +14,7 @@ import {
   getCardOwnershipStatus,
   getCardOwnedPrintings,
   setOwnedPrintingQuantity,
+  parseFinish,
   getCardOwnershipAndUsage,
 } from '../services/cardService.js';
 import { authenticate } from '../middleware/auth.js';
@@ -258,7 +259,8 @@ router.post('/printings/:printingId/quantity', authenticate, (req, res, next) =>
       return res.status(400).json({ error: 'Quantity is required' });
     }
 
-    const result = setOwnedPrintingQuantity(userId, printingId, parseInt(quantity));
+    const finish = parseFinish(req.body.finish);
+    const result = setOwnedPrintingQuantity(userId, printingId, parseInt(quantity), finish);
     res.json(result);
   } catch (error) {
     next(error);

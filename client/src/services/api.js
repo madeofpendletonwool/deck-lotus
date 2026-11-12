@@ -190,10 +190,11 @@ class ApiClient {
     return this.request(`/cards/${cardId}/ownership-usage`);
   }
 
-  async setOwnedPrintingQuantity(printingId, quantity) {
+  // finish: 'nonfoil' | 'foil' | 'etched'. Foil and nonfoil copies are counted separately.
+  async setOwnedPrintingQuantity(printingId, quantity, finish = 'nonfoil') {
     return this.request(`/cards/printings/${printingId}/quantity`, {
       method: 'POST',
-      body: JSON.stringify({ quantity }),
+      body: JSON.stringify({ quantity, finish }),
     });
   }
 

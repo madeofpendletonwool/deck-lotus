@@ -551,16 +551,30 @@ export function getCardOwnedPrintings(userId, cardId) {
      JOIN printings p ON op.printing_id = p.id
      LEFT JOIN sets s ON p.set_code = s.code
      WHERE op.user_id = ? AND p.card_id = ?
-     ORDER BY p.set_code, p.collector_number`,
+     ORDER BY p.set_code, p.collector_number, op.finish DESC`,
     [userId, cardId]
   );
 }
 
+export const FINISHES = ['nonfoil', 'foil', 'etched'];
+
+/** Validate a finish from a request; missing means nonfoil. */
+export function parseFinish(value) {
+  if (value === undefined || value === null || value === '') return 'nonfoil';
+  if (!FINISHES.includes(value)) {
+    const err = new Error(`finish must be one of ${FINISHES.join(', ')}`);
+    err.statusCode = 400;
+    throw err;
+  }
+  return value;
+}
+
 /**
- * Add or update owned printing quantity
+ * Set how many copies of a printing, in one finish, the user owns.
+ * Foil and nonfoil copies of the same printing are separate rows.
  * Also syncs with owned_cards table
  */
-export function setOwnedPrintingQuantity(userId, printingId, quantity) {
+export function setOwnedPrintingQuantity(userId, printingId, quantity, finish = 'nonfoil') {
   // Get the card_id for this printing
   const printing = db.get(
     `SELECT card_id FROM printings WHERE id = ?`,
@@ -576,8 +590,8 @@ export function setOwnedPrintingQuantity(userId, printingId, quantity) {
   if (quantity <= 0) {
     // Remove if quantity is 0 or less
     db.run(
-      `DELETE FROM owned_printings WHERE user_id = ? AND printing_id = ?`,
-      [userId, printingId]
+      `DELETE FROM owned_printings WHERE user_id = ? AND printing_id = ? AND finish = ?`,
+      [userId, printingId, finish]
     );
 
     // Check if any other printings of this card are still owned
@@ -602,8 +616,8 @@ export function setOwnedPrintingQuantity(userId, printingId, quantity) {
 
   // Check if already exists
   const existing = db.get(
-    `SELECT id FROM owned_printings WHERE user_id = ? AND printing_id = ?`,
-    [userId, printingId]
+    `SELECT id FROM owned_printings WHERE user_id = ? AND printing_id = ? AND finish = ?`,
+    [userId, printingId, finish]
   );
 
   if (existing) {
@@ -615,8 +629,8 @@ export function setOwnedPrintingQuantity(userId, printingId, quantity) {
   } else {
     // Insert new
     db.run(
-      `INSERT INTO owned_printings (user_id, printing_id, quantity) VALUES (?, ?, ?)`,
-      [userId, printingId, quantity]
+      `INSERT INTO owned_printings (user_id, printing_id, quantity, finish) VALUES (?, ?, ?, ?)`,
+      [userId, printingId, quantity, finish]
     );
   }
 
@@ -627,7 +641,7 @@ export function setOwnedPrintingQuantity(userId, printingId, quantity) {
     [userId, cardId]
   );
 
-  return { success: true, quantity };
+  return { success: true, quantity, finish };
 }
 
 /**

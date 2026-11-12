@@ -5128,4 +5128,23 @@ a.col-deck:hover { border-color: var(--border-strong); color: var(--text); }
   .col-table .col-name { max-width: 150px; }
   .col-cards { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); }
   .col-search { max-width: none; }
+
+/* Foil / etched copies in the owned-printings list */
+.finish-badge {
+  margin-left: 0.5rem;
+  padding: 0.05rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  vertical-align: middle;
+}
+.finish-badge.finish-foil {
+  color: #1a1206;
+  background: linear-gradient(110deg, #f0bf72, #c7b8ff 45%, #8fe3d0 75%, #f0bf72);
+}
+.finish-badge.finish-etched {
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  background: var(--bg-tertiary);
 }

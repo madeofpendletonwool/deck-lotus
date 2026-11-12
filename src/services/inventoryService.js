@@ -1,5 +1,6 @@
 import db from '../db/connection.js';
 import { PRINTING_PRICE_SQL, DEFAULT_PRINTING_ORDER_SQL } from './pricingService.js';
+import { parseFinish } from './cardService.js';
 
 /**
  * Get all owned cards for inventory display
@@ -182,6 +183,7 @@ export function getInventory(userId, filters = {}) {
       SELECT
         op.id as owned_printing_id,
         op.quantity,
+        op.finish,
         p.id as printing_id,
         p.set_code,
         p.collector_number,
@@ -193,7 +195,7 @@ export function getInventory(userId, filters = {}) {
       JOIN printings p ON op.printing_id = p.id
       LEFT JOIN sets s ON p.set_code = s.code
       WHERE op.user_id = ? AND p.card_id = ?
-      ORDER BY p.set_code, p.collector_number
+      ORDER BY p.set_code, p.collector_number, op.finish DESC
     `, [userId, card.card_id]);
 
     return {
@@ -305,7 +307,7 @@ export function searchCardsForInventoryAdd(userId, query, limit = 10) {
 
 /**
  * Bulk add cards to inventory
- * Accepts array of items: { cardName, setCode (optional), quantity }
+ * Accepts array of items: { cardName, setCode (optional), quantity, finish (optional) }
  */
 export function bulkAddToInventory(userId, items) {
   const results = {
@@ -317,6 +319,7 @@ export function bulkAddToInventory(userId, items) {
   for (const item of items) {
     try {
       const { cardName, setCode, quantity = 1 } = item;
+      const finish = parseFinish(item.finish);
 
       if (!cardName) {
         results.failed++;
@@ -371,8 +374,8 @@ export function bulkAddToInventory(userId, items) {
 
       // Add or update owned_printings
       const existing = db.get(
-        `SELECT id, quantity FROM owned_printings WHERE user_id = ? AND printing_id = ?`,
-        [userId, printing.id]
+        `SELECT id, quantity FROM owned_printings WHERE user_id = ? AND printing_id = ? AND finish = ?`,
+        [userId, printing.id, finish]
       );
 
       if (existing) {
@@ -382,8 +385,8 @@ export function bulkAddToInventory(userId, items) {
         );
       } else {
         db.run(
-          `INSERT INTO owned_printings (user_id, printing_id, quantity) VALUES (?, ?, ?)`,
-          [userId, printing.id, quantity]
+          `INSERT INTO owned_printings (user_id, printing_id, quantity, finish) VALUES (?, ?, ?, ?)`,
+          [userId, printing.id, quantity, finish]
         );
       }
 
@@ -422,4 +425,77 @@ export function getOwnedSets(userId) {
     )
     ORDER BY s.release_date DESC, s.name
   `, [userId, userId]);
+}
+
+const MAX_SCAN_BATCH = 2000;
+
+/**
+ * Add a batch of cards scanned on the phone. Items are
+ * { scryfallId, finish, quantity }: the scanner identifies exact printings by
+ * Scryfall id, so there's no name or set guessing here.
+ *
+ * The phone retries a batch until it gets an answer. A batch id it has
+ * already sent returns the stored result instead of adding the cards again.
+ * The whole batch is one transaction: it lands completely or not at all.
+ */
+export function addScannedBatch(userId, batchId, items) {
+  if (typeof batchId !== 'string' || batchId.length < 8 || batchId.length > 64) {
+    throw Object.assign(new Error('batchId is required (8-64 characters)'), { statusCode: 400 });
+  }
+  if (!Array.isArray(items) || items.length === 0 || items.length > MAX_SCAN_BATCH) {
+    throw Object.assign(new Error(`items must be a non-empty array of at most ${MAX_SCAN_BATCH}`), { statusCode: 400 });
+  }
+
+  return db.transaction(() => {
+    const previous = db.get(
+      'SELECT result FROM inventory_scan_batches WHERE user_id = ? AND batch_id = ?',
+      [userId, batchId]
+    );
+    if (previous) return { ...JSON.parse(previous.result), duplicate: true };
+
+    const result = { added: 0, failed: [] };
+    // A double-faced card has a printings row per face, both with the same
+    // Scryfall id; the lowest id is the one the rest of the app treats as the card.
+    const findPrinting = db.prepare('SELECT MIN(id) AS id, card_id FROM printings WHERE scryfall_id = ?');
+    const upsert = db.prepare(`
+      INSERT INTO owned_printings (user_id, printing_id, quantity, finish) VALUES (?, ?, ?, ?)
+      ON CONFLICT(user_id, printing_id, finish)
+      DO UPDATE SET quantity = quantity + excluded.quantity, updated_at = CURRENT_TIMESTAMP
+    `);
+    const markOwned = db.prepare(`
+      INSERT INTO owned_cards (user_id, card_id, quantity) VALUES (?, ?, 1)
+      ON CONFLICT(user_id, card_id) DO UPDATE SET quantity = 1
+    `);
+
+    for (const item of items) {
+      const scryfallId = item?.scryfallId;
+      const quantity = Number.isInteger(item?.quantity) ? item.quantity : 1;
+      let finish;
+      try {
+        finish = parseFinish(item?.finish);
+      } catch (e) {
+        result.failed.push({ scryfallId, error: e.message });
+        continue;
+      }
+      if (typeof scryfallId !== 'string' || quantity < 1) {
+        result.failed.push({ scryfallId, error: 'scryfallId and a positive quantity are required' });
+        continue;
+      }
+      const printing = findPrinting.get(scryfallId);
+      if (!printing?.id) {
+        // The phone's card index can be newer than this server's card data.
+        result.failed.push({ scryfallId, error: 'Printing not on this server yet (update card data)' });
+        continue;
+      }
+      upsert.run(userId, printing.id, quantity, finish);
+      markOwned.run(userId, printing.card_id);
+      result.added += quantity;
+    }
+
+    db.run(
+      'INSERT INTO inventory_scan_batches (user_id, batch_id, result) VALUES (?, ?, ?)',
+      [userId, batchId, JSON.stringify(result)]
+    );
+    return result;
+  });
 }

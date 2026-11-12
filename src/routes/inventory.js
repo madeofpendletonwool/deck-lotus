@@ -5,8 +5,9 @@ import {
   searchCardsForInventoryAdd,
   bulkAddToInventory,
   getOwnedSets,
+  addScannedBatch,
 } from '../services/inventoryService.js';
-import { setOwnedPrintingQuantity } from '../services/cardService.js';
+import { setOwnedPrintingQuantity, parseFinish } from '../services/cardService.js';
 import { getContestedCards } from '../services/collectionService.js';
 import { authenticate } from '../middleware/auth.js';
 
@@ -135,8 +136,22 @@ router.post('/quick-add', authenticate, (req, res, next) => {
       return res.status(400).json({ error: 'printingId is required' });
     }
 
-    const result = setOwnedPrintingQuantity(req.user.id, printingId, quantity);
+    const result = setOwnedPrintingQuantity(req.user.id, printingId, quantity, parseFinish(req.body.finish));
     res.json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /api/inventory/scans
+ * Cards scanned by the Android app: { batchId, items: [{ scryfallId, finish, quantity }] }.
+ * Safe to retry with the same batchId; the cards are only added once.
+ */
+router.post('/scans', authenticate, (req, res, next) => {
+  try {
+    const { batchId, items } = req.body;
+    res.json(addScannedBatch(req.user.id, batchId, items));
   } catch (error) {
     next(error);
   }

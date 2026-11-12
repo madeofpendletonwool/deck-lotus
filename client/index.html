@@ -36,6 +36,13 @@
         />
         <link rel="preconnect" href="https://cards.scryfall.io" />
         <meta name="theme-color" content="#0c0d11" />
+        <script>
+            // Apply the cached theme before first paint. utils/theme.js owns the real logic.
+            try {
+                var t = localStorage.getItem("theme");
+                if (t && /^[a-z-]+$/.test(t)) document.documentElement.dataset.theme = t;
+            } catch (e) {}
+        </script>
         <link rel="stylesheet" href="/mana.min.css" />
         <link
             rel="stylesheet"
@@ -909,6 +916,17 @@
                     <h2>Settings</h2>
                 </div>
                 <div class="settings-content">
+                    <section id="appearance-section" class="settings-section">
+                        <h3>Theme</h3>
+                        <p>Saved to your account, so it follows you to other devices.</p>
+                        <div
+                            id="theme-picker"
+                            class="theme-picker"
+                            role="radiogroup"
+                            aria-label="Theme"
+                        ></div>
+                    </section>
+
                     <section id="database-section" class="settings-section">
                         <div class="sync-header">
                             <div>

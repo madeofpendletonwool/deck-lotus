@@ -6,6 +6,7 @@ import {
   getUserApiKeys,
   revokeApiKey,
   getUserById,
+  setUserTheme,
 } from '../services/authService.js';
 import { authenticate } from '../middleware/auth.js';
 import { verifyToken, generateTokens } from '../utils/jwt.js';
@@ -107,6 +108,22 @@ router.get('/me', authenticate, (req, res, next) => {
     }
 
     res.json({ user });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * PUT /api/auth/me/theme
+ * Save the current user's colour theme
+ */
+router.put('/me/theme', authenticate, (req, res, next) => {
+  try {
+    const { theme } = req.body || {};
+    if (!setUserTheme(req.user.id, theme)) {
+      return res.status(400).json({ error: 'Unknown theme' });
+    }
+    res.json({ theme });
   } catch (error) {
     next(error);
   }

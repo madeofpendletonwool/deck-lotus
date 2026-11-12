@@ -47,7 +47,7 @@ export function createBackup(userId = null) {
 
   // Backup users
   backup.data.users = db.prepare(`
-    SELECT id, username, email, password_hash, is_admin, created_at, updated_at
+    SELECT id, username, email, password_hash, is_admin, theme, created_at, updated_at
     FROM users
     ${userFilter}
   `).all();
@@ -195,13 +195,14 @@ export function restoreBackup(backupData, options = {}) {
     // card, price watch and API key the user has that isn't in the backup. It would also
     // delete a different user whose username or email collides.
     const insertUser = db.prepare(`
-      INSERT INTO users (id, username, email, password_hash, is_admin, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO users (id, username, email, password_hash, is_admin, theme, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         username = excluded.username,
         email = excluded.email,
         password_hash = excluded.password_hash,
         is_admin = excluded.is_admin,
+        theme = excluded.theme,
         created_at = excluded.created_at,
         updated_at = excluded.updated_at
     `);
@@ -217,6 +218,7 @@ export function restoreBackup(backupData, options = {}) {
           user.email,
           user.password_hash,
           user.is_admin || 0,
+          user.theme ?? null,
           user.created_at,
           user.updated_at
         );

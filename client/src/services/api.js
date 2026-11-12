@@ -109,6 +109,13 @@ class ApiClient {
     return this.request('/auth/me');
   }
 
+  async setTheme(theme) {
+    return this.request('/auth/me/theme', {
+      method: 'PUT',
+      body: JSON.stringify({ theme }),
+    });
+  }
+
   async getUserStats() {
     return this.request('/auth/stats');
   }

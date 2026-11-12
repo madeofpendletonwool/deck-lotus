@@ -1,4 +1,5 @@
 import api from '../services/api.js';
+import { themeColor } from '../utils/theme.js';
 import { showToast, debounce, confirmDialog, openDrawer, closeDrawer } from '../utils/ui.js';
 
 const CONDITIONS = { any: 'Any', nm: 'NM', lp: 'LP', mp: 'MP', hp: 'HP', dm: 'DM' };
@@ -253,14 +254,14 @@ async function renderHistoryChart(history, cardName, maxPrice) {
   });
   const prices = sorted.map(r => r.found_price);
   const pointColors = sorted.map(r =>
-    r.notified ? '#16a34a' : 'rgba(99,102,241,0.9)'
+    r.notified ? themeColor('--success') : themeColor('--primary')
   );
 
   const datasets = [{
     label: 'Found Price',
     data: prices,
-    borderColor: 'rgba(99,102,241,0.9)',
-    backgroundColor: 'rgba(99,102,241,0.08)',
+    borderColor: themeColor('--primary'),
+    backgroundColor: themeColor('--primary', 0.08),
     pointBackgroundColor: pointColors,
     pointRadius: 5,
     pointHoverRadius: 7,
@@ -273,7 +274,7 @@ async function renderHistoryChart(history, cardName, maxPrice) {
     datasets.push({
       label: 'Target Price',
       data: sorted.map(() => maxPrice),
-      borderColor: '#f59e0b',
+      borderColor: themeColor('--warning'),
       borderDash: [6, 4],
       borderWidth: 2,
       pointRadius: 0,
@@ -289,7 +290,7 @@ async function renderHistoryChart(history, cardName, maxPrice) {
       maintainAspectRatio: false,
       interaction: { mode: 'index', intersect: false },
       plugins: {
-        legend: { labels: { color: 'rgba(255,255,255,0.7)', boxWidth: 14, font: { size: 11 } } },
+        legend: { labels: { color: themeColor('--text-secondary'), boxWidth: 14, font: { size: 11 } } },
         tooltip: {
           callbacks: {
             label: ctx => ctx.dataset.label + ': $' + (ctx.parsed.y != null ? ctx.parsed.y.toFixed(2) : '—'),
@@ -297,10 +298,10 @@ async function renderHistoryChart(history, cardName, maxPrice) {
         },
       },
       scales: {
-        x: { ticks: { color: 'rgba(255,255,255,0.5)', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,0.05)' } },
+        x: { ticks: { color: themeColor('--text-muted'), font: { size: 10 } }, grid: { color: themeColor('--border') } },
         y: {
-          ticks: { color: 'rgba(255,255,255,0.5)', font: { size: 10 }, callback: v => '$' + v.toFixed(2) },
-          grid: { color: 'rgba(255,255,255,0.05)' },
+          ticks: { color: themeColor('--text-muted'), font: { size: 10 }, callback: v => '$' + v.toFixed(2) },
+          grid: { color: themeColor('--border') },
         },
       },
     },

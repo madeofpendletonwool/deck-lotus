@@ -1,4 +1,5 @@
 import bcrypt from 'bcrypt';
+import { isValidTheme, resolveTheme } from '../../shared/themes.js';
 import crypto from 'crypto';
 import db from '../db/connection.js';
 import { generateTokens } from '../utils/jwt.js';
@@ -151,11 +152,21 @@ export function revokeApiKey(userId, keyId) {
  */
 export function getUserById(userId) {
   const user = db.get(
-    'SELECT id, username, email, is_admin, created_at FROM users WHERE id = ?',
+    'SELECT id, username, email, is_admin, theme, created_at FROM users WHERE id = ?',
     [userId]
   );
 
+  if (user) user.theme = resolveTheme(user.theme);
   return user;
+}
+
+/**
+ * Save the user's colour theme. Returns false for an unknown theme id.
+ */
+export function setUserTheme(userId, theme) {
+  if (!isValidTheme(theme)) return false;
+  db.run('UPDATE users SET theme = ? WHERE id = ?', [theme, userId]);
+  return true;
 }
 
 /**

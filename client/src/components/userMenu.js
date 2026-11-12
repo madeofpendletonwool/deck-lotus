@@ -1,4 +1,5 @@
 import api from '../services/api.js';
+import { applyTheme } from '../utils/theme.js';
 import { getGravatarUrl, getUserInitials, getUserColor } from '../utils/gravatar.js';
 
 let currentUser = null;
@@ -41,6 +42,7 @@ async function loadUserData() {
     // Load user profile
     const profileResult = await api.getProfile();
     currentUser = profileResult.user;
+    if (currentUser.theme) applyTheme(currentUser.theme);
 
     // Load user stats
     const statsResult = await api.getUserStats();

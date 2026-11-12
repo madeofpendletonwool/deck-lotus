@@ -1,8 +1,11 @@
 import api from '../services/api.js';
 import { showLoading, hideLoading, showModal, showToast, confirmDialog } from '../utils/ui.js';
 import { setupSyncPanel, loadSyncStatus } from './syncPanel.js';
+import { setupThemePicker } from './themePicker.js';
 
 export function setupSettings() {
+  setupThemePicker();
+
   const generateApiKeyBtn = document.getElementById('generate-api-key-btn');
   const refreshDbBtn = document.getElementById('refresh-db-btn');
   const backupDataBtn = document.getElementById('backup-data-btn');

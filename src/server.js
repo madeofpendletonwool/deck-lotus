@@ -19,6 +19,7 @@ import shoppingRoutes from './routes/shopping.js';
 import inventoryRoutes from './routes/inventory.js';
 import priceMonitoringRoutes from './routes/priceMonitoring.js';
 import manapoolRoutes from './routes/manapool.js';
+import formatRoutes from './routes/formats.js';
 import { setupDailySync, isDatabaseLocked } from './services/syncService.js';
 import { setupPriceMonitoringSchedule } from './services/priceMonitoringService.js';
 
@@ -84,6 +85,7 @@ app.use('/api/shopping', shoppingRoutes);
 app.use('/api/inventory', inventoryRoutes);
 app.use('/api/price-monitoring', priceMonitoringRoutes);
 app.use('/api/manapool', manapoolRoutes);
+app.use('/api/formats', formatRoutes);
 app.use('/api/admin', adminRoutes);
 
 // SPA catch-all route (MUST be last)

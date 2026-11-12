@@ -11,8 +11,9 @@ COPY client/package*.json ./
 # Install ALL frontend dependencies (including dev, needed for build)
 RUN npm install
 
-# Copy frontend source
+# Copy frontend source, and the format rules it shares with the server
 COPY client/ ./
+COPY shared/ ../shared/
 
 # Build frontend
 RUN npm run build
@@ -41,6 +42,7 @@ COPY --from=backend-builder /app/node_modules ./node_modules
 
 # Copy backend source
 COPY src ./src
+COPY shared ./shared
 COPY scripts ./scripts
 COPY package*.json ./
 

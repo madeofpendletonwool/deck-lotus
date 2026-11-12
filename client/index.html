@@ -305,11 +305,20 @@
                             <i class="ph ph-upload btn-icon"></i>
                             <span class="btn-text">Import Deck</span>
                         </button>
+                        <button id="new-cube-btn" class="btn btn-ghost">
+                            <i class="ph ph-cube btn-icon"></i>
+                            <span class="btn-text">New Cube</span>
+                        </button>
                         <button id="new-deck-btn" class="btn btn-primary">
                             <i class="ph ph-plus btn-icon"></i>
                             <span class="btn-text">New Deck</span>
                         </button>
                     </div>
+                </div>
+                <div id="decks-filter" class="decks-filter" role="tablist" aria-label="Show">
+                    <button class="decks-filter-btn active" data-kind="all">All</button>
+                    <button class="decks-filter-btn" data-kind="decks">Decks</button>
+                    <button class="decks-filter-btn" data-kind="cubes">Cubes</button>
                 </div>
                 <div id="decks-list" class="decks-grid"></div>
             </div>
@@ -322,15 +331,11 @@
                             <i class="ph ph-arrow-left"></i>
                         </button>
                         <input type="text" id="deck-name" class="deck-name-input" placeholder="Untitled deck" aria-label="Deck name" />
-                        <select id="deck-format" class="deck-format-select" aria-label="Format">
-                            <option value="">No format</option>
-                            <option value="standard">Standard</option>
-                            <option value="modern">Modern</option>
-                            <option value="commander">Commander</option>
-                            <option value="legacy">Legacy</option>
-                            <option value="vintage">Vintage</option>
-                            <option value="pauper">Pauper</option>
-                        </select>
+                        <select id="deck-format" class="deck-format-select" aria-label="Format"></select>
+                        <button id="deck-format-options-btn" class="icon-btn hidden" title="Format options" aria-label="Format options">
+                            <i class="ph ph-sliders-horizontal"></i>
+                        </button>
+                        <button id="deck-format-status" class="format-status hidden" type="button" title="Check legality"></button>
                         <span id="deck-save-status" class="deck-save-status" aria-live="polite"></span>
                         <div id="deck-total-price" class="deck-price-display"></div>
                         <div class="deck-actions">
@@ -352,6 +357,21 @@
                             </button>
                         </div>
                     </div>
+
+                    <!-- Cube views: only shown when the deck's format is Cube -->
+                    <nav id="cube-bar" class="cube-bar hidden" aria-label="Cube views">
+                        <div class="cube-view-tabs" role="tablist">
+                            <button class="cube-view-btn active" data-cube-view="table" role="tab"><i class="ph ph-columns"></i> Table</button>
+                            <button class="cube-view-btn" data-cube-view="visual" role="tab"><i class="ph ph-squares-four"></i> Visual</button>
+                            <button class="cube-view-btn" data-cube-view="list" role="tab"><i class="ph ph-list"></i> List</button>
+                            <button class="cube-view-btn" data-cube-view="analysis" role="tab"><i class="ph ph-chart-bar"></i> Analysis</button>
+                            <button class="cube-view-btn" data-cube-view="playtest" role="tab"><i class="ph ph-cards-three"></i> Playtest</button>
+                            <button class="cube-view-btn" data-cube-view="history" role="tab"><i class="ph ph-clock-counter-clockwise"></i> History</button>
+                        </div>
+                        <div id="cube-summary" class="cube-summary"></div>
+                        <button id="cube-settings-btn" class="btn btn-ghost btn-sm"><i class="ph ph-gear-six"></i> Cube settings</button>
+                    </nav>
+                    <div id="cube-view" class="cube-view hidden"></div>
 
                     <div class="deck-builder-content">
                         <!-- Deck List -->
@@ -385,7 +405,7 @@
                                 <div class="deck-view-controls">
                                     <div class="deck-filter">
                                         <i class="ph ph-funnel-simple deck-filter-icon"></i>
-                                        <input type="text" id="deck-filter-search" placeholder="Filter" autocomplete="off" aria-label="Filter cards in this deck" />
+                                        <input type="text" id="deck-filter-search" placeholder="Filter" autocomplete="off" aria-label="Filter cards in this deck" title="Name, or a search like t:creature c:r mv<=2 #aggro" />
                                         <button id="deck-filter-clear" class="hidden" title="Clear filter" aria-label="Clear filter">
                                             <i class="ph ph-x"></i>
                                         </button>
@@ -395,6 +415,7 @@
                                     </button>
                                 </div>
                             </div>
+                            <div id="cube-bulk-bar" class="cube-bulk-bar hidden" aria-live="polite"></div>
                             <div id="mainboard" class="deck-list active"></div>
                             <div id="sideboard" class="deck-list hidden"></div>
                             <div id="maybeboard" class="deck-list hidden"></div>
@@ -1058,7 +1079,7 @@
                         style="margin-top: 2rem; display: none"
                     >
                         <h3>Access Control</h3>
-                        <p>Control who can create accounts on this server.</p>
+                        <p>Control who can create accounts on this server, and server-wide format rules.</p>
                         <div class="setting-row">
                             <div class="setting-row-text">
                                 <div class="setting-row-title">Allow public registration</div>
@@ -1074,6 +1095,19 @@
                                 <input type="checkbox" id="toggle-registration" />
                                 <span class="toggle-slider"></span>
                             </label>
+                        </div>
+                        <div class="setting-block">
+                            <div class="setting-row-title">Canadian Highlander points list</div>
+                            <div class="setting-row-desc">
+                                Canadian Highlander decks get 10 points to spend. The list changes a few times a year, so paste the
+                                current one from <a href="https://canadianhighlander.ca/points-list/" target="_blank" rel="noopener">canadianhighlander.ca</a>,
+                                one card per line as <code>Card Name|points</code> (<code>Black Lotus|7</code>; "Card Name: 7" and "7 Card Name" also work).
+                            </div>
+                            <textarea id="canlander-points" class="form-control mono" rows="8" spellcheck="false" placeholder="Ancestral Recall|8&#10;Black Lotus|7"></textarea>
+                            <div class="btn-row">
+                                <button id="save-canlander-points" class="btn btn-primary btn-sm">Save points list</button>
+                                <span id="canlander-points-status" class="setting-row-desc"></span>
+                            </div>
                         </div>
                     </section>
 
@@ -1256,15 +1290,7 @@
                             <label for="import-deck-format"
                                 >Format (Optional)</label
                             >
-                            <select id="import-deck-format">
-                                <option value="">Select Format</option>
-                                <option value="standard">Standard</option>
-                                <option value="modern">Modern</option>
-                                <option value="commander">Commander</option>
-                                <option value="legacy">Legacy</option>
-                                <option value="vintage">Vintage</option>
-                                <option value="pauper">Pauper</option>
-                            </select>
+                            <select id="import-deck-format"></select>
                         </div>
                         <div class="form-group">
                             <label for="import-deck-list">Deck List</label>
@@ -1275,8 +1301,8 @@
                                     margin-bottom: 0.5rem;
                                 "
                             >
-                                Supports Moxfield, Arena, MTGO, and plain text
-                                formats
+                                Supports Moxfield, Arena, MTGO, plain text, and CSV
+                                (including CubeCobra cube exports, with tags and color categories)
                             </p>
                             <textarea
                                 id="import-deck-list"
@@ -1552,31 +1578,14 @@
 
             <!-- Legality Check Modal -->
             <div id="legality-check-modal" class="modal hidden">
-                <div class="modal-content" style="max-width: 700px">
-                    <span class="modal-close" id="legality-modal-close"
-                        >&times;</span
-                    >
-                    <h2 style="margin-bottom: 1.5rem">Check Deck Legality</h2>
-                    <div
-                        id="format-selection"
-                        style="
-                            display: grid;
-                            grid-template-columns: repeat(
-                                auto-fill,
-                                minmax(150px, 1fr)
-                            );
-                            gap: 0.75rem;
-                        "
-                    >
-                        <!-- Format buttons will be populated here -->
+                <div class="modal-content modal-lg legality-modal">
+                    <span class="modal-close" id="legality-modal-close">&times;</span>
+                    <h2>Legality</h2>
+                    <div class="legality-picker">
+                        <select id="legality-format-select" class="form-control" aria-label="Format to check"></select>
+                        <button id="legality-check-all-btn" class="btn btn-ghost btn-sm"><i class="ph ph-list-checks"></i> Every format</button>
                     </div>
-                    <div
-                        id="legality-results"
-                        class="hidden"
-                        style="margin-top: 2rem"
-                    >
-                        <!-- Results will be displayed here -->
-                    </div>
+                    <div id="legality-results" class="legality-results"></div>
                 </div>
             </div>
 

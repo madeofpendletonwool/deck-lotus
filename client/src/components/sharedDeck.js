@@ -1,6 +1,8 @@
 import api from '../services/api.js';
 import { showLoading, hideLoading, formatMana, showToast } from '../utils/ui.js';
 import { openExportModal } from './exportModal.js';
+import { formatLabel, isCubeFormat } from '../../../shared/formats.js';
+import { COLOR_CATEGORIES, COLORS, colorCategoryOf, sortForDisplay, tagsOf } from '../utils/cube.js';
 
 // Board of a shared-deck card (board_type authoritative; is_sideboard is legacy).
 const sharedBoardOf = (c) => c.board_type || (c.is_sideboard ? 'sideboard' : 'mainboard');
@@ -64,7 +66,7 @@ export async function loadSharedDeck(token) {
 
     // Populate deck info
     document.getElementById('shared-deck-name').textContent = sharedDeck.name;
-    document.getElementById('shared-deck-format').textContent = sharedDeck.format || 'No format';
+    document.getElementById('shared-deck-format').textContent = formatLabel(sharedDeck.format);
     if (sharedDeck.description) {
       document.getElementById('shared-deck-description').textContent = sharedDeck.description;
       document.getElementById('shared-deck-description').classList.remove('hidden');
@@ -119,8 +121,24 @@ function renderSharedDeckCards() {
   document.getElementById('shared-mainboard-count').textContent = mainboardTotal;
   document.getElementById('shared-sideboard-count').textContent = sideboardTotal;
 
-  mainboard.innerHTML = renderCardsList(mainboardCards);
+  mainboard.innerHTML = isCubeFormat(sharedDeck.format) ? renderCubeTable(mainboardCards) : renderCardsList(mainboardCards);
   sideboard.innerHTML = renderCardsList(sideboardCards);
+}
+
+const esc = (t) => String(t ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+/** A cube reads best as columns by color, the way cube sites lay them out. */
+function renderCubeTable(cards) {
+  if (!cards.length) return renderCardsList(cards);
+  const byCat = new Map(COLOR_CATEGORIES.map((c) => [c.id, []]));
+  for (const card of sortForDisplay(cards)) byCat.get(colorCategoryOf(card)).push(card);
+  const columns = COLOR_CATEGORIES.filter((c) => COLORS.includes(c.id) || byCat.get(c.id).length);
+  const sum = (list) => list.reduce((s, c) => s + (c.quantity ?? 1), 0);
+  return `<div class="cube-table" style="--cube-cols:${columns.length}">${columns.map((col) => `
+    <section class="cube-column" data-cat="${col.id}">
+      <header class="cube-column-head"><span>${col.label}</span><span class="cube-column-count">${sum(byCat.get(col.id))}</span></header>
+      ${byCat.get(col.id).map((c) => `<span class="cube-card is-static" data-cat="${col.id}" title="${esc([c.type_line, tagsOf(c).join(', ')].filter(Boolean).join('\n'))}">${(c.quantity ?? 1) > 1 ? `<span class="cube-card-qty">${c.quantity}×</span>` : ''}<span class="cube-card-name">${esc(c.name)}</span></span>`).join('') || '<p class="cube-column-empty">—</p>'}
+    </section>`).join('')}</div>`;
 }
 
 function renderCardsList(cards) {

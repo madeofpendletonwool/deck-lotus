@@ -74,6 +74,8 @@ export function setupSettings() {
             <ul style="text-align: left; margin: 1rem 0;">
               <li>Users: ${result.results.users}</li>
               <li>Owned Cards: ${result.results.owned_cards || 0}</li>
+              <li>Owned Printings: ${result.results.owned_printings || 0}</li>
+              <li>Price Watches: ${result.results.price_watches || 0}</li>
               <li>Decks: ${result.results.decks}</li>
               <li>Deck Cards: ${result.results.deck_cards}</li>
               <li>API Keys: ${result.results.api_keys}</li>
@@ -607,6 +609,8 @@ window.restoreFromBackup = async function(filename) {
       <ul style="text-align: left; margin: 1rem 0;">
         <li>Users: ${result.results.users}</li>
         <li>Owned Cards: ${result.results.owned_cards || 0}</li>
+        <li>Owned Printings: ${result.results.owned_printings || 0}</li>
+        <li>Price Watches: ${result.results.price_watches || 0}</li>
         <li>Decks: ${result.results.decks}</li>
         <li>Deck Cards: ${result.results.deck_cards}</li>
         <li>API Keys: ${result.results.api_keys}</li>

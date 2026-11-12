@@ -1,0 +1,9 @@
+.gradle/
+build/
+local.properties
+.idea/
+*.iml
+.kotlin/
+# Generated card index (built by :indexer, large)
+app/src/main/assets/card-index.bin
+indexer-cache/

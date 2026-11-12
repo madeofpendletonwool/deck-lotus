@@ -710,8 +710,13 @@ async function main() {
         JOIN cards c ON oc.card_id = c.id
       `).all();
 
+      // Foil tracking arrives with migration 023; a foil and a nonfoil copy of one
+      // printing are separate rows, so dropping finish would merge them on restore
+      const hasFinish = targetDb.prepare(`PRAGMA table_info(owned_printings)`).all().some((c) => c.name === 'finish');
+      targetDb._ownedPrintingsHaveFinish = hasFinish;
       const ownedPrintingsBackup = targetDb.prepare(`
-        SELECT op.user_id, op.quantity, p.uuid as printing_uuid
+        SELECT op.user_id, op.quantity, op.created_at, op.updated_at, p.uuid as printing_uuid
+          ${hasFinish ? ', op.finish' : ''}
         FROM owned_printings op
         JOIN printings p ON op.printing_id = p.id
       `).all();
@@ -896,10 +901,12 @@ async function main() {
       console.log('\n🔄 Restoring owned printings data...');
       const backup = targetDb._ownedPrintingsBackup;
 
-      const insertOwnedPrinting = targetDb.prepare(`
-        INSERT OR IGNORE INTO owned_printings (user_id, printing_id, quantity)
-        VALUES (?, ?, ?)
-      `);
+      const hasFinish = targetDb._ownedPrintingsHaveFinish;
+      const insertOwnedPrinting = targetDb.prepare(hasFinish
+        ? `INSERT OR IGNORE INTO owned_printings (user_id, printing_id, quantity, finish, created_at, updated_at)
+           VALUES (?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP), COALESCE(?, CURRENT_TIMESTAMP))`
+        : `INSERT OR IGNORE INTO owned_printings (user_id, printing_id, quantity, created_at, updated_at)
+           VALUES (?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP), COALESCE(?, CURRENT_TIMESTAMP))`);
 
       const getPrintingIdByUuid = targetDb.prepare(`
         SELECT id FROM printings WHERE uuid = ? LIMIT 1
@@ -916,7 +923,10 @@ async function main() {
               insertOwnedPrinting.run(
                 entry.user_id,
                 printing.id,
-                entry.quantity
+                entry.quantity,
+                ...(hasFinish ? [entry.finish || 'nonfoil'] : []),
+                entry.created_at ?? null,
+                entry.updated_at ?? null
               );
               restored++;
             } catch (e) {

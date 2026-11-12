@@ -34,7 +34,8 @@ export function createBackup(userId = null) {
   const db = getDb();
 
   const backup = {
-    version: '1.0',
+    // 1.1 adds owned_printings (per-printing quantities with finish) and price_watches
+    version: '1.1',
     timestamp: new Date().toISOString(),
     data: {}
   };
@@ -74,6 +75,25 @@ export function createBackup(userId = null) {
     FROM owned_cards oc
     JOIN cards c ON oc.card_id = c.id
     WHERE oc.user_id IN (${userIdsStr})
+  `).all();
+
+  // Backup owned printings: the per-printing, per-finish collection the app and
+  // scanner write to. Printing UUIDs stay stable across MTGJSON re-imports.
+  backup.data.owned_printings = db.prepare(`
+    SELECT op.user_id, op.quantity, op.finish, op.created_at, op.updated_at,
+           p.uuid as printing_uuid
+    FROM owned_printings op
+    JOIN printings p ON op.printing_id = p.id
+    WHERE op.user_id IN (${userIdsStr})
+  `).all();
+
+  // Backup price watches (card name is the stable key; card_id is re-resolved on restore)
+  backup.data.price_watches = db.prepare(`
+    SELECT id, user_id, card_name, max_price, condition, notes, is_active, expires_at,
+           last_checked, last_price, last_notified, created_at,
+           scryfall_id, image_url, set_code, set_name
+    FROM price_watches
+    WHERE user_id IN (${userIdsStr})
   `).all();
 
   // Backup decks
@@ -126,6 +146,8 @@ export function restoreBackup(backupData, options = {}) {
     users: 0,
     api_keys: 0,
     owned_cards: 0,
+    owned_printings: 0,
+    price_watches: 0,
     decks: 0,
     deck_cards: 0,
     deck_shares: 0,
@@ -152,6 +174,8 @@ export function restoreBackup(backupData, options = {}) {
     if (overwrite && userId) {
       // api_keys are left alone: scoped restores don't bring keys back
       db.prepare('DELETE FROM owned_cards WHERE user_id = ?').run(userId);
+      db.prepare('DELETE FROM owned_printings WHERE user_id = ?').run(userId);
+      db.prepare('DELETE FROM price_watches WHERE user_id = ?').run(userId);
       db.prepare('DELETE FROM deck_cards WHERE deck_id IN (SELECT id FROM decks WHERE user_id = ?)').run(userId);
       db.prepare('DELETE FROM deck_shares WHERE deck_id IN (SELECT id FROM decks WHERE user_id = ?)').run(userId);
       db.prepare('DELETE FROM decks WHERE user_id = ?').run(userId);
@@ -162,13 +186,24 @@ export function restoreBackup(backupData, options = {}) {
       db.prepare('DELETE FROM decks').run();
       db.prepare('DELETE FROM api_keys').run();
       db.prepare('DELETE FROM owned_cards').run();
+      db.prepare('DELETE FROM owned_printings').run();
       db.prepare('DELETE FROM users').run();
     }
 
-    // Restore users
+    // Restore users. This must update in place, not INSERT OR REPLACE: REPLACE deletes
+    // the old row first, and with foreign keys on that cascades away every deck, owned
+    // card, price watch and API key the user has that isn't in the backup. It would also
+    // delete a different user whose username or email collides.
     const insertUser = db.prepare(`
-      INSERT OR REPLACE INTO users (id, username, email, password_hash, is_admin, created_at, updated_at)
+      INSERT INTO users (id, username, email, password_hash, is_admin, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET
+        username = excluded.username,
+        email = excluded.email,
+        password_hash = excluded.password_hash,
+        is_admin = excluded.is_admin,
+        created_at = excluded.created_at,
+        updated_at = excluded.updated_at
     `);
 
     // A scoped (non-admin) restore never writes the users table: the caller
@@ -253,14 +288,131 @@ export function restoreBackup(backupData, options = {}) {
       }
     }
 
+    // Restore owned printings (using UUIDs to find current printing_ids).
+    // Backups from before 1.1 don't have them; their owned_cards still restore above.
+    const ownedPrintings = (backupData.data.owned_printings || []).filter(op =>
+      restoredUserIds.includes(op.user_id)
+    );
+
+    const getOwnedPrinting = db.prepare(`
+      SELECT id, card_id FROM printings WHERE uuid = ? LIMIT 1
+    `);
+
+    // A restored row sets the quantity rather than adding to it, matching how the
+    // other tables are restored with INSERT OR REPLACE
+    const upsertOwnedPrinting = db.prepare(`
+      INSERT INTO owned_printings (user_id, printing_id, quantity, finish, created_at, updated_at)
+      VALUES (?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP), COALESCE(?, CURRENT_TIMESTAMP))
+      ON CONFLICT(user_id, printing_id, finish) DO UPDATE SET
+        quantity = excluded.quantity,
+        updated_at = excluded.updated_at
+    `);
+
+    // owned_cards is the card-level "do I own this" flag other queries still read
+    const markCardOwned = db.prepare(`
+      INSERT OR IGNORE INTO owned_cards (user_id, card_id, quantity) VALUES (?, ?, 1)
+    `);
+
+    const FINISHES = new Set(['nonfoil', 'foil', 'etched']);
+
+    for (const owned of ownedPrintings) {
+      try {
+        const printing = getOwnedPrinting.get(owned.printing_uuid);
+        const quantity = Number(owned.quantity);
+        if (!printing) {
+          results.errors.push(`Owned printing UUID ${owned.printing_uuid} not found in database`);
+          continue;
+        }
+        if (!Number.isInteger(quantity) || quantity < 1) {
+          results.errors.push(`Owned printing ${owned.printing_uuid}: invalid quantity ${owned.quantity}`);
+          continue;
+        }
+        const targetUserId = userId || owned.user_id;
+        upsertOwnedPrinting.run(
+          targetUserId,
+          printing.id,
+          quantity,
+          FINISHES.has(owned.finish) ? owned.finish : 'nonfoil',
+          owned.created_at ?? null,
+          owned.updated_at ?? null
+        );
+        markCardOwned.run(targetUserId, printing.card_id);
+        results.owned_printings++;
+      } catch (e) {
+        results.errors.push(`Owned printing ${owned.printing_uuid}: ${e.message}`);
+      }
+    }
+
+    // Restore price watches. Scoped restores get fresh ids, like decks.
+    const priceWatches = (backupData.data.price_watches || []).filter(w =>
+      restoredUserIds.includes(w.user_id)
+    );
+
+    const getCardIdByName = db.prepare(`SELECT id FROM cards WHERE name = ? LIMIT 1`);
+    const watchColumns = `user_id, card_name, max_price, condition, notes, is_active, expires_at,
+      last_checked, last_price, last_notified, created_at, card_id, scryfall_id, image_url, set_code, set_name`;
+    const insertWatch = db.prepare(`
+      INSERT INTO price_watches (id, ${watchColumns})
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, datetime('now')), ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET
+        user_id = excluded.user_id, card_name = excluded.card_name, max_price = excluded.max_price,
+        condition = excluded.condition, notes = excluded.notes, is_active = excluded.is_active,
+        expires_at = excluded.expires_at, last_checked = excluded.last_checked,
+        last_price = excluded.last_price, last_notified = excluded.last_notified,
+        created_at = excluded.created_at, card_id = excluded.card_id, scryfall_id = excluded.scryfall_id,
+        image_url = excluded.image_url, set_code = excluded.set_code, set_name = excluded.set_name
+    `);
+    const insertScopedWatch = db.prepare(`
+      INSERT INTO price_watches (${watchColumns})
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, datetime('now')), ?, ?, ?, ?, ?)
+    `);
+
+    for (const watch of priceWatches) {
+      try {
+        const values = [
+          userId || watch.user_id,
+          watch.card_name,
+          watch.max_price ?? null,
+          watch.condition || 'nm',
+          watch.notes ?? null,
+          watch.is_active ?? 1,
+          watch.expires_at ?? null,
+          watch.last_checked ?? null,
+          watch.last_price ?? null,
+          watch.last_notified ?? null,
+          watch.created_at ?? null,
+          getCardIdByName.get(watch.card_name)?.id ?? null,
+          watch.scryfall_id ?? null,
+          watch.image_url ?? null,
+          watch.set_code ?? null,
+          watch.set_name ?? null
+        ];
+        if (userId) insertScopedWatch.run(...values);
+        else insertWatch.run(watch.id, ...values);
+        results.price_watches++;
+      } catch (e) {
+        results.errors.push(`Price watch ${watch.card_name}: ${e.message}`);
+      }
+    }
+
     // Restore decks
     const decks = (backupData.data.decks || []).filter(d =>
       restoredUserIds.includes(d.user_id)
     );
 
+    // Update in place for the same reason as users: REPLACE would cascade away the
+    // deck's change history and any cards added since the backup
     const insertDeck = db.prepare(`
-      INSERT OR REPLACE INTO decks (id, user_id, name, format, description, settings, created_at, updated_at)
+      INSERT INTO decks (id, user_id, name, format, description, settings, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET
+        user_id = excluded.user_id,
+        name = excluded.name,
+        format = excluded.format,
+        description = excluded.description,
+        settings = excluded.settings,
+        created_at = excluded.created_at,
+        updated_at = excluded.updated_at
     `);
 
     // Scoped restores get fresh deck ids so a crafted file can't REPLACE another user's deck

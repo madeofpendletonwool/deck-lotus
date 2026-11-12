@@ -98,6 +98,29 @@ export function getDeckCollection(deckId, userId) {
   return buildReport(userId, deckRows(deck.id), deck.id);
 }
 
+/**
+ * The headline numbers of every deck's report, keyed by deck id, for a deck list:
+ * { cards, ownedCards, missingCards, missingCopies, sharedCards, cost, unpriced }.
+ * Same counting rules as the full report, so the list and the deck page agree.
+ */
+export function getDeckSummaries(userId) {
+  const decks = db.all(`SELECT id FROM decks WHERE user_id = ?`, [userId]);
+  const out = {};
+  for (const { id } of decks) {
+    const { summary } = buildReport(userId, deckRows(id), id);
+    out[id] = {
+      cards: summary.cards,
+      ownedCards: summary.ownedCards,
+      missingCards: summary.missingCards,
+      missingCopies: summary.missingCopies,
+      sharedCards: summary.sharedCards,
+      cost: summary.cost,
+      unpriced: summary.unpriced,
+    };
+  }
+  return out;
+}
+
 /** The same report for someone else's shared deck, measured against the viewer's collection. */
 export function getSharedDeckCollection(deckId, viewerId) {
   // Viewing your own share link: the deck doesn't compete with itself

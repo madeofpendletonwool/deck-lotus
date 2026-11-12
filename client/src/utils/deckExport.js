@@ -11,6 +11,8 @@
  *  - Arena, Moxfield and MTGO each mark the sideboard differently.
  */
 
+import { toCubeCobraCsv } from './cube.js';
+
 const FACE_SEPARATOR = ' // ';
 
 // All the names are printed on one side, so MPC Autofill indexes these under every name joined.
@@ -73,6 +75,14 @@ export const EXPORT_FORMATS = [
     openUrl: 'https://www.tcgplayer.com/massentry',
     openLabel: 'Copy & open TCGplayer',
     extension: 'txt',
+  },
+  {
+    id: 'cubecobra',
+    label: 'CubeCobra',
+    hint: 'CSV with tags and color categories; import it on CubeCobra',
+    group: 'Deck sites',
+    supportsMaybeboard: true,
+    extension: 'csv',
   },
   {
     id: 'csv',
@@ -266,6 +276,9 @@ export function generateExport(format, cards, options = {}) {
 
     case 'csv':
       return toCsv(deck);
+
+    case 'cubecobra':
+      return toCubeCobraCsv(everything);
 
     default:
       throw new Error(`Unknown export format: ${format}`);

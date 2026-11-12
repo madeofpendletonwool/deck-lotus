@@ -278,8 +278,35 @@ async function loadAccessControl() {
     console.error('Failed to load access settings:', error);
   }
 
+  const pointsInput = document.getElementById('canlander-points');
+  const pointsStatus = document.getElementById('canlander-points-status');
+  const describePoints = (settings) => {
+    const count = (settings.canlanderPoints || '').split('\n').filter((l) => l.trim() && !l.trim().startsWith('#')).length;
+    pointsStatus.textContent = count
+      ? `${count} cards${settings.canlanderPointsUpdatedAt ? `, updated ${new Date(settings.canlanderPointsUpdatedAt).toLocaleDateString()}` : ''}`
+      : 'Not set: Canadian Highlander checks skip points.';
+  };
+  try {
+    const settings = await api.getAdminSettings();
+    if (pointsInput) {
+      pointsInput.value = settings.canlanderPoints || '';
+      describePoints(settings);
+    }
+  } catch {
+    // Shown as unset
+  }
+
   if (!accessControlWired) {
     accessControlWired = true;
+    document.getElementById('save-canlander-points')?.addEventListener('click', async () => {
+      try {
+        const updated = await api.updateAdminSettings({ canlanderPoints: pointsInput.value });
+        describePoints(updated);
+        showToast('Points list saved', 'success');
+      } catch (error) {
+        showToast('Failed to save points list: ' + error.message, 'error');
+      }
+    });
     toggle.addEventListener('change', async () => {
       const enabled = toggle.checked;
       try {

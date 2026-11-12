@@ -693,11 +693,16 @@ async function main() {
       // STEP 1: CRITICAL - Save user data to disk BEFORE deleting anything
       console.log('  📦 Creating safety backup before sync...');
 
+      // Cube metadata columns arrive with migration 022; older databases don't have them yet
+      const deckCardColumns = new Set(targetDb.prepare(`PRAGMA table_info(deck_cards)`).all().map((c) => c.name));
+      const cubeColumns = ['tags', 'color_category', 'notes'].filter((c) => deckCardColumns.has(c));
       const deckCardsBackup = targetDb.prepare(`
         SELECT dc.deck_id, dc.quantity, dc.is_sideboard, dc.is_commander, dc.board_type, p.uuid
+          ${cubeColumns.map((c) => `, dc.${c}`).join('')}
         FROM deck_cards dc
         JOIN printings p ON dc.printing_id = p.id
       `).all();
+      targetDb._deckCardCubeColumns = cubeColumns;
 
       const ownedCardsBackup = targetDb.prepare(`
         SELECT oc.user_id, oc.quantity, c.name as card_name
@@ -786,9 +791,10 @@ async function main() {
       console.log('\n🔄 Restoring user deck data...');
       const backup = targetDb._deckCardsBackup;
 
+      const cubeColumns = targetDb._deckCardCubeColumns || [];
       const insertDeckCard = targetDb.prepare(`
-        INSERT INTO deck_cards (deck_id, printing_id, quantity, is_sideboard, is_commander, board_type)
-        VALUES (?, ?, ?, ?, ?, ?)
+        INSERT INTO deck_cards (deck_id, printing_id, quantity, is_sideboard, is_commander, board_type${cubeColumns.map((c) => `, ${c}`).join('')})
+        VALUES (?, ?, ?, ?, ?, ?${cubeColumns.map(() => ', ?').join('')})
       `);
 
       const getPrintingId = targetDb.prepare(`
@@ -809,7 +815,8 @@ async function main() {
                 entry.quantity,
                 entry.is_sideboard,
                 entry.is_commander,
-                entry.board_type || 'mainboard'
+                entry.board_type || 'mainboard',
+                ...cubeColumns.map((c) => entry[c] ?? null)
               );
               restored++;
             } catch (e) {

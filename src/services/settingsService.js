@@ -53,6 +53,11 @@ export function updateSettings(patch = {}) {
   if (typeof patch.registrationEnabled === 'boolean') {
     current.registrationEnabled = patch.registrationEnabled;
   }
+  // Canadian Highlander points, pasted from canadianhighlander.ca ("Card Name|points" per line)
+  if (typeof patch.canlanderPoints === 'string') {
+    current.canlanderPoints = patch.canlanderPoints.slice(0, 50000);
+    current.canlanderPointsUpdatedAt = new Date().toISOString();
+  }
   try {
     if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
     fs.writeFileSync(SETTINGS_FILE, JSON.stringify(current, null, 2));

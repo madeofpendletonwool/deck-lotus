@@ -3,6 +3,10 @@ import { showLoading, hideLoading, debounce, formatMana, showToast, hideModal, c
 import { showCardDetail } from './cards.js';
 import { setupExportModal, openExportModal } from './exportModal.js';
 import { PRINTING_SORTS, printingPrice, printingFinishNote, formatPrice, sortPrintings, uniquePrintings, printingMatches, priceRange } from '../utils/printings.js';
+import { resolveRules, canLead, canPairCommanders, isCubeFormat, getFormat, formatLabel, deckSizeLabel, TWO_HEADED_GIANT_BASES } from '../../../shared/formats.js';
+import { fillFormatSelect, formatOptionsHtml } from '../utils/formatUi.js';
+import { compileQuery } from '../utils/cardQuery.js';
+import { setupCubeTools, setCubeMode, renderCubeBoard, refreshCube, cubeViewShowsList, clearCubeSelection } from './cubeTools.js';
 
 let currentDeck = null;
 let currentDeckId = null;
@@ -120,12 +124,39 @@ export function setupDeckBuilder() {
     saveTimer = setTimeout(saveDeckDetails, 500);
   };
   deckNameInput.addEventListener('input', queueSave);
+  fillFormatSelect(deckFormatSelect, { noneLabel: 'No format' });
   deckFormatSelect.addEventListener('change', () => {
     if (currentDeck) {
+      const wasCube = isCubeFormat(currentDeck.format);
       currentDeck.format = deckFormatSelect.value;
+      // A deck turned into a cube gets the default draft settings
+      if (!wasCube && isCubeFormat(currentDeck.format) && !currentDeck.settings?.packSize) {
+        currentDeck.settings = { ...(currentDeck.settings || {}), targetSize: 360, packSize: 15, packsPerPlayer: 3, seats: 8, singleton: true, cardPool: '' };
+      }
+      applyFormatMode();
       renderDeckCards(); // Commander controls depend on the format
     }
     queueSave();
+  });
+
+  document.getElementById('deck-format-options-btn').addEventListener('click', openFormatOptions);
+  document.getElementById('deck-format-status').addEventListener('click', () => showLegalityModal(currentDeck?.format));
+
+  // Cube views live in their own module; it reads and replaces the deck through these hooks
+  setupCubeTools({
+    getDeck: () => currentDeck,
+    getDeckId: () => currentDeckId,
+    setDeck: async (deck) => {
+      currentDeck = deck;
+      renderDeckCards();
+      await loadDeckStats();
+    },
+    saveSettings: (settings) => saveDeckSettings(settings),
+    openPrinting: (cardId, deckCardId) => showPrintingSelectionModal(cardId, deckCardId),
+    showCard: (printingId) => showCardModal(printingId),
+    getFilter: () => deckFilterPredicate(),
+    getActiveBoard: () => activeTab,
+    rerender: () => renderDeckCards(),
   });
 
   // Buy Deck Modal
@@ -437,9 +468,17 @@ async function loadDeck(deckId) {
 
     // Populate deck info
     document.getElementById('deck-name').value = currentDeck.name;
-    document.getElementById('deck-format').value = currentDeck.format || '';
+    // Formats from before this list existed are still shown, not silently dropped
+    const formatSelect = document.getElementById('deck-format');
+    fillFormatSelect(formatSelect, { selected: currentDeck.format || '', noneLabel: 'No format' });
+    if (currentDeck.format && !getFormat(currentDeck.format)) {
+      formatSelect.insertAdjacentHTML('beforeend', `<option value="${escapeHtml(currentDeck.format)}">${escapeHtml(currentDeck.format)}</option>`);
+      formatSelect.value = currentDeck.format;
+    }
     document.title = `${currentDeck.name} · Deck Lotus`;
     setSaveStatus('');
+    clearCubeSelection();
+    applyFormatMode();
 
     // Render deck cards
     renderDeckCards();
@@ -447,8 +486,8 @@ async function loadDeck(deckId) {
     // Load and render stats
     await loadDeckStats();
 
-    // Auto-deal example hand
-    dealExampleHand();
+    // Auto-deal example hand (quietly: an empty deck just shows the empty state)
+    dealExampleHand({ silent: true });
 
     hideLoading();
   } catch (error) {
@@ -470,7 +509,7 @@ async function saveDeckDetails() {
     return;
   }
   try {
-    await api.updateDeck(currentDeckId, { name, format: document.getElementById('deck-format').value });
+    await api.updateDeck(currentDeckId, { name, format: document.getElementById('deck-format').value, settings: currentDeck.settings || {} });
     currentDeck.name = name;
     document.title = `${name} · Deck Lotus`;
     setSaveStatus('Saved');
@@ -607,11 +646,17 @@ async function addCardToDeck(cardId, knownPrintingId = null, cardName = 'Card') 
       printingId = printings[0].id;
     }
 
+    // A singleton cube usually wants one of each; say so rather than refuse
+    const alreadyIn = isCubeFormat(currentDeck.format) && currentDeck.settings?.singleton !== false &&
+      currentDeck.cards.some((c) => c.card_id == cardId && boardOf(c) === activeTab);
+
     // Add card to the currently active tab (mainboard, sideboard, or maybeboard)
     const updatedDeck = await api.addCardToDeck(currentDeckId, printingId, 1, activeTab === 'sideboard', false, activeTab);
     currentDeck = updatedDeck.deck;
     renderDeckCards();
-    showToast(`Added ${cardName} to ${activeTab}`, 'success', 1500);
+    const boardName = isCubeFormat(currentDeck.format) && activeTab === 'mainboard' ? 'the cube' : activeTab;
+    if (alreadyIn) showToast(`${cardName} was already in ${boardName}; this cube is singleton`, 'warning', 3000);
+    else showToast(`Added ${cardName} to ${boardName}`, 'success', 1500);
     await loadDeckStats();
   } catch (error) {
     showToast('Failed to add card: ' + error.message, 'error');
@@ -653,9 +698,11 @@ function renderDeckCards() {
 
   // Apply name filter
   if (deckFilterQuery) {
-    mainboardCards = mainboardCards.filter(c => c.name.toLowerCase().includes(deckFilterQuery));
-    sideboardCards = sideboardCards.filter(c => c.name.toLowerCase().includes(deckFilterQuery));
-    maybeboardCards = maybeboardCards.filter(c => c.name.toLowerCase().includes(deckFilterQuery));
+    // Plain text matches names; "t:creature c:r mv<=2 #aggro" style searches work too
+    const matches = deckFilterPredicate();
+    mainboardCards = mainboardCards.filter(matches);
+    sideboardCards = sideboardCards.filter(matches);
+    maybeboardCards = maybeboardCards.filter(matches);
   }
 
   if (currentFilter.cmc !== null) {
@@ -715,15 +762,174 @@ function renderDeckCards() {
   // Show/hide clear filter button
   clearFilterBtn.style.display = hasFilter ? 'inline-flex' : 'none';
 
-  mainboard.innerHTML = renderCardsList(mainboardCards);
-  sideboard.innerHTML = renderCardsList(sideboardCards);
-  maybeboard.innerHTML = renderCardsList(maybeboardCards);
-  [mainboard, sideboard, maybeboard].forEach((list) => {
-    list.dataset.layout = layoutView;
-  });
+  const cube = isCubeFormat(currentDeck.format);
+  if (cube && !cubeViewShowsList()) {
+    // Table and visual views draw the cube themselves
+    renderCubeBoard(mainboard, mainboardCards, 'mainboard');
+    renderCubeBoard(maybeboard, maybeboardCards, 'maybeboard');
+    sideboard.innerHTML = renderCardsList(sideboardCards);
+    sideboard.dataset.layout = layoutView;
+  } else {
+    mainboard.innerHTML = renderCardsList(mainboardCards);
+    sideboard.innerHTML = renderCardsList(sideboardCards);
+    maybeboard.innerHTML = renderCardsList(maybeboardCards);
+    [mainboard, sideboard, maybeboard].forEach((list) => {
+      list.dataset.layout = layoutView;
+    });
+  }
 
   // Add event listeners
   setupCardControls();
+
+  if (cube) refreshCube();
+  scheduleFormatStatus();
+
+  // A hand drawn from cards that are no longer in the mainboard is stale
+  if (exampleHand.length > 0 && !(currentDeck?.cards || []).some(isMainboardCard)) {
+    exampleHand = [];
+    renderExampleHand();
+    updateHandStats();
+  }
+}
+
+/** The deck filter box as a card predicate. */
+function deckFilterPredicate() {
+  return compileQuery(deckFilterQuery);
+}
+
+/**
+ * Show or hide the controls that depend on the format: cube views, the format options button,
+ * the sideboard tab (cubes don't have one) and the sample hand.
+ */
+function applyFormatMode() {
+  const format = currentDeck?.format || '';
+  const cube = isCubeFormat(format);
+  const def = getFormat(format);
+  document.querySelector('#deck-builder-page .deck-builder').classList.toggle('is-cube', cube);
+  document.getElementById('deck-format-options-btn').classList.toggle('hidden', !def?.baseFormat);
+  const mainTab = document.querySelector('#deck-builder-page .tab-btn[data-tab="mainboard"]');
+  if (mainTab?.firstChild) mainTab.firstChild.textContent = cube ? 'Cube ' : 'Main ';
+  document.querySelector('#deck-builder-page .tab-btn[data-tab="sideboard"]')?.classList.toggle('hidden', cube && !(currentDeck?.cards || []).some(isSideboardCard));
+  if (cube && activeTab === 'sideboard') switchTab('mainboard');
+  if (!cube) clearCubeSelection();
+  setCubeMode(cube);
+}
+
+// ---- Live format check ----
+let formatStatusTimer = null;
+let formatStatusSeq = 0;
+let formatStatusKey = '';
+
+/** What the format check depends on, so re-renders that change nothing (filtering, views) skip it. */
+function formatStatusInputs() {
+  const cards = (currentDeck?.cards || []).map((c) => `${c.deck_card_id}:${c.printing_id}:${c.quantity}:${boardOf(c)}:${c.is_commander ? 1 : 0}`).join(',');
+  return `${currentDeckId}|${currentDeck?.format}|${JSON.stringify(currentDeck?.settings || {})}|${cards}`;
+}
+
+/** Re-check the deck against its format shortly after it changes. */
+function scheduleFormatStatus() {
+  const key = formatStatusInputs();
+  if (key === formatStatusKey) return;
+  formatStatusKey = key;
+  clearTimeout(formatStatusTimer);
+  formatStatusTimer = setTimeout(updateFormatStatus, 400);
+}
+
+async function updateFormatStatus() {
+  const el = document.getElementById('deck-format-status');
+  const format = currentDeck?.format;
+  if (!format || !getFormat(format) || !currentDeckId) {
+    el.classList.add('hidden');
+    return;
+  }
+  const seq = ++formatStatusSeq;
+  try {
+    const result = await api.checkDeckLegality(currentDeckId, format);
+    if (seq !== formatStatusSeq) return; // A newer check is on its way
+    const errors = result.issues.filter((i) => i.severity === 'error');
+    const warnings = result.issues.filter((i) => i.severity === 'warning');
+    const rules = resolveRules(format, currentDeck.settings || {});
+    const parts = [];
+    const size = rules?.deckSize?.exact || rules?.deckSize?.min || result.summary?.targetSize;
+    if (size) parts.push(`${result.summary.mainCount}/${size}`);
+    else parts.push(`${result.summary.mainCount} cards`);
+    if (result.summary.points) parts.push(`${result.summary.points.total}/${result.summary.points.cap} pts`);
+
+    let icon = 'ph-seal-check';
+    let state = 'ok';
+    let label = 'Legal';
+    if (errors.length) {
+      icon = 'ph-warning-circle';
+      state = 'error';
+      label = `${errors.length} issue${errors.length === 1 ? '' : 's'}`;
+    } else if (warnings.length) {
+      icon = 'ph-info';
+      state = 'warning';
+      label = isCubeFormat(format) ? `${warnings.length} note${warnings.length === 1 ? '' : 's'}` : 'Legal';
+    }
+    el.dataset.state = state;
+    el.title = [...errors, ...warnings].map((i) => `• ${i.message}`).join('\n') || `Legal in ${result.label}`;
+    el.innerHTML = `<i class="ph ${icon}"></i><span>${label}</span><span class="format-status-meta">${parts.join(' · ')}</span>`;
+    el.classList.remove('hidden');
+  } catch {
+    if (seq === formatStatusSeq) {
+      el.classList.add('hidden');
+      formatStatusKey = ''; // Try again on the next change
+    }
+  }
+}
+
+/** Save the deck's format options (two-headed giant pool, cube settings). */
+async function saveDeckSettings(settings) {
+  currentDeck.settings = settings;
+  await api.updateDeck(currentDeckId, { settings });
+  applyFormatMode();
+  renderDeckCards();
+}
+
+/** Options for formats that have them: two-headed giant picks a card pool and a teammate deck. */
+async function openFormatOptions() {
+  const def = getFormat(currentDeck?.format);
+  if (!def?.baseFormat) return;
+  const settings = currentDeck.settings || {};
+  let decks = [];
+  try {
+    decks = (await api.getDecks()).decks.filter((d) => String(d.id) !== String(currentDeckId) && !isCubeFormat(d.format));
+  } catch { /* the teammate picker just stays empty */ }
+
+  const modal = document.getElementById('modal');
+  document.getElementById('modal-body').innerHTML = `
+    <h2>${escapeHtml(def.label)} options</h2>
+    <p class="modal-lede">Two-Headed Giant uses a constructed card pool. Pick your teammate's deck to check the team limit of four copies of a card across both decks.</p>
+    <form id="format-options-form">
+      <div class="form-group">
+        <label for="fo-base">Card pool</label>
+        <select id="fo-base">${TWO_HEADED_GIANT_BASES.map((id) => `<option value="${id}" ${id === (settings.baseFormat || def.baseFormat.default) ? 'selected' : ''}>${escapeHtml(formatLabel(id))}</option>`).join('')}</select>
+      </div>
+      <div class="form-group">
+        <label for="fo-teammate">Teammate's deck</label>
+        <select id="fo-teammate">
+          <option value="">None</option>
+          ${decks.map((d) => `<option value="${d.id}" ${String(d.id) === String(settings.teammateDeckId) ? 'selected' : ''}>${escapeHtml(d.name)}</option>`).join('')}
+        </select>
+      </div>
+      <div class="btn-row">
+        <button type="submit" class="btn btn-primary">Save</button>
+        <button type="button" class="btn btn-ghost" data-close>Cancel</button>
+      </div>
+    </form>`;
+  modal.classList.remove('hidden');
+  document.getElementById('format-options-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const teammate = document.getElementById('fo-teammate').value;
+    try {
+      await saveDeckSettings({ ...settings, baseFormat: document.getElementById('fo-base').value, teammateDeckId: teammate ? Number(teammate) : null });
+      modal.classList.add('hidden');
+      showToast('Format options saved', 'success', 1500);
+    } catch (error) {
+      showToast('Failed to save options: ' + error.message, 'error');
+    }
+  });
 }
 
 function renderCardsList(cards) {
@@ -830,57 +1036,20 @@ function renderCardsList(cards) {
   return html;
 }
 
-// Commander eligibility. A legendary creature qualifies; so does any card whose rules
-// text says "... can be your commander" — which is how planeswalker commanders (Daretti,
-// Teferi, Freyalise, etc.) are printed, so those now get the "Set as Commander" toggle.
-// If MTGJSON leadership-skills data is present on the card it wins (also covers edge cases
-// like Grist that lack the printed text), but the oracle-text check is the reliable signal.
-function canBeCommander(card) {
-  if (card.leadership_skills) {
-    try {
-      const skills = typeof card.leadership_skills === 'string'
-        ? JSON.parse(card.leadership_skills)
-        : card.leadership_skills;
-      if (skills && skills.commander) return true;
-    } catch { /* fall through to heuristic */ }
-  }
-  const type = card.type_line || '';
-  const isLegendaryCreature = /legendary/i.test(type) && /creature/i.test(type);
-  if (isLegendaryCreature) return true;
-  // Backgrounds are commanders (paired with a "Choose a Background" legend).
-  if (/\bBackground\b/i.test(type)) return true;
-  if (card.oracle_text && /can be your commander/i.test(card.oracle_text)) return true;
-  return false;
+// The deck's commander rules (null when its format has no commander). Eligibility follows the
+// format: Brawl allows planeswalkers, Pauper Commander wants an uncommon creature, and
+// Oathbreaker marks a planeswalker plus an instant or sorcery as its signature spell.
+function commanderSpec() {
+  return resolveRules(currentDeck?.format, currentDeck?.settings || {})?.commander || null;
 }
 
-// ---- Two-commander pairings (Partner / Backgrounds / Doctor's companion) ----
-const cmdrText = (c) => (c.oracle_text || '').replace(/\r/g, '');
-const hasPartner = (c) =>
-  /(^|\n)Partner\b(?!\s+with)/i.test(cmdrText(c)) ||
-  /have two commanders if both have partner/i.test(cmdrText(c).replace(/\n/g, ' '));
-const partnerWithName = (c) => {
-  const m = cmdrText(c).match(/Partner with ([^\n(.]+)/i);
-  return m ? m[1].trim().replace(/[.,]+$/, '') : null;
-};
-const hasFriendsForever = (c) => /friends forever/i.test(cmdrText(c));
-const hasChooseABackground = (c) => /choose a background/i.test(cmdrText(c));
-const isBackground = (c) => /\bBackground\b/i.test(c.type_line || '');
-const hasDoctorsCompanion = (c) => /doctor.?s companion/i.test(cmdrText(c));
-const isTimeLordDoctor = (c) => /Time Lord/i.test(c.type_line || '') && /Doctor/i.test(c.type_line || '');
+const isSpell = (card) => /\b(Instant|Sorcery)\b/.test(card.type_line || '');
 
-// May cards `a` and `b` legally be commanders together?
-function canPairCommanders(a, b) {
-  if (!a || !b || a.deck_card_id === b.deck_card_id) return false;
-  if (hasPartner(a) && hasPartner(b)) return true;
-  const aw = partnerWithName(a), bw = partnerWithName(b);
-  if (aw && (b.name || '').toLowerCase().includes(aw.toLowerCase())) return true;
-  if (bw && (a.name || '').toLowerCase().includes(bw.toLowerCase())) return true;
-  if (hasFriendsForever(a) && hasFriendsForever(b)) return true;
-  if (hasChooseABackground(a) && isBackground(b)) return true;
-  if (hasChooseABackground(b) && isBackground(a)) return true;
-  if (hasDoctorsCompanion(a) && isTimeLordDoctor(b)) return true;
-  if (hasDoctorsCompanion(b) && isTimeLordDoctor(a)) return true;
-  return false;
+function canBeCommander(card) {
+  const spec = commanderSpec();
+  if (!spec) return false;
+  if (spec.signatureSpell && isSpell(card)) return true;
+  return canLead(card, spec.skill);
 }
 
 function renderOwnershipToggle(card) {
@@ -909,8 +1078,7 @@ function renderCompactPrinting(card) {
 }
 
 function renderCardItem(card) {
-  const isCommanderDeck = currentDeck.format === 'commander';
-  const showCommanderIcon = isCommanderDeck && canBeCommander(card) && isMainboardCard(card);
+  const showCommanderIcon = canBeCommander(card) && isMainboardCard(card);
 
   // Ultra-compact view - minimal text-only with dropdown
   if (layoutView === 'ultra-compact') {
@@ -1439,11 +1607,14 @@ async function toggleCommander(deckCardId) {
     // valid pair (Partner / Partner with / Friends forever / Background / Doctor's
     // companion). Otherwise the new pick replaces whatever was there.
     let pairedWithPartner = false;
+    const spec = commanderSpec();
     if (newCommanderStatus) {
+      // In Oathbreaker the planeswalker and its signature spell are marked separately
+      const sameKind = (c) => !spec?.signatureSpell || isSpell(c) === isSpell(card);
       const existing = currentDeck.cards.filter(
-        c => c.is_commander && c.deck_card_id != deckCardId
+        c => c.is_commander && c.deck_card_id != deckCardId && sameKind(c)
       );
-      const partner = existing.find(c => canPairCommanders(c, card));
+      const partner = isSpell(card) && spec?.signatureSpell ? null : existing.find(c => canPairCommanders(c, card));
       pairedWithPartner = !!partner;
       const toUnmark = partner
         ? existing.filter(c => c.deck_card_id != partner.deck_card_id)
@@ -2325,123 +2496,118 @@ function adjustBrightness(color, amount) {
   return `#${(1 << 24 | r << 16 | g << 8 | b).toString(16).slice(1)}`;
 }
 
-function showLegalityModal() {
+let legalitySetup = false;
+
+/**
+ * The legality modal: pick a format for a full report (size, copies, commanders, color identity,
+ * points), or check every format at once. Opens on the deck's own format when it has one.
+ */
+function showLegalityModal(format) {
   const modal = document.getElementById('legality-check-modal');
-  const formatSelection = document.getElementById('format-selection');
-  const resultsDiv = document.getElementById('legality-results');
+  const select = document.getElementById('legality-format-select');
+  const deckFormat = currentDeck?.format && getFormat(currentDeck.format) && !isCubeFormat(currentDeck.format) ? currentDeck.format : '';
+  const initial = format && getFormat(format) ? format : deckFormat || 'commander';
+  select.innerHTML = formatOptionsHtml({ selected: initial, noneLabel: null, includeLimited: true, includeCube: isCubeFormat(currentDeck?.format) });
 
-  // Reset modal
-  resultsDiv.classList.add('hidden');
-  resultsDiv.innerHTML = '';
-
-  // Define all formats with their labels
-  const formats = {
-    standard: 'Standard',
-    pioneer: 'Pioneer',
-    modern: 'Modern',
-    legacy: 'Legacy',
-    vintage: 'Vintage',
-    commander: 'Commander',
-    brawl: 'Brawl',
-    historic: 'Historic',
-    timeless: 'Timeless',
-    pauper: 'Pauper',
-    penny: 'Penny Dreadful',
-    alchemy: 'Alchemy',
-    explorer: 'Explorer',
-    oathbreaker: 'Oathbreaker',
-    standardbrawl: 'Standard Brawl',
-    paupercommander: 'Pauper Commander',
-    duel: 'Duel Commander',
-    oldschool: 'Old School',
-    premodern: 'Premodern',
-    predh: 'Pre-EDH',
-    gladiator: 'Gladiator',
-    future: 'Future'
-  };
-
-  // Render format buttons
-  formatSelection.innerHTML = Object.entries(formats).map(([key, label]) => `
-    <button class="btn btn-secondary format-check-btn" data-format="${key}">
-      ${label}
-    </button>
-  `).join('');
-
-  // Add click handlers for format buttons
-  formatSelection.querySelectorAll('.format-check-btn').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      const format = btn.dataset.format;
-      await checkFormatLegality(format, formats[format]);
+  if (!legalitySetup) {
+    legalitySetup = true;
+    select.addEventListener('change', () => checkFormatLegality(select.value));
+    document.getElementById('legality-check-all-btn').addEventListener('click', checkAllFormats);
+    document.getElementById('legality-results').addEventListener('click', (e) => {
+      const pick = e.target.closest('[data-pick-format]');
+      if (pick) {
+        select.value = pick.dataset.pickFormat;
+        checkFormatLegality(select.value);
+      }
     });
-  });
+  }
 
   modal.classList.remove('hidden');
+  checkFormatLegality(initial);
 }
 
-async function checkFormatLegality(format, formatLabel) {
+function renderIssue(issue) {
+  const icon = issue.severity === 'error' ? 'ph-x-circle' : 'ph-info';
+  const cards = issue.cards?.length
+    ? `<ul class="legality-issue-cards">${issue.cards.slice(0, 60).map((c) => `<li>${escapeHtml(c)}</li>`).join('')}${issue.cards.length > 60 ? `<li class="muted">and ${issue.cards.length - 60} more</li>` : ''}</ul>`
+    : '';
+  return `<li class="legality-issue" data-severity="${issue.severity}">
+    <i class="ph ${icon}" aria-hidden="true"></i>
+    <div><div class="legality-issue-msg">${escapeHtml(issue.message)}</div>${cards}</div>
+  </li>`;
+}
+
+async function checkFormatLegality(format) {
   const resultsDiv = document.getElementById('legality-results');
-
+  resultsDiv.innerHTML = '<div class="legality-loading">Checking…</div>';
   try {
-    showLoading();
     const result = await api.checkDeckLegality(currentDeckId, format);
-    hideLoading();
+    const def = getFormat(format);
+    const rules = resolveRules(format, format === currentDeck.format ? currentDeck.settings || {} : {});
+    const errors = result.issues.filter((i) => i.severity === 'error');
+    const warnings = result.issues.filter((i) => i.severity === 'warning');
+    const facts = [
+      deckSizeLabel(rules),
+      rules?.copies === 1 ? 'Singleton' : rules?.copies ? `Up to ${rules.copies} copies` : '',
+      rules?.commander ? (rules.commander.signatureSpell ? 'Oathbreaker + signature spell' : 'Commander, color identity') : '',
+      rules?.sideboard ? `${rules.sideboard}-card sideboard` : '',
+      rules?.points ? `${rules.points.cap} point cap` : '',
+      result.baseFormat ? `${formatLabel(result.baseFormat)} card pool` : '',
+      rules?.isCube ? result.summary.poolLabel : '',
+    ].filter(Boolean);
 
-    // Display results
+    const points = result.summary.points;
     resultsDiv.innerHTML = `
-      <h3>${formatLabel} Legality</h3>
-      <div style="padding: 1rem; background: ${result.isLegal ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)'}; border-radius: 8px; margin: 1rem 0;">
-        <div style="font-size: 1.1rem; font-weight: 600; color: ${result.isLegal ? '#10b981' : '#ef4444'};">
-          ${result.isLegal ? '✓' : '✗'} ${result.isLegal ? 'This deck is legal for ' + formatLabel : 'This deck is not legal for ' + formatLabel}
+      <div class="legality-verdict" data-legal="${result.isLegal}">
+        <i class="ph ${result.isLegal ? 'ph-seal-check' : 'ph-warning-circle'}"></i>
+        <div>
+          <strong>${result.isLegal ? `Legal in ${escapeHtml(result.label)}` : `Not legal in ${escapeHtml(result.label)}`}</strong>
+          <div class="legality-facts">${facts.map(escapeHtml).join(' · ')}${def?.description ? ` — ${escapeHtml(def.description)}` : ''}</div>
         </div>
-        ${!result.isLegal ? `
-          <div style="margin-top: 0.5rem; color: var(--text-secondary);">
-            There ${result.illegalCardCount === 1 ? 'is' : 'are'} ${result.illegalCardCount} card${result.illegalCardCount === 1 ? '' : 's'} that ${result.illegalCardCount === 1 ? 'isn\'t' : 'aren\'t'} legal.
-          </div>
-        ` : ''}
       </div>
-
-      ${result.illegalCards && result.illegalCards.length > 0 ? `
-        <h4 style="margin-top: 1.5rem; margin-bottom: 0.75rem;">Illegal Cards:</h4>
-        <div style="display: grid; gap: 0.75rem;">
-          ${result.illegalCards.map(card => `
-            <div style="padding: 0.75rem; background: var(--bg-tertiary); border-radius: 6px; display: flex; gap: 1rem; align-items: center; border-left: 3px solid #ef4444;">
-              ${card.image_url ? `
-                <img src="${card.image_url}" alt="${card.name}" style="width: 50px; height: 70px; border-radius: 4px; object-fit: cover;">
-              ` : ''}
-              <div style="flex: 1;">
-                <div style="font-weight: 600;">${card.name}</div>
-                <div style="font-size: 0.875rem; color: var(--text-secondary); margin-top: 0.25rem;">${card.type_line || ''}</div>
-                <div style="font-size: 0.875rem; color: #ef4444; margin-top: 0.25rem; font-weight: 500;">
-                  ${card.reason}
-                </div>
-              </div>
-              <div style="text-align: right; color: var(--text-secondary);">
-                Qty: ${card.quantity}
-              </div>
-            </div>
-          `).join('')}
-        </div>
-      ` : ''}
+      ${errors.length || warnings.length ? `<ul class="legality-issues">${[...errors, ...warnings].map(renderIssue).join('')}</ul>` : ''}
+      ${points ? `<div class="legality-points"><h4>Points: ${points.total} of ${points.cap}</h4>
+        ${points.cards.length ? `<ul>${points.cards.map((c) => `<li><span>${escapeHtml(c.name)}</span><span>${c.points}</span></li>`).join('')}</ul>` : '<p class="muted">No pointed cards.</p>'}</div>` : ''}
+      ${result.summary.commanders?.length ? `<p class="legality-meta">Commander: ${result.summary.commanders.map(escapeHtml).join(' + ')}${result.summary.colorIdentity ? ` · Identity: ${formatMana(result.summary.colorIdentity.map((c) => `{${c}}`).join('')) || 'colorless'}` : ''}</p>` : ''}
     `;
-
-    resultsDiv.classList.remove('hidden');
   } catch (error) {
-    hideLoading();
+    resultsDiv.innerHTML = '';
     showToast('Failed to check legality: ' + error.message, 'error');
   }
 }
 
-// Example Hand Functions
-function dealExampleHand() {
-  if (!currentDeck || !currentDeck.cards || currentDeck.cards.length === 0) {
-    showToast('Add cards to your deck first', 'warning');
-    return;
+async function checkAllFormats() {
+  const resultsDiv = document.getElementById('legality-results');
+  resultsDiv.innerHTML = '<div class="legality-loading">Checking every format…</div>';
+  try {
+    const { formats } = await api.checkAllFormats(currentDeckId);
+    const legal = formats.filter((f) => f.isLegal);
+    const groups = [...new Set(formats.map((f) => f.group))];
+    resultsDiv.innerHTML = `
+      <p class="legality-meta">${legal.length ? `Legal in ${legal.map((f) => escapeHtml(f.label)).join(', ')}.` : 'Not legal in any format as it stands.'} Pick one for details.</p>
+      ${groups.map((g) => `<h4 class="legality-group">${escapeHtml(g)}</h4>
+        <div class="legality-grid">${formats.filter((f) => f.group === g).map((f) => `
+          <button type="button" class="legality-chip" data-legal="${f.isLegal}" data-pick-format="${f.format}" title="${escapeHtml(f.errors.join('\n') || 'Legal')}">
+            <i class="ph ${f.isLegal ? 'ph-check' : 'ph-x'}"></i> ${escapeHtml(f.label)}
+            ${f.isLegal ? '' : `<span class="legality-chip-count">${f.errors.length}</span>`}
+          </button>`).join('')}</div>`).join('')}
+    `;
+  } catch (error) {
+    resultsDiv.innerHTML = '';
+    showToast('Failed to check formats: ' + error.message, 'error');
   }
+}
 
+// Example Hand Functions
+function dealExampleHand({ silent = false } = {}) {
   // Get mainboard cards only
-  const mainboardCards = currentDeck.cards.filter(isMainboardCard);
+  const mainboardCards = (currentDeck?.cards || []).filter(isMainboardCard);
   if (mainboardCards.length === 0) {
-    showToast('Add cards to your mainboard first', 'warning');
+    // Never leave a previous deck's hand on screen
+    exampleHand = [];
+    renderExampleHand();
+    updateHandStats();
+    if (!silent) showToast('Add cards to your mainboard first', 'warning');
     return;
   }
 
@@ -2501,7 +2667,10 @@ function renderExampleHand() {
   const handContainer = document.getElementById('example-hand');
 
   if (exampleHand.length === 0) {
-    handContainer.innerHTML = '<div class="example-hand-empty">Press New hand to draw 7 random cards from your deck</div>';
+    const hasMainboard = (currentDeck?.cards || []).some(isMainboardCard);
+    handContainer.innerHTML = `<div class="example-hand-empty">${hasMainboard
+      ? 'Press New hand to draw 7 random cards from your deck'
+      : 'Add cards to your mainboard to draw a sample hand'}</div>`;
     return;
   }
 

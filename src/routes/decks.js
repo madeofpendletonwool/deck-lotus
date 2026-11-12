@@ -15,6 +15,9 @@ import {
   deleteDeckShare,
   importSharedDeck,
   checkDeckLegality,
+  checkAllFormats,
+  bulkUpdateDeckCards,
+  getDeckHistory,
 } from '../services/deckService.js';
 import { getDeckPrice } from '../services/pricingService.js';
 import { parseDeckList, importDeck } from '../services/importService.js';
@@ -47,13 +50,13 @@ router.get('/', authenticate, (req, res, next) => {
  */
 router.post('/', authenticate, (req, res, next) => {
   try {
-    const { name, format, description } = req.body;
+    const { name, format, description, settings } = req.body;
 
     if (!name) {
       return res.status(400).json({ error: 'Deck name is required' });
     }
 
-    const deck = createDeck(req.user.id, name, format, description);
+    const deck = createDeck(req.user.id, name, format, description, settings);
     res.status(201).json({ deck });
   } catch (error) {
     next(error);
@@ -86,9 +89,9 @@ router.get('/:id', authenticate, (req, res, next) => {
 router.put('/:id', authenticate, (req, res, next) => {
   try {
     const deckId = parseInt(req.params.id);
-    const { name, format, description } = req.body;
+    const { name, format, description, settings } = req.body;
 
-    const deck = updateDeck(deckId, req.user.id, { name, format, description });
+    const deck = updateDeck(deckId, req.user.id, { name, format, description, settings });
     res.json({ deck });
   } catch (error) {
     next(error);
@@ -184,7 +187,7 @@ router.put('/:id/cards/:cardId', authenticate, (req, res, next) => {
   try {
     const deckId = parseInt(req.params.id);
     const deckCardId = parseInt(req.params.cardId);
-    const { quantity, isSideboard, isCommander, printingId, boardType } = req.body;
+    const { quantity, isSideboard, isCommander, printingId, boardType, tags, colorCategory, notes } = req.body;
 
     const deck = updateDeckCard(deckId, req.user.id, deckCardId, {
       quantity,
@@ -192,6 +195,9 @@ router.put('/:id/cards/:cardId', authenticate, (req, res, next) => {
       isCommander,
       printingId,
       boardType,
+      tags,
+      colorCategory,
+      notes,
     });
 
     res.json({ deck });
@@ -246,6 +252,7 @@ router.post('/import', authenticate, (req, res, next) => {
       deck,
       imported: result.imported,
       notFound: result.notFound,
+      missing: result.missing,
       message: `Successfully imported ${result.imported} cards${result.notFound > 0 ? ` (${result.notFound} not found)` : ''}`
     });
   } catch (error) {
@@ -354,6 +361,52 @@ router.post('/share/:token/import', authenticate, (req, res, next) => {
  * GET /api/decks/:id/legality/:format
  * Check deck legality for a specific format
  */
+/**
+ * POST /api/decks/:id/cards/bulk
+ * Change many cards at once: { ids, addTags, removeTags, colorCategory, boardType, remove }
+ */
+router.post('/:id/cards/bulk', authenticate, (req, res, next) => {
+  try {
+    const deckId = parseInt(req.params.id);
+    const { ids, addTags, removeTags, colorCategory, boardType, remove } = req.body || {};
+    const toList = (v) => (Array.isArray(v) ? v.map(String).filter(Boolean) : []);
+    const deck = bulkUpdateDeckCards(deckId, req.user.id, (ids || []).map(Number).filter(Number.isInteger), {
+      addTags: toList(addTags),
+      removeTags: toList(removeTags),
+      colorCategory,
+      boardType,
+      remove: remove === true,
+    });
+    res.json({ deck });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * GET /api/decks/:id/history
+ * What was added and removed, newest first (recorded for cubes)
+ */
+router.get('/:id/history', authenticate, (req, res, next) => {
+  try {
+    res.json({ changes: getDeckHistory(parseInt(req.params.id), req.user.id, req.query.limit) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * GET /api/decks/:id/legality
+ * Legality in every format at once, for "where can I play this?"
+ */
+router.get('/:id/legality', authenticate, (req, res, next) => {
+  try {
+    res.json({ formats: checkAllFormats(parseInt(req.params.id), req.user.id) });
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.get('/:id/legality/:format', authenticate, (req, res, next) => {
   try {
     const deckId = parseInt(req.params.id);

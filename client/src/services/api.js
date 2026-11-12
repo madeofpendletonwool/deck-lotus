@@ -206,11 +206,31 @@ class ApiClient {
     return this.request(`/decks/${id}`);
   }
 
-  async createDeck(name, format, description) {
+  async createDeck(name, format, description, settings = undefined) {
     return this.request('/decks', {
       method: 'POST',
-      body: JSON.stringify({ name, format, description }),
+      body: JSON.stringify({ name, format, description, settings }),
     });
+  }
+
+  /** Change many deck cards at once: { addTags, removeTags, colorCategory, boardType, remove } */
+  async bulkUpdateDeckCards(deckId, ids, changes) {
+    return this.request(`/decks/${deckId}/cards/bulk`, {
+      method: 'POST',
+      body: JSON.stringify({ ids, ...changes }),
+    });
+  }
+
+  async getDeckHistory(deckId) {
+    return this.request(`/decks/${deckId}/history`);
+  }
+
+  async checkAllFormats(deckId) {
+    return this.request(`/decks/${deckId}/legality`);
+  }
+
+  async getCanlanderPoints() {
+    return this.request('/formats/canlander-points');
   }
 
   async updateDeck(id, updates) {
@@ -285,7 +305,7 @@ class ApiClient {
   }
 
   async checkDeckLegality(deckId, format) {
-    return this.request(`/decks/${deckId}/legality/${format}`);
+    return this.request(`/decks/${deckId}/legality/${encodeURIComponent(format)}`);
   }
 
   // Printing optimization methods

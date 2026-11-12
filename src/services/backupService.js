@@ -78,7 +78,7 @@ export function createBackup(userId = null) {
 
   // Backup decks
   backup.data.decks = db.prepare(`
-    SELECT id, user_id, name, format, description, created_at, updated_at
+    SELECT id, user_id, name, format, description, settings, created_at, updated_at
     FROM decks
     WHERE user_id IN (${userIdsStr})
   `).all();
@@ -92,7 +92,7 @@ export function createBackup(userId = null) {
     // Backup deck_cards with UUIDs (stable across imports)
     backup.data.deck_cards = db.prepare(`
       SELECT dc.id, dc.deck_id, dc.quantity, dc.is_sideboard, dc.is_commander,
-             dc.board_type, dc.added_at, p.uuid as printing_uuid
+             dc.board_type, dc.added_at, dc.tags, dc.color_category, dc.notes, p.uuid as printing_uuid
       FROM deck_cards dc
       JOIN printings p ON dc.printing_id = p.id
       WHERE dc.deck_id IN (${deckIdsStr})
@@ -259,14 +259,14 @@ export function restoreBackup(backupData, options = {}) {
     );
 
     const insertDeck = db.prepare(`
-      INSERT OR REPLACE INTO decks (id, user_id, name, format, description, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT OR REPLACE INTO decks (id, user_id, name, format, description, settings, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     // Scoped restores get fresh deck ids so a crafted file can't REPLACE another user's deck
     const insertScopedDeck = db.prepare(`
-      INSERT INTO decks (user_id, name, format, description, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?)
+      INSERT INTO decks (user_id, name, format, description, settings, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
     `);
 
     // Backup deck id -> deck id in this database
@@ -280,6 +280,7 @@ export function restoreBackup(backupData, options = {}) {
             deck.name,
             deck.format,
             deck.description,
+            deck.settings ?? null,
             deck.created_at,
             deck.updated_at
           );
@@ -291,6 +292,7 @@ export function restoreBackup(backupData, options = {}) {
             deck.name,
             deck.format,
             deck.description,
+            deck.settings ?? null,
             deck.created_at,
             deck.updated_at
           );
@@ -314,8 +316,8 @@ export function restoreBackup(backupData, options = {}) {
     `);
 
     const insertDeckCard = db.prepare(`
-      INSERT OR REPLACE INTO deck_cards (deck_id, printing_id, quantity, is_sideboard, is_commander, board_type, added_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT OR REPLACE INTO deck_cards (deck_id, printing_id, quantity, is_sideboard, is_commander, board_type, added_at, tags, color_category, notes)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     for (const deckCard of deckCards) {
@@ -329,7 +331,10 @@ export function restoreBackup(backupData, options = {}) {
             deckCard.is_sideboard,
             deckCard.is_commander,
             deckCard.board_type || 'mainboard',
-            deckCard.added_at
+            deckCard.added_at,
+            deckCard.tags ?? null,
+            deckCard.color_category ?? null,
+            deckCard.notes ?? null
           );
           results.deck_cards++;
         } else {

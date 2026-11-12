@@ -1,5 +1,66 @@
 import db from '../db/connection.js';
 import crypto from 'crypto';
+import { validateDeck, FORMATS, isCubeFormat, DEFAULT_CUBE_SETTINGS, parsePointsList } from '../../shared/formats.js';
+import { getSettings } from './settingsService.js';
+
+const RARITY_RANK_SQL = `CASE rarity WHEN 'common' THEN 0 WHEN 'uncommon' THEN 1 WHEN 'rare' THEN 2 WHEN 'mythic' THEN 3 ELSE 4 END`;
+
+/** Deck settings are stored as JSON text; hand back an object either way. */
+function parseSettings(raw) {
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+/** Clean a settings object from a request: plain JSON values only, and a size cap. */
+function serializeSettings(settings) {
+  if (settings === undefined) return undefined;
+  if (settings === null) return null;
+  if (typeof settings !== 'object' || Array.isArray(settings)) throw Object.assign(new Error('settings must be an object'), { statusCode: 400 });
+  const text = JSON.stringify(settings);
+  if (text.length > 10000) throw Object.assign(new Error('settings are too large'), { statusCode: 400 });
+  return text;
+}
+
+/** Tags arrive as an array of strings; store a de-duplicated, trimmed JSON array (or NULL). */
+function serializeTags(tags) {
+  if (tags === undefined) return undefined;
+  if (tags === null) return null;
+  if (!Array.isArray(tags)) throw Object.assign(new Error('tags must be an array'), { statusCode: 400 });
+  const clean = [...new Set(tags.map((t) => String(t).trim().slice(0, 40)).filter(Boolean))].slice(0, 30);
+  return clean.length ? JSON.stringify(clean) : null;
+}
+
+const COLOR_CATEGORY_IDS = new Set(['W', 'U', 'B', 'R', 'G', 'M', 'H', 'C', 'L']);
+
+// ---- Cube history ----
+
+function logChange(deckId, action, cardName, quantity, boardType = 'mainboard') {
+  if (!cardName || !quantity) return;
+  db.run(
+    `INSERT INTO deck_changes (deck_id, action, card_name, quantity, board_type) VALUES (?, ?, ?, ?, ?)`,
+    [deckId, action, cardName, quantity, boardType || 'mainboard']
+  );
+}
+
+function deckCardInfo(deckId, deckCardId) {
+  return db.get(
+    `SELECT dc.id, dc.quantity, COALESCE(dc.board_type, CASE WHEN dc.is_sideboard = 1 THEN 'sideboard' ELSE 'mainboard' END) as board_type, c.name
+     FROM deck_cards dc JOIN printings p ON dc.printing_id = p.id JOIN cards c ON p.card_id = c.id
+     WHERE dc.id = ? AND dc.deck_id = ?`,
+    [deckCardId, deckId]
+  );
+}
+
+function ownedDeck(deckId, userId) {
+  const deck = db.get(`SELECT id, format FROM decks WHERE id = ? AND user_id = ?`, [deckId, userId]);
+  if (!deck) throw new Error('Deck not found or access denied');
+  return deck;
+}
 
 /**
  * Get all decks for a user
@@ -82,6 +143,11 @@ export function getDeckById(deckId, userId) {
       c.toughness,
       c.loyalty,
       c.layout,
+      c.edhrec_rank,
+      c.leadership_skills,
+      dc.tags,
+      dc.color_category,
+      dc.notes,
       (SELECT CASE WHEN oc.id IS NOT NULL THEN 1 ELSE 0 END FROM owned_cards oc WHERE oc.user_id = ? AND oc.card_id = c.id LIMIT 1) as is_owned,
       (SELECT SUM(op.quantity) FROM owned_printings op JOIN printings op_p ON op.printing_id = op_p.id WHERE op.user_id = ? AND op_p.card_id = c.id) as owned_quantity
      FROM deck_cards dc
@@ -102,6 +168,7 @@ export function getDeckById(deckId, userId) {
 
   return {
     ...deck,
+    settings: parseSettings(deck.settings),
     cards,
   };
 }
@@ -109,10 +176,12 @@ export function getDeckById(deckId, userId) {
 /**
  * Create a new deck
  */
-export function createDeck(userId, name, format, description) {
+export function createDeck(userId, name, format, description, settings = undefined) {
+  // A new cube starts with the default draft settings so its tools work straight away
+  const initial = settings ?? (isCubeFormat(format) ? { ...DEFAULT_CUBE_SETTINGS } : undefined);
   const result = db.run(
-    `INSERT INTO decks (user_id, name, format, description) VALUES (?, ?, ?, ?)`,
-    [userId, name, format || null, description || null]
+    `INSERT INTO decks (user_id, name, format, description, settings) VALUES (?, ?, ?, ?, ?)`,
+    [userId, name, format || null, description || null, serializeSettings(initial) ?? null]
   );
 
   return {
@@ -121,6 +190,7 @@ export function createDeck(userId, name, format, description) {
     name,
     format,
     description,
+    settings: initial || {},
   };
 }
 
@@ -128,7 +198,7 @@ export function createDeck(userId, name, format, description) {
  * Update deck
  */
 export function updateDeck(deckId, userId, updates) {
-  const { name, format, description } = updates;
+  const { name, format, description, settings } = updates;
 
   // Check if deck belongs to user
   const deck = db.get(
@@ -154,6 +224,10 @@ export function updateDeck(deckId, userId, updates) {
   if (description !== undefined) {
     fields.push('description = ?');
     params.push(description);
+  }
+  if (settings !== undefined) {
+    fields.push('settings = ?');
+    params.push(serializeSettings(settings));
   }
 
   fields.push('updated_at = CURRENT_TIMESTAMP');
@@ -189,15 +263,7 @@ export function deleteDeck(deckId, userId) {
  * Add card to deck
  */
 export function addCardToDeck(deckId, userId, printingId, quantity = 1, isSideboard = false, isCommander = false, boardType = null) {
-  // Verify deck ownership
-  const deck = db.get(
-    `SELECT id FROM decks WHERE id = ? AND user_id = ?`,
-    [deckId, userId]
-  );
-
-  if (!deck) {
-    throw new Error('Deck not found or access denied');
-  }
+  const deck = ownedDeck(deckId, userId);
 
   // Determine board type
   const finalBoardType = boardType || (isSideboard ? 'sideboard' : 'mainboard');
@@ -223,6 +289,11 @@ export function addCardToDeck(deckId, userId, printingId, quantity = 1, isSidebo
        VALUES (?, ?, ?, ?, ?, ?)`,
       [deckId, printingId, quantity, isSideboard ? 1 : 0, isCommander ? 1 : 0, finalBoardType]
     );
+  }
+
+  if (isCubeFormat(deck.format)) {
+    const card = db.get(`SELECT c.name FROM printings p JOIN cards c ON p.card_id = c.id WHERE p.id = ?`, [printingId]);
+    logChange(deckId, 'add', card?.name, quantity, finalBoardType);
   }
 
   // Update deck timestamp
@@ -272,17 +343,9 @@ function mergeIntoExistingPrinting(deckId, deckCardId, printingId) {
  * Update card quantity in deck
  */
 export function updateDeckCard(deckId, userId, deckCardId, updates) {
-  // Verify deck ownership
-  const deck = db.get(
-    `SELECT id FROM decks WHERE id = ? AND user_id = ?`,
-    [deckId, userId]
-  );
-
-  if (!deck) {
-    throw new Error('Deck not found or access denied');
-  }
-
-  const { quantity, isSideboard, isCommander, printingId, boardType } = updates;
+  const deck = ownedDeck(deckId, userId);
+  const { quantity, isSideboard, isCommander, printingId, boardType, tags, colorCategory, notes } = updates;
+  const before = isCubeFormat(deck.format) ? deckCardInfo(deckId, deckCardId) : null;
 
   const fields = [];
   const params = [];
@@ -312,6 +375,18 @@ export function updateDeckCard(deckId, userId, deckCardId, updates) {
     fields.push('is_commander = ?');
     params.push(isCommander ? 1 : 0);
   }
+  if (tags !== undefined) {
+    fields.push('tags = ?');
+    params.push(serializeTags(tags));
+  }
+  if (colorCategory !== undefined) {
+    fields.push('color_category = ?');
+    params.push(COLOR_CATEGORY_IDS.has(colorCategory) ? colorCategory : null);
+  }
+  if (notes !== undefined) {
+    fields.push('notes = ?');
+    params.push(notes ? String(notes).slice(0, 1000) : null);
+  }
   if (printingId !== undefined) {
     if (mergeIntoExistingPrinting(deckId, deckCardId, printingId)) {
       db.run(`UPDATE decks SET updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [deckId]);
@@ -333,24 +408,99 @@ export function updateDeckCard(deckId, userId, deckCardId, updates) {
     params
   );
 
+  if (before) logRowChange(deckId, before, deckCardInfo(deckId, deckCardId));
+
   // Update deck timestamp
   db.run(`UPDATE decks SET updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [deckId]);
 
   return getDeckById(deckId, userId);
 }
 
+/** Record what a row edit changed: copies added or removed, or a move between boards. */
+function logRowChange(deckId, before, after) {
+  if (!after) {
+    logChange(deckId, 'remove', before.name, before.quantity, before.board_type);
+    return;
+  }
+  if (before.board_type !== after.board_type) {
+    logChange(deckId, 'remove', before.name, before.quantity, before.board_type);
+    logChange(deckId, 'add', after.name, after.quantity, after.board_type);
+  } else if (after.quantity !== before.quantity) {
+    const diff = after.quantity - before.quantity;
+    logChange(deckId, diff > 0 ? 'add' : 'remove', after.name, Math.abs(diff), after.board_type);
+  }
+}
+
+/**
+ * Change many cards at once: add or remove tags, set a color category, move boards or remove.
+ * Used by the cube editor's multi-select.
+ */
+export function bulkUpdateDeckCards(deckId, userId, deckCardIds, changes = {}) {
+  const deck = ownedDeck(deckId, userId);
+  if (!Array.isArray(deckCardIds) || deckCardIds.length === 0) return getDeckById(deckId, userId);
+  if (deckCardIds.length > 2000) throw Object.assign(new Error('Too many cards at once'), { statusCode: 400 });
+  const { addTags = [], removeTags = [], colorCategory, boardType, remove } = changes;
+  const cube = isCubeFormat(deck.format);
+
+  db.transaction(() => {
+    for (const id of deckCardIds) {
+      const row = db.get(`SELECT id, tags FROM deck_cards WHERE id = ? AND deck_id = ?`, [id, deckId]);
+      if (!row) continue;
+      const before = cube ? deckCardInfo(deckId, id) : null;
+
+      if (remove) {
+        if (before) logChange(deckId, 'remove', before.name, before.quantity, before.board_type);
+        db.run(`DELETE FROM deck_cards WHERE id = ?`, [id]);
+        continue;
+      }
+
+      if (addTags.length || removeTags.length) {
+        let tags = [];
+        try { tags = JSON.parse(row.tags || '[]'); } catch { tags = []; }
+        const drop = new Set(removeTags.map((t) => String(t).toLowerCase()));
+        tags = tags.filter((t) => !drop.has(String(t).toLowerCase()));
+        for (const t of addTags) if (!tags.some((x) => x.toLowerCase() === String(t).toLowerCase())) tags.push(t);
+        db.run(`UPDATE deck_cards SET tags = ? WHERE id = ?`, [serializeTags(tags), id]);
+      }
+      if (colorCategory !== undefined) {
+        db.run(`UPDATE deck_cards SET color_category = ? WHERE id = ?`, [COLOR_CATEGORY_IDS.has(colorCategory) ? colorCategory : null, id]);
+      }
+      if (boardType && ['mainboard', 'sideboard', 'maybeboard'].includes(boardType)) {
+        try {
+          db.run(`UPDATE deck_cards SET board_type = ?, is_sideboard = ? WHERE id = ?`, [boardType, boardType === 'sideboard' ? 1 : 0, id]);
+        } catch (error) {
+          // The same printing is already on the other board (see mergeIntoExistingPrinting); leave this one
+          if (!/UNIQUE/.test(error.message)) throw error;
+        }
+        if (before) logRowChange(deckId, before, deckCardInfo(deckId, id));
+      }
+    }
+    db.run(`UPDATE decks SET updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [deckId]);
+  });
+
+  return getDeckById(deckId, userId);
+}
+
+/**
+ * A deck's change history, newest first, grouped into days for display.
+ */
+export function getDeckHistory(deckId, userId, limit = 500) {
+  ownedDeck(deckId, userId);
+  return db.all(
+    `SELECT action, card_name, quantity, board_type, created_at FROM deck_changes
+     WHERE deck_id = ? ORDER BY created_at DESC, id DESC LIMIT ?`,
+    [deckId, Math.min(Number(limit) || 500, 5000)]
+  );
+}
+
 /**
  * Remove card from deck
  */
 export function removeCardFromDeck(deckId, userId, deckCardId) {
-  // Verify deck ownership
-  const deck = db.get(
-    `SELECT id FROM decks WHERE id = ? AND user_id = ?`,
-    [deckId, userId]
-  );
-
-  if (!deck) {
-    throw new Error('Deck not found or access denied');
+  const deck = ownedDeck(deckId, userId);
+  if (isCubeFormat(deck.format)) {
+    const before = deckCardInfo(deckId, deckCardId);
+    if (before) logChange(deckId, 'remove', before.name, before.quantity, before.board_type);
   }
 
   db.run(
@@ -503,7 +653,7 @@ export function getDeckByShareToken(shareToken) {
 
   // Get deck with cards (similar to getDeckById but without user ownership check)
   const deck = db.get(
-    `SELECT id, name, format, description, created_at, updated_at FROM decks WHERE id = ?`,
+    `SELECT id, name, format, description, settings, created_at, updated_at FROM decks WHERE id = ?`,
     [share.deck_id]
   );
 
@@ -538,7 +688,11 @@ export function getDeckByShareToken(shareToken) {
       c.power,
       c.toughness,
       c.loyalty,
-      c.layout
+      c.layout,
+      c.edhrec_rank,
+      dc.tags,
+      dc.color_category,
+      dc.notes
      FROM deck_cards dc
      JOIN printings p ON dc.printing_id = p.id
      JOIN cards c ON p.card_id = c.id
@@ -551,6 +705,7 @@ export function getDeckByShareToken(shareToken) {
 
   return {
     ...deck,
+    settings: parseSettings(deck.settings),
     cards,
     is_shared: true,
   };
@@ -599,19 +754,22 @@ export function importSharedDeck(shareToken, userId) {
   }
 
   // Create new deck for the user
+  // A teammate deck belongs to the original owner, so it doesn't carry over
+  const { teammateDeckId, ...settings } = sharedDeck.settings || {};
   const newDeck = createDeck(
     userId,
     `${sharedDeck.name} (imported)`,
     sharedDeck.format,
-    sharedDeck.description
+    sharedDeck.description,
+    Object.keys(settings).length ? settings : undefined
   );
 
   // Copy all cards to the new deck
   for (const card of sharedDeck.cards) {
     db.run(
-      `INSERT INTO deck_cards (deck_id, printing_id, quantity, is_sideboard, is_commander, board_type)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [newDeck.id, card.printing_id, card.quantity, card.is_sideboard, card.is_commander, card.board_type]
+      `INSERT INTO deck_cards (deck_id, printing_id, quantity, is_sideboard, is_commander, board_type, tags, color_category, notes)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [newDeck.id, card.printing_id, card.quantity, card.is_sideboard, card.is_commander, card.board_type, card.tags, card.color_category, card.notes]
     );
   }
 
@@ -619,69 +777,84 @@ export function importSharedDeck(shareToken, userId) {
 }
 
 /**
- * Check deck legality for a specific format
+ * Cards with what the format rules need: legalities, leadership skills and the lowest rarity the
+ * card was ever printed at (for pauper-style cube pools).
  */
-export function checkDeckLegality(deckId, userId, format) {
-  // Verify deck ownership
-  const deck = db.get(
-    `SELECT id FROM decks WHERE id = ? AND user_id = ?`,
-    [deckId, userId]
-  );
-
-  if (!deck) {
-    throw new Error('Deck not found or access denied');
-  }
-
-  // Get all unique cards in the mainboard with their legalities
-  const cards = db.all(
-    `SELECT DISTINCT
-      c.id,
+function cardsForValidation(deckId) {
+  return db.all(
+    `SELECT
+      dc.quantity,
+      dc.is_commander,
+      COALESCE(dc.board_type, CASE WHEN dc.is_sideboard = 1 THEN 'sideboard' ELSE 'mainboard' END) as board_type,
+      c.id as card_id,
       c.name,
-      c.legalities,
       c.type_line,
+      c.oracle_text,
+      c.color_identity,
+      c.legalities,
+      c.leadership_skills,
+      p.rarity,
       p.image_url,
-      SUM(dc.quantity) as total_quantity
+      (SELECT CASE MIN(${RARITY_RANK_SQL}) WHEN 0 THEN 'common' WHEN 1 THEN 'uncommon' WHEN 2 THEN 'rare' WHEN 3 THEN 'mythic' ELSE NULL END
+         FROM printings lp WHERE lp.card_id = c.id) as lowest_rarity
      FROM deck_cards dc
      JOIN printings p ON dc.printing_id = p.id
      JOIN cards c ON p.card_id = c.id
-     WHERE dc.deck_id = ? AND (dc.board_type = 'mainboard' OR (dc.board_type IS NULL AND dc.is_sideboard = 0))
-     GROUP BY c.id
-     ORDER BY c.name`,
+     WHERE dc.deck_id = ?`,
     [deckId]
   );
+}
 
-  const illegalCards = [];
+/** The admin-maintained Canadian Highlander points list. */
+export function getPointsList() {
+  return parsePointsList(getSettings().canlanderPoints || '');
+}
 
-  for (const card of cards) {
-    if (!card.legalities) continue;
-
-    try {
-      const legalities = JSON.parse(card.legalities);
-      const status = legalities[format];
-
-      // Card is illegal if: not in format (null/undefined), banned, or restricted
-      if (!status || status === 'null' || status === 'Banned' || status === 'Restricted') {
-        illegalCards.push({
-          id: card.id,
-          name: card.name,
-          type_line: card.type_line,
-          image_url: card.image_url,
-          quantity: card.total_quantity,
-          status: status || 'Not Legal',
-          reason: status === 'Banned' ? 'Banned' :
-                  status === 'Restricted' ? 'Restricted' :
-                  'Not legal in this format'
-        });
-      }
-    } catch (e) {
-      console.error(`Error parsing legalities for card ${card.name}:`, e);
-    }
+function validationOptions(deck, userId, formatId) {
+  const settings = parseSettings(deck.settings);
+  const options = { ...settings, pointsList: getPointsList() };
+  if (formatId === 'twoheadedgiant' && settings.teammateDeckId && Number(settings.teammateDeckId) !== Number(deck.id)) {
+    const teammate = db.get(`SELECT id FROM decks WHERE id = ? AND user_id = ?`, [settings.teammateDeckId, userId]);
+    if (teammate) options.teammateCards = cardsForValidation(teammate.id);
   }
+  return options;
+}
 
-  return {
-    format,
-    isLegal: illegalCards.length === 0,
-    illegalCardCount: illegalCards.length,
-    illegalCards
-  };
+/**
+ * Check a deck against a format: card legality, deck size, copy limits, commanders, color
+ * identity, points and so on (see shared/formats.js). The format defaults to the deck's own.
+ */
+export function checkDeckLegality(deckId, userId, format) {
+  const deck = db.get(`SELECT id, format, settings FROM decks WHERE id = ? AND user_id = ?`, [deckId, userId]);
+  if (!deck) {
+    throw new Error('Deck not found or access denied');
+  }
+  const formatId = format || deck.format;
+  // Only the deck's own format uses its saved options (2HG card pool, cube settings)
+  const options = formatId === deck.format ? validationOptions(deck, userId, formatId) : { pointsList: getPointsList() };
+  return validateDeck(cardsForValidation(deckId), formatId, options);
+}
+
+/**
+ * Which formats is this deck legal in? Checks every constructed, commander and highlander format.
+ */
+export function checkAllFormats(deckId, userId) {
+  const deck = db.get(`SELECT id, format, settings FROM decks WHERE id = ? AND user_id = ?`, [deckId, userId]);
+  if (!deck) {
+    throw new Error('Deck not found or access denied');
+  }
+  const cards = cardsForValidation(deckId);
+  const pointsList = getPointsList();
+  return FORMATS
+    .filter((f) => !f.isCube && f.id !== 'limited' && !f.baseFormat)
+    .map((f) => {
+      const result = validateDeck(cards, f.id, { pointsList });
+      return {
+        format: f.id,
+        label: f.label,
+        group: f.group,
+        isLegal: result.isLegal,
+        errors: result.issues.filter((i) => i.severity === 'error').map((i) => i.message),
+      };
+    });
 }

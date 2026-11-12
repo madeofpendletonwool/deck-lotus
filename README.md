@@ -13,9 +13,22 @@
 - **Multiple Printings** — choose specific card art, set, and foil version per card
 - **Printing Optimizer** — automatically find the cheapest or most thematic set for your entire deck
 - **Deck Statistics** — live mana curve, type distribution, color breakdown, and estimated value
-- **Format Support** — Commander, Standard, Modern, Pioneer, Legacy, Vintage, Pauper
+- **Format Support** — Standard, Pioneer, Modern, Premodern, Legacy, Vintage, Pauper, Timeless, Historic, Alchemy, Penny Dreadful, Old School; Commander, Duel Commander, Pauper Commander, Brawl, Standard Brawl, Oathbreaker, Pre-EDH; Canadian Highlander, Gladiator; Two-Headed Giant; Limited
+- **Real Legality Checks** — deck size, copy limits (basics and "any number of" cards exempt), restricted cards, sideboard size, commander eligibility per format, partners and backgrounds, color identity, Canadian Highlander points, and the Two-Headed Giant team limit. A chip in the deck header shows the result live, and one click lists every format the deck is legal in
 - **Drag & Drop** — reorder cards between boards
 - **Layout Views** — full card, compact, and ultra-compact views
+
+### Cube Building
+- **Cubes** — a cube is a deck with the Cube format: pricing, printings, ownership, sharing and export all work on it
+- **Table and Visual Views** — columns by color (CubeCobra's categories, including Hybrid), rows by mana value or card type, or a card image spoiler
+- **Per-card Tags, Color Category and Notes** — click any card to edit it; override where a card sorts (put a hybrid card in a mono-color column)
+- **Bulk Editing** — Ctrl/⌘-click or Shift-click to select cards, then tag, untag, recategorize, move to the maybeboard or remove them together
+- **Search Filters** — `t:creature c:r mv<=2`, `c=wu`, `ci<=bg`, `is:fixing`, `#aggro`, `r>=rare`, `-t:land`, `or`
+- **Analysis** — color balance against the average, gold cards and fixing per color pair (flags pairs with no fixing), mana curve and card types by color, fixing by color, tag counts, rarity, and the tokens and emblems the cube needs
+- **Playtest** — sample packs, sealed pools and a full draft against bots that pick by power and settle into colors; save any draft or sealed pool as a Limited deck
+- **History** — every add, cut and maybeboard move, by day
+- **Settings** — target size, card pool (Vintage, Legacy, Modern, Pioneer, Premodern, Pauper, Peasant, Commander legal), singleton, players, packs and pack size
+- **CubeCobra** — import a CubeCobra CSV export (tags, color categories, notes and maybeboard come with it) and export one back
 
 ### Mana Pool Integration
 - **Cart Optimizer** — find the cheapest combination of sellers for your deck or shopping list across four strategies:
@@ -52,8 +65,8 @@
 - **Hover Previews** — full card image on hover throughout the app
 
 ### Deck Import & Export
-- **Import from** Moxfield, MTG Arena, MTGO, and plain text formats
-- **Export to** Moxfield (with set codes), Arena, MTGO, and plain text
+- **Import from** Moxfield, MTG Arena, MTGO, plain text, and CSV (including CubeCobra)
+- **Export to** Moxfield (with set codes), Arena, MTGO, plain text, CSV, and CubeCobra
 - **Smart Parser** — auto-detects set codes in brackets or parentheses
 - **Shared Deck Import** — one-click import of any publicly shared deck
 
@@ -229,9 +242,22 @@ Auto-generated credentials look like this:
 
 ### Validating a Deck
 
-1. Open a deck → look for **Validate Deck** in the sidebar stats panel
-2. Select a format (Commander, Standard, Modern, etc.)
-3. Click **Validate** — results show legality status, your commander, color identity, and any violations
+1. Pick the deck's format in the header. A chip next to it shows whether the deck is legal, its size against the target, and Canadian Highlander points
+2. Click the chip (or **Check legality** in the stats panel) for the full report: every problem, the cards involved, your commander and color identity
+3. Click **Every format** to see everywhere the deck is legal at once
+
+Commander formats use the crown on a card to mark the commander. In Oathbreaker, crown both the planeswalker and its signature spell. For Two-Headed Giant, the sliders button next to the format picks the card pool and your teammate's deck, so the team's shared four-copy limit can be checked.
+
+Canadian Highlander's points list changes a few times a year, so it isn't built in. An admin pastes the current list from [canadianhighlander.ca](https://canadianhighlander.ca/points-list/) into **Settings → Access control**. Until then, Canadian Highlander checks skip points and say so.
+
+### Building a Cube
+
+1. **My Decks** → **New Cube**, then choose a target size and card pool (or **Import Deck** with a CubeCobra CSV)
+2. Add cards with the search box. **Table** lays the cube out in color columns; **Visual** shows the images
+3. Click a card to tag it, change its color category or add notes. Ctrl/⌘-click or Shift-click to select several and edit them together
+4. **Analysis** shows balance, color-pair support, curves and the tokens you'll need
+5. **Playtest** opens sample packs, sealed pools, or a draft against bots. **Build a deck from your picks** saves the pool as a Limited deck with every card in the sideboard
+6. **History** lists what changed and when
 
 ### Setting Up Price Watches
 
@@ -263,6 +289,7 @@ Click the chart icon on any watch to see the full price history graph with your 
    - `4 Lightning Bolt` (Arena / MTGO)
    - `4 Counterspell [DMR]` (Moxfield with set code)
    - `1 Black Lotus (LEA)` (set code in parentheses)
+   - A CSV with a `name` column, such as a CubeCobra export
 4. Click **Import Deck**
 
 ### API Keys
@@ -324,6 +351,11 @@ All endpoints require authentication via `Authorization: Bearer <token>` or `X-A
 | `DELETE` | `/api/decks/:id/share` | Remove share link |
 | `GET` | `/api/decks/share/:token` | View shared deck (public) |
 | `POST` | `/api/decks/share/:token/import` | Import shared deck |
+| `GET` | `/api/decks/:id/legality/:format` | Full legality report for one format |
+| `GET` | `/api/decks/:id/legality` | Legal or not in every format |
+| `POST` | `/api/decks/:id/cards/bulk` | Change many cards: `{ ids, addTags, removeTags, colorCategory, boardType, remove }` |
+| `GET` | `/api/decks/:id/history` | Cube change history |
+| `GET` | `/api/formats/canlander-points` | The Canadian Highlander points list in use |
 
 ### Price Monitoring
 

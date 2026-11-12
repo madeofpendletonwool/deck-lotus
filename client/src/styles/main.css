@@ -5128,6 +5128,7 @@ a.col-deck:hover { border-color: var(--border-strong); color: var(--text); }
   .col-table .col-name { max-width: 150px; }
   .col-cards { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); }
   .col-search { max-width: none; }
+}
 
 /* Foil / etched copies in the owned-printings list */
 .finish-badge {

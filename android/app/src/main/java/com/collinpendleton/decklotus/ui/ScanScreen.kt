@@ -107,6 +107,7 @@ fun ScanScreen(vm: ScanViewModel = viewModel()) {
     var showDebug by remember { mutableStateOf(false) }
     var picking by remember { mutableStateOf<ScannedCard?>(null) }
     var confirmClear by remember { mutableStateOf(false) }
+    var pickingDeck by remember { mutableStateOf(false) }
     var camera by remember { mutableStateOf<Camera?>(null) }
 
     Column(Modifier.fillMaxSize().background(Lotus.bg)) {
@@ -193,6 +194,7 @@ fun ScanScreen(vm: ScanViewModel = viewModel()) {
             onClear = { confirmClear = true },
             upload = upload,
             onAdd = vm::addToCollection,
+            onAddToDeck = { vm.loadDecks(); pickingDeck = true },
             onRetry = vm::retryUploads,
             onDismissUpload = vm::dismissUploadMessage,
         )
@@ -203,6 +205,14 @@ fun ScanScreen(vm: ScanViewModel = viewModel()) {
             vm.choosePrinting(card.key, it)
             picking = null
         }
+    }
+    if (pickingDeck) {
+        val decks by vm.decks.collectAsStateWithLifecycle()
+        val decksError by vm.decksError.collectAsStateWithLifecycle()
+        DeckPickerSheet(
+            count = session.size, decks = decks, error = decksError, initial = vm.lastDeckChoice,
+            onRetry = vm::loadDecks, onDismiss = { pickingDeck = false },
+        ) { target -> vm.addToDeck(target); pickingDeck = false }
     }
     if (confirmClear) {
         AlertDialog(
@@ -264,7 +274,7 @@ private fun CameraPreview(vm: ScanViewModel, onCamera: (Camera) -> Unit) {
 
 /** "Add 12 to collection", or how the last upload went. */
 @Composable
-private fun UploadBar(count: Int, upload: UploadState, onAdd: () -> Unit, onRetry: () -> Unit, onDismiss: () -> Unit) {
+private fun UploadBar(count: Int, upload: UploadState, onAdd: () -> Unit, onAddToDeck: () -> Unit, onRetry: () -> Unit, onDismiss: () -> Unit) {
     when (upload) {
         is UploadState.Waiting -> Row(
             Modifier.fillMaxWidth().background(Lotus.goldSoft).padding(start = 16.dp, end = 4.dp),
@@ -279,11 +289,12 @@ private fun UploadBar(count: Int, upload: UploadState, onAdd: () -> Unit, onRetr
         else -> Unit
     }
     if (count > 0) {
-        Button(
-            onClick = onAdd, enabled = upload != UploadState.Sending,
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
-        ) {
-            Text(if (upload == UploadState.Sending) "Adding…" else if (count == 1) "Add 1 card to collection" else "Add $count cards to collection")
+        val sending = upload == UploadState.Sending
+        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = onAdd, enabled = !sending, modifier = Modifier.weight(1f)) {
+                Text(if (sending) "Adding…" else if (count == 1) "Add 1 to collection" else "Add $count to collection", maxLines = 1)
+            }
+            OutlinedButton(onClick = onAddToDeck, enabled = !sending) { Text("To deck…", maxLines = 1) }
         }
     }
 }
@@ -360,13 +371,14 @@ private fun SessionPanel(
     onClear: () -> Unit,
     upload: UploadState,
     onAdd: () -> Unit,
+    onAddToDeck: () -> Unit,
     onRetry: () -> Unit,
     onDismissUpload: () -> Unit,
 ) {
     Column(
         Modifier.fillMaxWidth().fillMaxHeight(0.42f).background(Lotus.surface),
     ) {
-        UploadBar(session.size, upload, onAdd, onRetry, onDismissUpload)
+        UploadBar(session.size, upload, onAdd, onAddToDeck, onRetry, onDismissUpload)
         Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp, top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             val review = session.count { it.needsReview }
             Text("${session.size} scanned", color = Lotus.text, fontWeight = FontWeight.SemiBold)

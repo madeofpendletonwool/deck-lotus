@@ -147,13 +147,14 @@ router.post('/quick-add', authenticate, (req, res, next) => {
 
 /**
  * POST /api/inventory/scans
- * Cards scanned by the Android app: { batchId, items: [{ scryfallId, finish, quantity }] }.
- * Safe to retry with the same batchId; the cards are only added once.
+ * Cards scanned by the Android app: { batchId, items: [{ scryfallId, finish, quantity }],
+ * deckId?, board?, collection? }. With deckId they go in that deck too (or only, with
+ * collection: false). Safe to retry with the same batchId; the cards are only added once.
  */
 router.post('/scans', authenticate, (req, res, next) => {
   try {
-    const { batchId, items } = req.body;
-    res.json(addScannedBatch(req.user.id, batchId, items));
+    const { batchId, items, deckId, board, collection } = req.body;
+    res.json(addScannedBatch(req.user.id, batchId, items, { deckId, board, collection }));
   } catch (error) {
     next(error);
   }

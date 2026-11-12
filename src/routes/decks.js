@@ -27,7 +27,7 @@ import {
   applyPrintingOptimization,
   getAvailableSets
 } from '../services/printingOptimizerService.js';
-import { getDeckCollection, getSharedDeckCollection, getBinderFits } from '../services/collectionService.js';
+import { getDeckCollection, getSharedDeckCollection, getBinderFits, getDeckSummaries } from '../services/collectionService.js';
 import { authenticate, optionalAuthenticate } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -40,6 +40,19 @@ router.get('/', authenticate, (req, res, next) => {
   try {
     const decks = getUserDecks(req.user.id);
     res.json({ decks });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * GET /api/decks/collection-summary
+ * For each deck, how much of it you own: { summaries: { [deckId]: { cards, ownedCards, missingCards, ... } } }.
+ * Declared before /:id so it isn't read as a deck id.
+ */
+router.get('/collection-summary', authenticate, (req, res, next) => {
+  try {
+    res.json({ summaries: getDeckSummaries(req.user.id) });
   } catch (error) {
     next(error);
   }

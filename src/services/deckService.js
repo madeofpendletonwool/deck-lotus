@@ -302,6 +302,45 @@ export function addCardToDeck(deckId, userId, printingId, quantity = 1, isSidebo
   return getDeckById(deckId, userId);
 }
 
+export const DECK_BOARDS = ['mainboard', 'sideboard', 'maybeboard'];
+
+/**
+ * Add scanned copies of a printing to a deck, inside the caller's transaction. `deck` is
+ * { id, format } and already checked to be the user's.
+ *
+ * A deck holds a printing once per is_sideboard value, and the mainboard and maybeboard share
+ * is_sideboard = 0. So when the printing is already on the other one of those two boards, the
+ * copies join that row. A card scanned into the mainboard that was sitting in the maybeboard
+ * moves up to the mainboard, which is what putting a physical card in a deck means.
+ * Returns the board the copies ended up on.
+ */
+export function addScannedPrintingToDeck(deck, printingId, quantity, board = 'mainboard') {
+  const isSideboard = board === 'sideboard' ? 1 : 0;
+  const row = db.get(
+    `SELECT id, COALESCE(board_type, CASE WHEN is_sideboard = 1 THEN 'sideboard' ELSE 'mainboard' END) AS board_type
+     FROM deck_cards WHERE deck_id = ? AND printing_id = ? AND is_sideboard = ?`,
+    [deck.id, printingId, isSideboard]
+  );
+  let landed = board;
+  if (!row) {
+    db.run(
+      `INSERT INTO deck_cards (deck_id, printing_id, quantity, is_sideboard, board_type) VALUES (?, ?, ?, ?, ?)`,
+      [deck.id, printingId, quantity, isSideboard, board]
+    );
+  } else if (row.board_type === board || (row.board_type === 'maybeboard' && board === 'mainboard')) {
+    db.run(`UPDATE deck_cards SET quantity = quantity + ?, board_type = ? WHERE id = ?`, [quantity, board, row.id]);
+  } else {
+    // Asked for the maybeboard, but the printing is already in the mainboard: add it there
+    db.run(`UPDATE deck_cards SET quantity = quantity + ? WHERE id = ?`, [quantity, row.id]);
+    landed = row.board_type;
+  }
+  if (isCubeFormat(deck.format)) {
+    const card = db.get(`SELECT c.name FROM printings p JOIN cards c ON p.card_id = c.id WHERE p.id = ?`, [printingId]);
+    logChange(deck.id, 'add', card?.name, quantity, landed);
+  }
+  return landed;
+}
+
 /**
  * A deck can only hold a printing once per is_sideboard value. When a row is switched to a printing
  * another row already uses, combine the two so the copies aren't lost.

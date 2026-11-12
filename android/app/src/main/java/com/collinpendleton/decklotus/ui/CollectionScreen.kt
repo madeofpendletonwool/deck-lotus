@@ -94,17 +94,6 @@ private fun shortMoney(v: Double) = if (v >= 100) wholeMoney.format(v) else mone
 
 private const val CARD_ASPECT = 0.716f
 
-private data class ManaColor(val code: String, val label: String, val fill: Color, val ink: Color)
-
-private val MANA = listOf(
-    ManaColor("W", "White", Color(0xFFF4EBCB), Color(0xFF3A3424)),
-    ManaColor("U", "Blue", Color(0xFF3F86D1), Color.White),
-    ManaColor("B", "Black", Color(0xFF3A3340), Color(0xFFE6E0EA)),
-    ManaColor("R", "Red", Color(0xFFD9573A), Color.White),
-    ManaColor("G", "Green", Color(0xFF3C9659), Color.White),
-    ManaColor("C", "Colorless", Color(0xFFB9B4AA), Color(0xFF2C2A26)),
-)
-
 private val TYPES = listOf("Creature", "Instant", "Sorcery", "Artifact", "Enchantment", "Planeswalker", "Land", "Battle", "Legendary")
 
 @OptIn(ExperimentalMaterial3Api::class)

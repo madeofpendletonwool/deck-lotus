@@ -1,6 +1,7 @@
 import db from '../db/connection.js';
 import { OWNED_PRICE_SQL, OWNED_PRICE_ESTIMATED_SQL, DEFAULT_PRINTING_ORDER_SQL } from './pricingService.js';
 import { parseFinish } from './cardService.js';
+import { addScannedPrintingToDeck, DECK_BOARDS } from './deckService.js';
 
 const INVENTORY_SORTS = {
   name: 'c.name ASC',
@@ -388,16 +389,39 @@ const MAX_SCAN_BATCH = 2000;
  * { scryfallId, finish, quantity }: the scanner identifies exact printings by
  * Scryfall id, so there's no name or set guessing here.
  *
+ * `target` sends the cards to one of the user's decks as well, or instead:
+ * { deckId, board ('mainboard' | 'sideboard' | 'maybeboard'), collection (default true) }.
+ * With collection false the cards only go in the deck, for cards pulled out of a
+ * binder that are already counted. Finish only matters to the collection; decks
+ * don't track it.
+ *
  * The phone retries a batch until it gets an answer. A batch id it has
  * already sent returns the stored result instead of adding the cards again.
  * The whole batch is one transaction: it lands completely or not at all.
+ *
+ * Result: { added, deckAdded, deck: { id, name, board } | null, failed: [{ scryfallId, error }] }.
+ * `added` counts copies added to the collection. If the deck is gone, the cards
+ * still go in the collection when asked; otherwise every item comes back failed,
+ * so the phone keeps them rather than dropping them.
  */
-export function addScannedBatch(userId, batchId, items) {
+export function addScannedBatch(userId, batchId, items, target = {}) {
   if (typeof batchId !== 'string' || batchId.length < 8 || batchId.length > 64) {
     throw Object.assign(new Error('batchId is required (8-64 characters)'), { statusCode: 400 });
   }
   if (!Array.isArray(items) || items.length === 0 || items.length > MAX_SCAN_BATCH) {
     throw Object.assign(new Error(`items must be a non-empty array of at most ${MAX_SCAN_BATCH}`), { statusCode: 400 });
+  }
+  const deckId = target.deckId == null ? null : Number(target.deckId);
+  const board = target.board ?? 'mainboard';
+  const toCollection = target.collection !== false;
+  if (deckId !== null && !Number.isInteger(deckId)) {
+    throw Object.assign(new Error('deckId must be a deck id'), { statusCode: 400 });
+  }
+  if (!DECK_BOARDS.includes(board)) {
+    throw Object.assign(new Error(`board must be one of ${DECK_BOARDS.join(', ')}`), { statusCode: 400 });
+  }
+  if (deckId === null && !toCollection) {
+    throw Object.assign(new Error('Nothing to add to: no deck and collection is false'), { statusCode: 400 });
   }
 
   return db.transaction(() => {
@@ -407,7 +431,12 @@ export function addScannedBatch(userId, batchId, items) {
     );
     if (previous) return { ...JSON.parse(previous.result), duplicate: true };
 
-    const result = { added: 0, failed: [] };
+    const deck = deckId === null ? null
+      : db.get('SELECT id, name, format FROM decks WHERE id = ? AND user_id = ?', [deckId, userId]);
+    const result = { added: 0, deckAdded: 0, deck: null, failed: [] };
+    if (deckId !== null && !deck) result.deckError = 'That deck no longer exists';
+    if (deck) result.deck = { id: deck.id, name: deck.name, board };
+
     // A double-faced card has a printings row per face, both with the same
     // Scryfall id; the lowest id is the one the rest of the app treats as the card.
     const findPrinting = db.prepare('SELECT MIN(id) AS id, card_id FROM printings WHERE scryfall_id = ?');
@@ -435,17 +464,30 @@ export function addScannedBatch(userId, batchId, items) {
         result.failed.push({ scryfallId, error: 'scryfallId and a positive quantity are required' });
         continue;
       }
+      if (result.deckError && !toCollection) {
+        result.failed.push({ scryfallId, error: result.deckError });
+        continue;
+      }
       const printing = findPrinting.get(scryfallId);
       if (!printing?.id) {
         // The phone's card index can be newer than this server's card data.
         result.failed.push({ scryfallId, error: 'Printing not on this server yet (update card data)' });
         continue;
       }
-      upsert.run(userId, printing.id, quantity, finish);
-      markOwned.run(userId, printing.card_id);
-      result.added += quantity;
+      if (toCollection) {
+        upsert.run(userId, printing.id, quantity, finish);
+        markOwned.run(userId, printing.card_id);
+        result.added += quantity;
+      }
+      if (deck) {
+        addScannedPrintingToDeck(deck, printing.id, quantity, board);
+        result.deckAdded += quantity;
+      }
     }
 
+    if (deck && result.deckAdded > 0) {
+      db.run('UPDATE decks SET updated_at = CURRENT_TIMESTAMP WHERE id = ?', [deck.id]);
+    }
     db.run(
       'INSERT INTO inventory_scan_batches (user_id, batch_id, result) VALUES (?, ?, ?)',
       [userId, batchId, JSON.stringify(result)]

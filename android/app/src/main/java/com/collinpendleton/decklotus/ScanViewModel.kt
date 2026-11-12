@@ -18,6 +18,8 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.collinpendleton.decklotus.core.CardIndex
 import com.collinpendleton.decklotus.core.IndexEntry
+import com.collinpendleton.decklotus.data.DeckListItem
+import com.collinpendleton.decklotus.data.DeckTarget
 import com.collinpendleton.decklotus.data.ScannedCard
 import com.collinpendleton.decklotus.data.SessionStore
 import com.collinpendleton.decklotus.scan.CardOcr
@@ -120,15 +122,57 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
      * Moves everything scanned into the collection. The cards leave the scan
      * list straight away; they're safe on disk until the server confirms.
      */
-    fun addToCollection() {
+    fun addToCollection() = deliver(target = null)
+
+    /** Moves everything scanned into a deck (and the collection too, if the target says so). */
+    fun addToDeck(target: DeckTarget) {
+        prefs.edit()
+            .putInt(KEY_LAST_DECK, target.deckId)
+            .putString(KEY_LAST_BOARD, target.board)
+            .putBoolean(KEY_ALSO_COLLECTION, target.collection)
+            .apply()
+        deliver(target)
+    }
+
+    private fun deliver(target: DeckTarget?) {
         val cards = _session.value
         if (cards.isEmpty() || _upload.value == UploadState.Sending) return
         viewModelScope.launch(Dispatchers.IO) {
-            uploads.enqueue(cards.reversed()) // oldest scan first
+            uploads.enqueue(cards.reversed(), target) // oldest scan first
             mutate { list -> list.filterNot { c -> cards.any { it.key == c.key } } }
             send()
         }
     }
+
+    private val prefs = app.getSharedPreferences("scan", android.content.Context.MODE_PRIVATE)
+
+    /** What the deck picker starts with: the last deck, board and collection choice used. */
+    val lastDeckChoice get() = Triple(
+        prefs.getInt(KEY_LAST_DECK, -1).takeIf { it >= 0 },
+        prefs.getString(KEY_LAST_BOARD, "mainboard") ?: "mainboard",
+        prefs.getBoolean(KEY_ALSO_COLLECTION, false),
+    )
+
+    /** Your decks, for the "Add to deck" picker; null while loading, or if it couldn't load. */
+    private val _decks = MutableStateFlow<List<DeckListItem>?>(null)
+    val decks: StateFlow<List<DeckListItem>?> = _decks.asStateFlow()
+    private val _decksError = MutableStateFlow<String?>(null)
+    val decksError: StateFlow<String?> = _decksError.asStateFlow()
+
+    fun loadDecks() {
+        _decksError.value = null
+        viewModelScope.launch {
+            try {
+                _decks.value = api.decks()
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _decksError.value = e.message ?: "Couldn't load your decks"
+            }
+        }
+    }
+
+    private val api = (app as DeckLotusApp).api
 
     fun retryUploads() {
         if (_upload.value == UploadState.Sending) return
@@ -151,18 +195,32 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
                     mutate { list -> val base = System.nanoTime()
                         r.returned.mapIndexed { i, c -> c.copy(key = base + i) } + list }
                 }
-                UploadState.Sent(
-                    buildString {
-                        append(if (r.added == 1) "Added 1 card to your collection" else "Added ${r.added} cards to your collection")
-                        if (r.returned.isNotEmpty()) append(". ${r.returned.size} not on the server yet, kept here: ${r.reasons.firstOrNull().orEmpty()}")
-                    },
-                )
+                UploadState.Sent(sentMessage(r))
             }
             is com.collinpendleton.decklotus.data.UploadOutcome.Offline ->
                 UploadState.Waiting(uploads.pending().sumOf { it.cards.size }, r.message)
             com.collinpendleton.decklotus.data.UploadOutcome.SignedOut ->
                 UploadState.Waiting(uploads.pending().sumOf { it.cards.size }, "Sign in again to finish adding them")
         }
+    }
+
+    private fun sentMessage(r: com.collinpendleton.decklotus.data.UploadOutcome.Done) = buildList {
+        r.decks.groupBy { it.deckName to it.board }.forEach { (k, ds) ->
+            val n = ds.sumOf { it.count }
+            val where = if (k.second == "mainboard") k.first else "${k.first} (${k.second})"
+            add(if (n == 1) "Added 1 card to $where" else "Added $n cards to $where")
+        }
+        if (r.added > 0) add(
+            when {
+                r.decks.isNotEmpty() -> "and your collection"
+                r.added == 1 -> "Added 1 card to your collection"
+                else -> "Added ${r.added} cards to your collection"
+            },
+        )
+        if (isEmpty()) add("Nothing added")
+    }.joinToString(" ").let { base ->
+        if (r.returned.isEmpty()) base
+        else "$base. ${r.returned.size} couldn't be added, kept here: ${r.reasons.firstOrNull().orEmpty()}"
     }
 
     /**
@@ -336,5 +394,11 @@ class ScanViewModel(app: Application) : AndroidViewModel(app) {
     override fun onCleared() {
         ocr.close()
         tones?.release()
+    }
+
+    private companion object {
+        const val KEY_LAST_DECK = "last_deck"
+        const val KEY_LAST_BOARD = "last_board"
+        const val KEY_ALSO_COLLECTION = "also_collection"
     }
 }

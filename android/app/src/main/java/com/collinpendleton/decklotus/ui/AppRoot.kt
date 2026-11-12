@@ -26,6 +26,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.collinpendleton.decklotus.AppViewModel
 import com.collinpendleton.decklotus.CollectionViewModel
+import com.collinpendleton.decklotus.DecksViewModel
 import com.collinpendleton.decklotus.ScanViewModel
 import com.collinpendleton.decklotus.UploadState
 import com.collinpendleton.decklotus.data.Account
@@ -33,6 +34,7 @@ import com.collinpendleton.decklotus.data.Account
 private enum class Tab(val label: String, val icon: ImageVector) {
     SCAN("Scan", LotusIcons.Scan),
     COLLECTION("Collection", LotusIcons.Collection),
+    DECKS("Decks", LotusIcons.Decks),
     ACCOUNT("Account", LotusIcons.Account),
 }
 
@@ -53,6 +55,7 @@ private fun MainShell(account: Account, onSignOut: () -> Unit) {
     // Activity-scoped, so the camera pipeline, scan list and collection survive tab switches.
     val scan: ScanViewModel = viewModel()
     val collection: CollectionViewModel = viewModel()
+    val decks: DecksViewModel = viewModel()
     var tab by rememberSaveable { mutableIntStateOf(Tab.SCAN.ordinal) }
     val pending by scan.pendingCount.collectAsStateWithLifecycle()
     val upload by scan.upload.collectAsStateWithLifecycle()
@@ -62,7 +65,14 @@ private fun MainShell(account: Account, onSignOut: () -> Unit) {
     LaunchedEffect(account.username, account.serverUrl) { if (pending > 0) scan.retryUploads() }
     // Freshly uploaded cards should be there when you look. Reloading only after an upload
     // (not on every visit) keeps the pages you'd scrolled through, and where you were.
-    LaunchedEffect(upload) { if (upload is UploadState.Sent) collection.reload() }
+    LaunchedEffect(upload) {
+        if (upload is UploadState.Sent) {
+            collection.reload()
+            // Cards may have gone into a deck, which changes what it's missing
+            if (decks.state.value.loaded) decks.reload()
+        }
+    }
+    val decksList = rememberLazyListState()
     val collectionGrid = rememberLazyGridState()
     val collectionList = rememberLazyListState()
 
@@ -95,6 +105,7 @@ private fun MainShell(account: Account, onSignOut: () -> Unit) {
             when (Tab.entries[tab]) {
                 Tab.SCAN -> ScanScreen(scan)
                 Tab.COLLECTION -> CollectionScreen(collection, collectionGrid, collectionList)
+                Tab.DECKS -> DecksScreen(decks, decksList)
                 Tab.ACCOUNT -> AccountScreen(account, index, pending, onSignOut)
             }
         }

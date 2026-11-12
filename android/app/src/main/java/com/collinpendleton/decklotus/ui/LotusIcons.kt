@@ -86,6 +86,13 @@ object LotusIcons {
         stroke { moveTo(10f, 7f); lineTo(20f, 7f); moveTo(10f, 17f); lineTo(20f, 17f) }
     }
 
+    val Decks = icon("Decks") {
+        // A deck box with a card standing out of the top.
+        stroke { roundRect(4.5f, 9f, 15f, 12f, 2f) }
+        stroke { moveTo(4.5f, 13f); lineTo(19.5f, 13f) }
+        stroke { moveTo(8f, 9f); lineTo(8f, 4.5f); arcTo(1.2f, 1.2f, 0f, false, true, 9.2f, 3.3f); lineTo(14.8f, 3.3f); arcTo(1.2f, 1.2f, 0f, false, true, 16f, 4.5f); lineTo(16f, 9f) }
+    }
+
     val Account = icon("Account") {
         stroke { circle(12f, 8.5f, 4f) }
         stroke {

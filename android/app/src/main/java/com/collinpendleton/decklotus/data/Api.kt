@@ -109,14 +109,120 @@ data class OwnershipUsage(val deckUsage: List<DeckUsage> = emptyList())
 @Serializable
 data class ScanItem(val scryfallId: String, val finish: String, val quantity: Int)
 
+/**
+ * [deckId] sends the cards to that deck as well, or only there when [collection] is false.
+ * Null fields and the default [collection] aren't sent.
+ */
 @Serializable
-data class ScanBatchRequest(val batchId: String, val items: List<ScanItem>)
+data class ScanBatchRequest(
+    val batchId: String,
+    val items: List<ScanItem>,
+    val deckId: Int? = null,
+    val board: String? = null,
+    val collection: Boolean = true,
+)
+
+@Serializable
+data class ScanDeck(val id: Int, val name: String, val board: String = "mainboard")
 
 @Serializable
 data class ScanFailure(val scryfallId: String? = null, val error: String)
 
 @Serializable
-data class ScanBatchResult(val added: Int, val failed: List<ScanFailure> = emptyList(), val duplicate: Boolean = false)
+data class ScanBatchResult(
+    /** Copies added to the collection. */
+    val added: Int,
+    val failed: List<ScanFailure> = emptyList(),
+    val duplicate: Boolean = false,
+    val deckAdded: Int = 0,
+    val deck: ScanDeck? = null,
+    val deckError: String? = null,
+)
+
+// ---- Decks ----
+
+@Serializable
+data class DeckListItem(
+    val id: Int,
+    val name: String,
+    val format: String? = null,
+    @SerialName("mainboard_count") val mainboardCount: Int = 0,
+    @SerialName("sideboard_count") val sideboardCount: Int = 0,
+    @SerialName("maybeboard_count") val maybeboardCount: Int = 0,
+    @SerialName("preview_image") val previewImage: String? = null,
+    @SerialName("updated_at") val updatedAt: String? = null,
+) {
+    val isCube get() = format?.contains("cube", ignoreCase = true) == true
+}
+
+@Serializable
+private data class DeckList(val decks: List<DeckListItem> = emptyList())
+
+/** How much of a deck you own. Basic lands are left out of every count. */
+@Serializable
+data class DeckOwnership(
+    val cards: Int = 0,
+    val ownedCards: Int = 0,
+    val missingCards: Int = 0,
+    val missingCopies: Int = 0,
+    /** Owned, but other decks want the same copies. */
+    val sharedCards: Int = 0,
+    /** What the missing copies cost. */
+    val cost: Double = 0.0,
+    /** Missing cards with no price at all. */
+    val unpriced: Int = 0,
+)
+
+@Serializable
+private data class DeckSummaries(val summaries: Map<String, DeckOwnership> = emptyMap())
+
+@Serializable
+data class DeckCard(
+    @SerialName("deck_card_id") val deckCardId: Int,
+    val quantity: Int,
+    @SerialName("board_type") val board: String = "mainboard",
+    @SerialName("is_commander") val isCommander: Int = 0,
+    @SerialName("card_id") val cardId: Int,
+    val name: String,
+    @SerialName("mana_cost") val manaCost: String? = null,
+    val cmc: Double? = null,
+    @SerialName("type_line") val typeLine: String? = null,
+    @SerialName("image_url") val imageUrl: String? = null,
+    @SerialName("set_code") val setCode: String? = null,
+    @SerialName("collector_number") val collectorNumber: String? = null,
+)
+
+@Serializable
+data class DeckDetail(
+    val id: Int,
+    val name: String,
+    val format: String? = null,
+    val description: String? = null,
+    val cards: List<DeckCard> = emptyList(),
+)
+
+@Serializable
+private data class DeckResponse(val deck: DeckDetail)
+
+@Serializable
+data class OtherDeck(@SerialName("deck_id") val deckId: Int, val name: String, val quantity: Int = 0)
+
+/** One card of a deck against your collection. */
+@Serializable
+data class OwnershipCard(
+    @SerialName("card_id") val cardId: Int,
+    val name: String,
+    val need: Int = 0,
+    val owned: Int = 0,
+    val missing: Int = 0,
+    /** "owned", "shared" (other decks want these copies too), "partial" or "missing". */
+    val status: String = "missing",
+    @SerialName("price_each") val priceEach: Double? = null,
+    @SerialName("other_decks") val otherDecks: List<OtherDeck> = emptyList(),
+)
+
+@Serializable
+data class DeckReport(val summary: DeckOwnership = DeckOwnership(), val cards: List<OwnershipCard> = emptyList())
 
 @Serializable
 private data class LoginRequest(val username: String, val password: String)
@@ -258,6 +364,16 @@ class Api(private val auth: AuthStore) {
     }
 
     suspend fun uploadScans(batch: ScanBatchRequest): ScanBatchResult = call(post("/api/inventory/scans", batch))
+
+    suspend fun decks(): List<DeckListItem> = call<DeckList>(get("/api/decks")).decks
+
+    /** Ownership numbers for every deck, by deck id. */
+    suspend fun deckSummaries(): Map<Int, DeckOwnership> =
+        call<DeckSummaries>(get("/api/decks/collection-summary")).summaries.mapKeys { it.key.toInt() }
+
+    suspend fun deck(id: Int): DeckDetail = call<DeckResponse>(get("/api/decks/$id")).deck
+
+    suspend fun deckReport(id: Int): DeckReport = call(get("/api/decks/$id/collection"))
 
     companion object {
         private const val USER_AGENT = "DeckLotus-Android"

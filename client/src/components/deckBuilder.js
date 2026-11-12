@@ -447,8 +447,8 @@ async function loadDeck(deckId) {
     // Load and render stats
     await loadDeckStats();
 
-    // Auto-deal example hand
-    dealExampleHand();
+    // Auto-deal example hand (quietly: an empty deck just shows the empty state)
+    dealExampleHand({ silent: true });
 
     hideLoading();
   } catch (error) {
@@ -724,6 +724,13 @@ function renderDeckCards() {
 
   // Add event listeners
   setupCardControls();
+
+  // A hand drawn from cards that are no longer in the mainboard is stale
+  if (exampleHand.length > 0 && !(currentDeck?.cards || []).some(isMainboardCard)) {
+    exampleHand = [];
+    renderExampleHand();
+    updateHandStats();
+  }
 }
 
 function renderCardsList(cards) {
@@ -2432,16 +2439,15 @@ async function checkFormatLegality(format, formatLabel) {
 }
 
 // Example Hand Functions
-function dealExampleHand() {
-  if (!currentDeck || !currentDeck.cards || currentDeck.cards.length === 0) {
-    showToast('Add cards to your deck first', 'warning');
-    return;
-  }
-
+function dealExampleHand({ silent = false } = {}) {
   // Get mainboard cards only
-  const mainboardCards = currentDeck.cards.filter(isMainboardCard);
+  const mainboardCards = (currentDeck?.cards || []).filter(isMainboardCard);
   if (mainboardCards.length === 0) {
-    showToast('Add cards to your mainboard first', 'warning');
+    // Never leave a previous deck's hand on screen
+    exampleHand = [];
+    renderExampleHand();
+    updateHandStats();
+    if (!silent) showToast('Add cards to your mainboard first', 'warning');
     return;
   }
 
@@ -2501,7 +2507,10 @@ function renderExampleHand() {
   const handContainer = document.getElementById('example-hand');
 
   if (exampleHand.length === 0) {
-    handContainer.innerHTML = '<div class="example-hand-empty">Press New hand to draw 7 random cards from your deck</div>';
+    const hasMainboard = (currentDeck?.cards || []).some(isMainboardCard);
+    handContainer.innerHTML = `<div class="example-hand-empty">${hasMainboard
+      ? 'Press New hand to draw 7 random cards from your deck'
+      : 'Add cards to your mainboard to draw a sample hand'}</div>`;
     return;
   }
 

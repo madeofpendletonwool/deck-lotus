@@ -964,7 +964,7 @@ button.btn-icon.active { background: var(--primary-soft); color: var(--primary-l
   .deck-list[data-layout='ultra-compact'] { columns: 2; column-gap: var(--space-5); }
 }
 
-.deck-list-empty { padding: var(--space-8) var(--space-4); text-align: center; color: var(--text-muted); }
+.deck-list-empty { column-span: all; padding: var(--space-8) var(--space-4); text-align: center; color: var(--text-muted); }
 .deck-list-empty i { display: block; margin-bottom: var(--space-2); font-size: 2rem; }
 
 .card-type-group { margin-bottom: var(--space-4); break-inside: avoid; }

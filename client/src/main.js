@@ -22,8 +22,8 @@ const PAGE_TITLES = {
 
 /** Work out what a URL points at. Anything unrecognized lands on the deck list. */
 function parseRoute(pathname) {
-  const deck = pathname.match(/^\/decks\/(\d+)\/?$/);
-  if (deck) return { page: 'decks', deckId: deck[1] };
+  const deck = pathname.match(/^\/decks\/(\d+)(?:\/(analysis|playtest|collection))?\/?$/);
+  if (deck) return { page: 'decks', deckId: deck[1], view: deck[2] || 'build' };
 
   const page = pathname.replace(/^\/|\/$/g, '');
   return { page: PAGE_TITLES[page] ? page : 'decks', deckId: null };
@@ -98,11 +98,11 @@ class App {
 
   /** Show whatever the current URL points at. */
   route() {
-    const { page, deckId } = parseRoute(window.location.pathname);
+    const { page, deckId, view } = parseRoute(window.location.pathname);
     if (deckId) {
       this.setActiveNav(page);
       document.title = 'Deck Lotus';
-      window.dispatchEvent(new CustomEvent('open-deck', { detail: { deckId } }));
+      window.dispatchEvent(new CustomEvent('open-deck', { detail: { deckId, view } }));
     } else {
       this.showPage(page);
     }

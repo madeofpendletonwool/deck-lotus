@@ -7,6 +7,7 @@ import {
   getOwnedSets,
 } from '../services/inventoryService.js';
 import { setOwnedPrintingQuantity } from '../services/cardService.js';
+import { getContestedCards } from '../services/collectionService.js';
 import { authenticate } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -54,6 +55,18 @@ router.get('/stats', authenticate, (req, res, next) => {
   try {
     const stats = getInventoryStats(req.user.id);
     res.json(stats);
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * GET /api/inventory/contested
+ * Cards two or more of your decks want more copies of than you own
+ */
+router.get('/contested', authenticate, (req, res, next) => {
+  try {
+    res.json(getContestedCards(req.user.id));
   } catch (error) {
     next(error);
   }

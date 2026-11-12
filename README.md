@@ -18,6 +18,19 @@
 - **Drag & Drop** — reorder cards between boards
 - **Layout Views** — full card, compact, and ultra-compact views
 
+### Deck Analysis and Playtesting
+Every deck (and every shared deck link) has **Analysis** and **Playtest** views next to the list, at `/decks/:id/analysis` and `/decks/:id/playtest`.
+- **Mana Base Check** — for each colored cost, the chance of having enough sources of that color by the turn you'd cast it, following Frank Karsten's method: on curve, given you hit your land drops, London mulligans, a 90% target. Shows the fewest sources that would reach 90% for your deck's size and land count, on the play or the draw. Fetch lands count for the colors they can actually find in your deck, double-faced lands and "any color" lands (Command Tower follows your commander) count too, and a breakdown shows how each land was counted
+- **Draw Odds** — "at least 3 lands and a 2-drop by turn 3": combine lands, mana values, creatures, color sources, specific cards or any search (`t:creature mv<=2`), on the play or draw, with or without a London mulligan rule, and see the chance for every turn
+- **Goldfish Playtester** — London mulligans (choose what to bottom; first one free in Commander), turns that untap and draw, a battlefield you tap by clicking, counters, tokens, graveyard, exile, command zone with commander tax, scry/surveil, library search, mill, life total, a game log, undo, and keyboard shortcuts
+
+### Building From Your Collection
+Every deck has a **Collection** view at `/decks/:id/collection` that checks it against the cards you own (any printing counts; maybeboards and basic lands don't).
+- **What you own and what the rest costs** — cards and copies owned, the cost to finish at the deck's printings or the cheapest ones, and a list you can paste into TCGplayer or Mana Pool mass entry. "Alongside my other decks" counts copies your other decks use as taken, to show what to buy to have every deck built at once
+- **What in your binder fits** — owned cards in the commander's color identity (or the deck's colors), legal in the format and not already in the deck, with search, type filters, free-copies-only and EDHREC sort; add one and it goes in as the printing you own
+- **Contested cards** — which decks are fighting over your only copy, on each deck and across all of them from the Inventory page
+- **Shared decks** — signed in, a shared deck link shows how much of it you already own
+
 ### Cube Building
 - **Cubes** — a cube is a deck with the Cube format: pricing, printings, ownership, sharing and export all work on it
 - **Table and Visual Views** — columns by color (CubeCobra's categories, including Hybrid), rows by mana value or card type, or a card image spoiler

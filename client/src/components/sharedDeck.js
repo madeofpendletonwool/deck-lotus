@@ -3,6 +3,8 @@ import { showLoading, hideLoading, formatMana, showToast } from '../utils/ui.js'
 import { openExportModal } from './exportModal.js';
 import { formatLabel, isCubeFormat } from '../../../shared/formats.js';
 import { COLOR_CATEGORIES, COLORS, colorCategoryOf, sortForDisplay, tagsOf } from '../utils/cube.js';
+import { DeckTools } from './deckAnalysis.js';
+import { DeckCollection } from './deckCollection.js';
 
 // Board of a shared-deck card (board_type authoritative; is_sideboard is legacy).
 const sharedBoardOf = (c) => c.board_type || (c.is_sideboard ? 'sideboard' : 'mainboard');
@@ -12,8 +14,45 @@ const isSharedSideboard = (c) => sharedBoardOf(c) === 'sideboard';
 
 let sharedDeck = null;
 let isAuthenticated = false;
+let sharedTools = null;
+let sharedCollection = null;
+
+const shareToken = () => window.location.pathname.split('/share/')[1];
+
+/** Deck list, analysis, playtest, or (signed in) the deck against your collection. Cubes only have the list. */
+function setSharedView(view) {
+  const cube = isCubeFormat(sharedDeck?.format);
+  const active = cube || (view === 'collection' && !isAuthenticated) ? 'build' : view;
+  document.querySelector('[data-shared-view="collection"]').classList.toggle('hidden', !isAuthenticated);
+  document.getElementById('shared-view-bar').classList.toggle('hidden', cube);
+  document.querySelectorAll('[data-shared-view]').forEach((btn) => {
+    const on = btn.dataset.sharedView === active;
+    btn.classList.toggle('active', on);
+    btn.setAttribute('aria-selected', String(on));
+  });
+  const panel = active !== 'build';
+  const tools = active === 'analysis' || active === 'playtest';
+  document.getElementById('shared-deck-view').classList.toggle('hidden', !tools);
+  document.getElementById('shared-collection-view').classList.toggle('hidden', active !== 'collection');
+  document.querySelector('#shared-deck-page .deck-builder-content').classList.toggle('hidden', panel);
+  sharedTools.show(tools ? active : null);
+  sharedCollection.show(active === 'collection');
+}
 
 export function setupSharedDeck() {
+  // Anyone with the link can check the mana and goldfish the deck
+  sharedTools = new DeckTools({ container: document.getElementById('shared-deck-view'), getDeck: () => sharedDeck });
+  // Signed in, you can see how much of someone's deck you already own
+  sharedCollection = new DeckCollection({
+    container: document.getElementById('shared-collection-view'),
+    getDeck: () => sharedDeck,
+    fetchReport: () => api.getSharedDeckCollection(shareToken()),
+    deckLinks: false, // The shared page stands alone, without the app's navigation
+  });
+  document.querySelectorAll('[data-shared-view]').forEach((btn) => {
+    btn.addEventListener('click', () => setSharedView(btn.dataset.sharedView));
+  });
+
   // Tab switching
   document.querySelectorAll('#shared-deck-page .tab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -88,6 +127,9 @@ export async function loadSharedDeck(token) {
 
     // Render stats
     renderSharedDeckStats();
+    sharedTools.reset();
+    sharedCollection.reset();
+    setSharedView('build');
 
     // Show the shared deck page
     document.querySelectorAll('.page').forEach(page => page.classList.add('hidden'));

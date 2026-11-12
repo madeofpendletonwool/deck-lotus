@@ -1,5 +1,5 @@
 import api from '../services/api.js';
-import { showLoading, hideLoading, formatMana, showToast, showError, confirmDialog } from '../utils/ui.js';
+import { showLoading, hideLoading, formatMana, showToast, showError, confirmDialog, openDrawer, closeDrawer, copyText } from '../utils/ui.js';
 import { showCardDetail } from './cards.js';
 
 let inventoryData = null;
@@ -17,10 +17,16 @@ let searchTimeout = null;
 let quickSearchTimeout = null;
 let selectedCards = new Set(); // Track selected card IDs for multi-select
 let selectMode = false; // Whether multi-select mode is active
+let contested = null; // Cards your decks want more copies of than you own
+let lastStats = null;
 
 export function setupInventory() {
   // Load inventory data when page is shown
-  window.addEventListener('page:inventory', loadInventoryData);
+  window.addEventListener('page:inventory', () => {
+    loadInventoryData();
+    loadContested();
+  });
+  setupContested();
 
   // Setup filter listeners
   setupFilterListeners();
@@ -710,6 +716,7 @@ async function loadInventoryData() {
     inventoryData = inventoryResult;
     totalPages = inventoryResult.pagination.totalPages || 1;
 
+    lastStats = statsResult;
     renderStats(statsResult);
     renderInventory();
     renderPagination();
@@ -762,7 +769,86 @@ function renderStats(stats) {
         <div class="stat-label">Est. Value</div>
       </div>
     </div>
+    ${contested ? `<button type="button" class="inventory-stat inventory-stat-btn${contested.cards.length ? ' is-warning' : ''}" id="inventory-contested-btn" title="Cards two or more of your decks want more copies of than you own">
+      <i class="ph ph-arrows-left-right"></i>
+      <div>
+        <div class="stat-value">${contested.cards.length.toLocaleString()}</div>
+        <div class="stat-label">Contested</div>
+      </div>
+    </button>` : ''}
   `;
+}
+
+// ---- Contested cards: decks fighting over the same copies ----
+
+async function loadContested() {
+  try {
+    contested = await api.getContestedCards();
+  } catch {
+    contested = null; // The tile simply doesn't show
+  }
+  if (lastStats) renderStats(lastStats);
+  if (!document.getElementById('contested-drawer').classList.contains('hidden')) renderContested();
+}
+
+function setupContested() {
+  document.getElementById('inventory-stats').addEventListener('click', (e) => {
+    if (!e.target.closest('#inventory-contested-btn')) return;
+    renderContested();
+    openDrawer('contested-drawer');
+  });
+  document.getElementById('contested-body').addEventListener('click', (e) => {
+    const link = e.target.closest('[data-deck-link]');
+    if (link) {
+      if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+      e.preventDefault();
+      closeDrawer('contested-drawer');
+      window.dispatchEvent(new CustomEvent('navigate', { detail: { path: link.getAttribute('href') } }));
+      return;
+    }
+    const card = e.target.closest('[data-card]');
+    if (card) {
+      showCardDetail(Number(card.dataset.card));
+      return;
+    }
+    if (e.target.closest('[data-action="copy-contested"]')) {
+      const text = contested.cards.map((c) => `${c.short} ${c.name}`).join('\n');
+      copyText(text).then((ok) => showToast(ok ? 'Copied. It pastes into TCGplayer or Mana Pool mass entry.' : 'Couldn\'t copy to the clipboard', ok ? 'success' : 'error'));
+    }
+  });
+}
+
+function renderContested() {
+  const body = document.getElementById('contested-body');
+  if (!contested) {
+    body.innerHTML = '<p class="muted">Couldn\'t work out which cards are contested.</p>';
+    return;
+  }
+  const { cards, shortCopies, cost } = contested;
+  if (!cards.length) {
+    body.innerHTML = `<div class="grid-message"><i class="ph ph-check-circle"></i><h3>No conflicts</h3><p>You own enough copies for every deck to be built at once.</p></div>`;
+    return;
+  }
+  const esc = (t) => String(t ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  body.innerHTML = `
+    <p class="an-note">Cards that two or more of your decks list, with fewer copies in your collection than they want between them. Maybeboards don't count, and neither do basic lands.</p>
+    <div class="col-actions">
+      <span><strong>${shortCopies.toLocaleString()}</strong> ${shortCopies === 1 ? 'copy' : 'copies'} short${cost ? `, about <strong>$${cost.toFixed(2)}</strong> at the cheapest printings` : ''}</span>
+      <button type="button" class="btn btn-secondary btn-sm" data-action="copy-contested"><i class="ph ph-copy"></i> Copy what to buy</button>
+    </div>
+    <ul class="contested-list">
+      ${cards.map((c) => `<li class="contested-item">
+        <button type="button" class="contested-img" data-card="${c.card_id}" aria-label="${esc(c.name)}">${c.image_url ? `<img src="${esc(c.image_url.replace('/normal/', '/small/'))}" alt="" loading="lazy">` : ''}</button>
+        <div class="contested-main">
+          <div class="contested-head">
+            <button type="button" class="link-btn" data-card="${c.card_id}">${esc(c.name)}</button>
+            <span class="contested-count">${c.owned === 1 ? 'your only copy' : `you own ${c.owned}`}, ${c.decks.length} decks want ${c.demand}</span>
+          </div>
+          <div class="contested-decks">${c.decks.map((d) => `<a class="col-deck" href="/decks/${d.deck_id}" data-deck-link="${d.deck_id}">${esc(d.name)}${d.quantity > 1 ? ` <span class="muted">×${d.quantity}</span>` : ''}</a>`).join('')}</div>
+        </div>
+        <div class="contested-short"><strong>${c.short}</strong> short${c.price_each != null ? `<span class="muted">$${(c.price_each * c.short).toFixed(2)}</span>` : ''}</div>
+      </li>`).join('')}
+    </ul>`;
 }
 
 function renderInventory() {

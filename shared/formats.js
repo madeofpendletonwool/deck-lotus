@@ -260,7 +260,8 @@ export function copyLimitOverride(card) {
   return null;
 }
 
-function legalityStatus(card, key) {
+/** 'Legal', 'Restricted', 'Banned', null (not legal), or undefined when the card has no legality data. */
+export function legalityStatus(card, key) {
   if (!key) return 'Legal';
   const legalities = parseJson(card.legalities);
   if (!legalities) return undefined; // Unknown: don't flag cards we have no data for

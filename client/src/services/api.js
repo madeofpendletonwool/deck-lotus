@@ -221,6 +221,27 @@ class ApiClient {
     });
   }
 
+  /** How much of a deck you own, what the rest costs, and which copies other decks also claim */
+  async getDeckCollection(deckId) {
+    return this.request(`/decks/${deckId}/collection`);
+  }
+
+  /** The same, for someone else's shared deck against your collection */
+  async getSharedDeckCollection(token) {
+    return this.request(`/decks/share/${encodeURIComponent(token)}/collection`);
+  }
+
+  /** Owned cards that fit a deck: { q, type, free, sort, colors, offset, limit } */
+  async getBinderFits(deckId, params = {}) {
+    const query = new URLSearchParams(Object.entries(params).filter(([, v]) => v !== '' && v != null && v !== false));
+    return this.request(`/decks/${deckId}/collection/binder?${query}`);
+  }
+
+  /** Cards two or more of your decks want more copies of than you own */
+  async getContestedCards() {
+    return this.request('/inventory/contested');
+  }
+
   async getDeckHistory(deckId) {
     return this.request(`/decks/${deckId}/history`);
   }

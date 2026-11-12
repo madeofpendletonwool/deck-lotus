@@ -7,6 +7,11 @@ import { resolveRules, canLead, canPairCommanders, isCubeFormat, getFormat, form
 import { fillFormatSelect, formatOptionsHtml } from '../utils/formatUi.js';
 import { compileQuery } from '../utils/cardQuery.js';
 import { setupCubeTools, setCubeMode, renderCubeBoard, refreshCube, cubeViewShowsList, clearCubeSelection } from './cubeTools.js';
+import { DeckTools } from './deckAnalysis.js';
+import { DeckCollection } from './deckCollection.js';
+import { missingRows } from '../../../shared/collection.js';
+import { shuffle } from '../utils/cube.js';
+import { hypergeometricAtLeast } from '../utils/manaMath.js';
 
 let currentDeck = null;
 let currentDeckId = null;
@@ -16,6 +21,9 @@ let saveTimer = null;
 let currentFilter = { cmc: null, color: null, ownership: null }; // Filter state for deck cards (null, 'owned', 'not-owned')
 let deckFilterQuery = ''; // Name filter for deck cards
 let exampleHand = []; // Current example hand
+let deckView = 'build'; // 'build' | 'analysis' | 'playtest' | 'collection' (decks that aren't cubes)
+let deckTools = null; // Analysis and playtest views
+let deckCollection = null; // The deck against your collection
 let activeTab = 'mainboard'; // Track which tab is currently active ('mainboard', 'sideboard', or 'maybeboard')
 let pricingMode = false; // Track if pricing mode is enabled
 let setGroupMode = false; // Track if set grouping mode is enabled
@@ -159,6 +167,34 @@ export function setupDeckBuilder() {
     rerender: () => renderDeckCards(),
   });
 
+  // Analysis and playtest views for decks that aren't cubes
+  deckTools = new DeckTools({
+    container: document.getElementById('deck-view'),
+    getDeck: () => currentDeck,
+    showCard: (card) => card.card_id && showCardDetail(card.card_id),
+    preview: (src, e) => showCardPreview(src, e),
+    hidePreview: () => hideCardPreview(),
+  });
+  // Collection view: what you own of the deck, what the rest costs, what in your binder fits
+  deckCollection = new DeckCollection({
+    container: document.getElementById('deck-collection-view'),
+    getDeck: () => currentDeck,
+    fetchReport: () => api.getDeckCollection(currentDeckId),
+    fetchBinder: (params) => api.getBinderFits(currentDeckId, params),
+    addCard: (card) => addOwnedCard(card),
+    buyMissing: () => {
+      openBuyDeckModal();
+      document.getElementById('copy-non-owned-only').checked = true;
+    },
+    showCard: (card) => card.card_id && showCardDetail(card.card_id),
+    preview: (src, e) => showCardPreview(src, e),
+    hidePreview: () => hideCardPreview(),
+  });
+  document.querySelectorAll('.deck-view-btn').forEach((btn) => {
+    btn.addEventListener('click', () => setDeckView(btn.dataset.deckView));
+  });
+  document.getElementById('playtest-hand-btn').addEventListener('click', () => setDeckView('playtest'));
+
   // Buy Deck Modal
   buyDeckBtn.addEventListener('click', () => {
     if (!currentDeck || !currentDeck.cards || currentDeck.cards.length === 0) {
@@ -194,9 +230,9 @@ export function setupDeckBuilder() {
   // Optimizer button
   document.getElementById('run-optimizer-btn').addEventListener('click', async () => {
     const nonOwnedOnly = document.getElementById('copy-non-owned-only')?.checked || false;
-    let cards = currentDeck?.cards || [];
-    if (nonOwnedOnly) cards = cards.filter(c => !c.is_owned);
-    if (!cards.length) { showToast('No cards to optimize', 'warning'); return; }
+    let cards = (currentDeck?.cards || []).filter((c) => !isMaybeboardCard(c));
+    if (nonOwnedOnly) cards = missingRows(cards);
+    if (!cards.length) { showToast(nonOwnedOnly ? 'You own every card in this deck' : 'No cards to optimize', 'warning'); return; }
 
     const model = document.getElementById('optimizer-strategy').value;
     const btn = document.getElementById('run-optimizer-btn');
@@ -418,8 +454,15 @@ export function setupDeckBuilder() {
 
   // Listen for open deck event
   window.addEventListener('open-deck', async (e) => {
-    const { deckId } = e.detail;
+    const { deckId, view } = e.detail;
+    // Moving between this deck's own views (back/forward) doesn't reload it
+    const builderOpen = !document.getElementById('deck-builder-page').classList.contains('hidden');
+    if (builderOpen && currentDeck && String(deckId) === String(currentDeckId)) {
+      setDeckView(view, { push: false });
+      return;
+    }
     showDeckBuilder();
+    deckView = view || 'build';
     await loadDeck(deckId);
   });
 
@@ -463,8 +506,10 @@ async function loadDeck(deckId) {
     activeTab = 'mainboard';
     switchTab('mainboard');
 
-    // Clear previous example hand
+    // Clear previous example hand and playtest game
     exampleHand = [];
+    deckTools.reset();
+    deckCollection.reset();
 
     // Populate deck info
     document.getElementById('deck-name').value = currentDeck.name;
@@ -663,6 +708,17 @@ async function addCardToDeck(cardId, knownPrintingId = null, cardName = 'Card') 
   }
 }
 
+/** Add a card from your binder to the main deck, as the printing you own. */
+async function addOwnedCard(card) {
+  const deckId = currentDeckId;
+  const updated = await api.addCardToDeck(deckId, card.printing_id, 1, false, false, 'mainboard');
+  if (deckId !== currentDeckId) return; // Another deck was opened meanwhile
+  currentDeck = updated.deck;
+  renderDeckCards();
+  showToast(`Added ${card.name} to the main deck`, 'success', 1500);
+  loadDeckStats();
+}
+
 const smallImage = (url) => (url ? url.replace('/normal/', '/small/') : '');
 
 const LAYOUT_PREFERENCE_KEY = 'deckListLayout';
@@ -782,6 +838,8 @@ function renderDeckCards() {
   setupCardControls();
 
   if (cube) refreshCube();
+  else if (deckView === 'collection') deckCollection.refresh();
+  else if (deckView !== 'build') deckTools.refresh();
   scheduleFormatStatus();
 
   // A hand drawn from cards that are no longer in the mainboard is stale
@@ -813,6 +871,39 @@ function applyFormatMode() {
   if (cube && activeTab === 'sideboard') switchTab('mainboard');
   if (!cube) clearCubeSelection();
   setCubeMode(cube);
+  applyDeckView();
+}
+
+const DECK_VIEWS = ['analysis', 'playtest', 'collection'];
+
+/** Switch between Build, Analysis, Playtest and Collection, keeping the URL in step. */
+function setDeckView(view, { push = true } = {}) {
+  deckView = DECK_VIEWS.includes(view) ? view : 'build';
+  if (push && currentDeckId) {
+    const path = `/decks/${currentDeckId}${deckView === 'build' ? '' : `/${deckView}`}`;
+    if (window.location.pathname !== path) window.history.pushState(null, '', path);
+  }
+  applyDeckView();
+}
+
+function applyDeckView() {
+  const cube = isCubeFormat(currentDeck?.format);
+  const view = cube ? 'build' : deckView; // Cubes have their own views
+  document.getElementById('deck-view-bar').classList.toggle('hidden', cube);
+  document.querySelectorAll('.deck-view-btn').forEach((btn) => {
+    const active = btn.dataset.deckView === view;
+    btn.classList.toggle('active', active);
+    btn.setAttribute('aria-selected', String(active));
+  });
+  const panel = view !== 'build';
+  const tools = view === 'analysis' || view === 'playtest';
+  document.getElementById('deck-view').classList.toggle('hidden', !tools);
+  document.getElementById('deck-collection-view').classList.toggle('hidden', view !== 'collection');
+  if (!cube) document.querySelector('#deck-builder-page .deck-builder-content').classList.toggle('hidden', panel);
+  document.querySelector('#deck-builder-page .example-hand-section').classList.toggle('hidden', panel);
+  hideCardPreview();
+  deckTools.show(tools ? view : null);
+  deckCollection.show(view === 'collection');
 }
 
 // ---- Live format check ----
@@ -1826,10 +1917,11 @@ function generateDeckList() {
   let mainboardCards = currentDeck.cards.filter(isMainboardCard);
   let sideboardCards = currentDeck.cards.filter(isSideboardCard);
 
-  // Filter for non-owned cards if checkbox is checked
+  // Only the copies you're short of (owned copies go to the mainboard first)
   if (nonOwnedOnly) {
-    mainboardCards = mainboardCards.filter(c => !c.is_owned);
-    sideboardCards = sideboardCards.filter(c => !c.is_owned);
+    const short = missingRows([...mainboardCards, ...sideboardCards]);
+    mainboardCards = short.filter(isMainboardCard);
+    sideboardCards = short.filter(isSideboardCard);
   }
 
   const mainboard = mainboardCards
@@ -2619,8 +2711,8 @@ function dealExampleHand({ silent = false } = {}) {
     }
   });
 
-  // Shuffle and draw 7 cards
-  const shuffled = cardPool.sort(() => Math.random() - 0.5);
+  // Shuffle and draw 7 cards (a sort with a random comparator isn't a fair shuffle)
+  const shuffled = shuffle(cardPool);
   exampleHand = shuffled.slice(0, Math.min(7, shuffled.length));
 
   renderExampleHand();
@@ -2743,8 +2835,11 @@ function updateHandStats() {
   // where n = hand size (7), K = lands in deck, N = total cards
   const handSize = 7;
   const expectedLands = (handSize * totalLands / totalCards).toFixed(2);
+  const keepable = totalCards >= handSize
+    ? hypergeometricAtLeast(totalCards, totalLands, handSize, 2) - hypergeometricAtLeast(totalCards, totalLands, handSize, 6)
+    : 0;
 
-  statsContainer.innerHTML = `Average number of lands in opening hand: <strong>${expectedLands}</strong>`;
+  statsContainer.innerHTML = `Average lands in an opening hand: <strong>${expectedLands}</strong> · 2 to 5 lands: <strong>${Math.round(keepable * 100)}%</strong>`;
 }
 
 // ===== Printing Optimizer Functions =====

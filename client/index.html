@@ -373,6 +373,18 @@
                     </nav>
                     <div id="cube-view" class="cube-view hidden"></div>
 
+                    <!-- Deck views: everything but cubes -->
+                    <nav id="deck-view-bar" class="cube-bar deck-view-bar" aria-label="Deck views">
+                        <div class="cube-view-tabs" role="tablist">
+                            <button class="deck-view-btn active" data-deck-view="build" role="tab" aria-selected="true"><i class="ph ph-list-bullets"></i> Build</button>
+                            <button class="deck-view-btn" data-deck-view="analysis" role="tab" aria-selected="false"><i class="ph ph-chart-line-up"></i> Analysis</button>
+                            <button class="deck-view-btn" data-deck-view="playtest" role="tab" aria-selected="false"><i class="ph ph-cards-three"></i> Playtest</button>
+                            <button class="deck-view-btn" data-deck-view="collection" role="tab" aria-selected="false"><i class="ph ph-books"></i> Collection</button>
+                        </div>
+                    </nav>
+                    <div id="deck-view" class="deck-view hidden"></div>
+                    <div id="deck-collection-view" class="deck-view hidden"></div>
+
                     <div class="deck-builder-content">
                         <!-- Deck List -->
                         <div class="deck-panel">
@@ -460,6 +472,7 @@
                             <div class="example-hand-controls">
                                 <button id="draw-card-btn" class="btn btn-ghost btn-sm"><i class="ph ph-plus"></i> Draw</button>
                                 <button id="deal-hand-btn" class="btn btn-secondary btn-sm"><i class="ph ph-shuffle"></i> New hand</button>
+                                <button id="playtest-hand-btn" class="btn btn-ghost btn-sm" title="Goldfish the deck: mulligans, turns, battlefield and life"><i class="ph ph-play"></i> Playtest</button>
                             </div>
                         </div>
                         <div id="example-hand" class="example-hand-grid"></div>
@@ -1135,6 +1148,15 @@
             </div>
 
             <!-- Buy Deck Modal -->
+            <!-- Contested cards: decks wanting more copies than you own -->
+            <div id="contested-drawer" class="modal drawer-mode hidden">
+                <div class="modal-content">
+                    <span class="modal-close">&times;</span>
+                    <h2>Contested cards</h2>
+                    <div id="contested-body"></div>
+                </div>
+            </div>
+
             <div id="buy-deck-modal" class="modal drawer-mode hidden">
                 <div class="modal-content">
                     <span class="modal-close" id="buy-modal-close">&times;</span>
@@ -1144,7 +1166,8 @@
                     <div style="margin-bottom: 1rem; padding: 0.75rem 1rem; background: var(--bg-tertiary); border-radius: 0.5rem;">
                         <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; user-select: none;">
                             <input type="checkbox" id="copy-non-owned-only" style="width: 18px; height: 18px; cursor: pointer;">
-                            <span style="font-weight: 600;">Non-owned cards only</span>
+                            <span style="font-weight: 600;">Only the copies I don't own</span>
+                            <span class="muted" style="font-size: 0.8125rem;">basic lands left out</span>
                         </label>
                     </div>
 
@@ -1415,6 +1438,17 @@
                             "
                         ></p>
                     </div>
+
+                    <nav id="shared-view-bar" class="cube-bar deck-view-bar hidden" aria-label="Deck views">
+                        <div class="cube-view-tabs" role="tablist">
+                            <button class="deck-view-btn active" data-shared-view="build" role="tab" aria-selected="true"><i class="ph ph-list-bullets"></i> Deck</button>
+                            <button class="deck-view-btn" data-shared-view="analysis" role="tab" aria-selected="false"><i class="ph ph-chart-line-up"></i> Analysis</button>
+                            <button class="deck-view-btn" data-shared-view="playtest" role="tab" aria-selected="false"><i class="ph ph-cards-three"></i> Playtest</button>
+                            <button class="deck-view-btn hidden" data-shared-view="collection" role="tab" aria-selected="false"><i class="ph ph-books"></i> Your collection</button>
+                        </div>
+                    </nav>
+                    <div id="shared-deck-view" class="deck-view hidden"></div>
+                    <div id="shared-collection-view" class="deck-view hidden"></div>
 
                     <div class="deck-builder-content">
                         <!-- Deck List -->

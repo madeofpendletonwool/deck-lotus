@@ -27,6 +27,7 @@ import {
   applyPrintingOptimization,
   getAvailableSets
 } from '../services/printingOptimizerService.js';
+import { getDeckCollection, getSharedDeckCollection, getBinderFits } from '../services/collectionService.js';
 import { authenticate, optionalAuthenticate } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -378,6 +379,63 @@ router.post('/:id/cards/bulk', authenticate, (req, res, next) => {
       remove: remove === true,
     });
     res.json({ deck });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * GET /api/decks/share/:token/collection
+ * How much of a shared deck the signed-in viewer already owns, and what the rest costs
+ */
+router.get('/share/:token/collection', authenticate, (req, res, next) => {
+  try {
+    const deck = getDeckByShareToken(req.params.token);
+    if (!deck) {
+      return res.status(404).json({ error: 'Shared deck not found or no longer available' });
+    }
+    res.json(getSharedDeckCollection(deck.id, req.user.id));
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * GET /api/decks/:id/collection
+ * How much of the deck you own, what the rest costs, and which copies other decks also claim
+ */
+router.get('/:id/collection', authenticate, (req, res, next) => {
+  try {
+    const report = getDeckCollection(req.params.id, req.user.id);
+    if (!report) {
+      return res.status(404).json({ error: 'Deck not found' });
+    }
+    res.json(report);
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * GET /api/decks/:id/collection/binder?q=&type=&free=1&sort=&colors=deck|any&offset=&limit=
+ * Cards you own that fit the deck: its colors (commander identity), its format, not already in it
+ */
+router.get('/:id/collection/binder', authenticate, (req, res, next) => {
+  try {
+    const { q, type, free, sort, colors, offset, limit } = req.query;
+    const result = getBinderFits(req.params.id, req.user.id, {
+      q,
+      type,
+      freeOnly: free === '1' || free === 'true',
+      sort,
+      colors,
+      offset: parseInt(offset, 10) || 0,
+      limit: parseInt(limit, 10) || 60,
+    });
+    if (!result) {
+      return res.status(404).json({ error: 'Deck not found' });
+    }
+    res.json(result);
   } catch (error) {
     next(error);
   }

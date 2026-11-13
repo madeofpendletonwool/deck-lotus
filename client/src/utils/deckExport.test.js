@@ -180,3 +180,59 @@ test('legacy rows without board_type still sort by is_sideboard', () => {
   const legacy = [{ name: 'Duress', quantity: 1, board_type: null, is_sideboard: 1 }];
   assert.equal(generateExport('text', legacy), 'Sideboard\n1 Duress');
 });
+
+const priced = [
+  card('Ragavan, Nimble Pilferer', { rarity: 'mythic', price: 45.5, type_line: 'Legendary Creature — Monkey Pirate' }),
+  card('Lightning Bolt', { quantity: 4, rarity: 'common', price: 1.2, type_line: 'Instant' }),
+  card('Delver of Secrets // Insectile Aberration', { quantity: 4, layout: 'transform', rarity: 'common', price: 0.3, type_line: 'Creature — Human Wizard' }),
+  card('Scalding Tarn', { quantity: 2, rarity: 'rare', price: 22, type_line: 'Land' }),
+  card('Mystery Card', { rarity: 'rare', price: null, type_line: 'Sorcery' }),
+  card('Island', { quantity: 6, price: 0.1, type_line: 'Basic Land — Island' }),
+];
+const names = (options) => partitionDeck(priced, options).main.map((c) => c.name);
+
+test('a price filter keeps only cards at or over the threshold, and never guesses for unpriced ones', () => {
+  assert.deepEqual(names({ filter: 'usd>=5' }), ['Ragavan, Nimble Pilferer', 'Scalding Tarn']);
+  assert.deepEqual(names({ filter: '$>1' }), ['Ragavan, Nimble Pilferer', 'Lightning Bolt', 'Scalding Tarn']);
+  assert.deepEqual(names({ filter: 'usd<1' }), ['Delver of Secrets // Insectile Aberration', 'Island']);
+  assert.deepEqual(names({ filter: 'is:unpriced' }), ['Mystery Card']);
+});
+
+test('a price of 0 counts as unknown, as the deck price endpoint reports unpriced cards that way', () => {
+  assert.deepEqual(partitionDeck([card('Free?', { price: 0 })], { filter: 'usd<1' }).main, []);
+});
+
+test('filters combine with each other and with the other export options', () => {
+  assert.deepEqual(names({ filter: 'usd>=5 -t:land' }), ['Ragavan, Nimble Pilferer']);
+  assert.deepEqual(names({ filter: 'r>=rare or is:dfc' }), [
+    'Ragavan, Nimble Pilferer',
+    'Delver of Secrets // Insectile Aberration',
+    'Scalding Tarn',
+    'Mystery Card',
+  ]);
+  assert.deepEqual(names({ filter: 'usd<1', excludeBasics: true }), ['Delver of Secrets // Insectile Aberration']);
+  assert.equal(countExportedCards(priced, { filter: 'usd>=5' }), 3);
+});
+
+test('the filter applies to every board, commanders included', () => {
+  const kept = partitionDeck(deck, { filter: 's:c16 or s:m21' });
+  assert.deepEqual(kept.commanders.map((c) => c.name), ["Atraxa, Praetors' Voice"]);
+  assert.deepEqual(kept.main, []);
+  assert.deepEqual(kept.side.map((c) => c.name), ['Duress']);
+});
+
+test('one copy of each collapses quantities and printings across boards', () => {
+  const out = generateExport('mpc', [
+    ...priced,
+    card('Island', { quantity: 3, set_code: 'eld', type_line: 'Basic Land — Island' }),
+    card('Lightning Bolt', { board_type: 'sideboard' }),
+  ], { oneOfEach: true });
+  assert.equal(out.split('\n').filter((l) => l.startsWith('1 ')).length, out.split('\n').length);
+  assert.equal(out.match(/Island/g).length, 1);
+  assert.equal(out.match(/Lightning Bolt/g).length, 1);
+});
+
+test('one copy of each runs after the ownership filter, so owned cards stay out', () => {
+  const cards = [card('Sol Ring', { quantity: 1, is_owned: 1, owned_quantity: 1, card_id: 1 }), card('Mana Crypt', { card_id: 2 })];
+  assert.equal(generateExport('mpc', cards, { unownedOnly: true, oneOfEach: true }), '1 Mana Crypt');
+});

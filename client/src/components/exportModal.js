@@ -5,6 +5,8 @@ import {
   generateExport,
   countExportedCards,
 } from '../utils/deckExport.js';
+import { tokenize } from '../utils/cardQuery.js';
+import { tagsOf } from '../utils/cube.js';
 
 const FORMAT_NOTES = {
   mtgprint: 'Paste this into the box on MTG Print, press Submit, then download your PDF.',
@@ -15,8 +17,77 @@ const FORMAT_NOTES = {
 
 const FORMAT_PREFERENCE_KEY = 'deckExportFormat';
 
+// One-click filter terms. Clicking one toggles its term in the filter box, replacing any other
+// term from the same group, so the box stays the single source of truth and can be hand-edited.
+const PRICE_TERM = /^(usd|price|\$)(:|<=|>=|=|<|>)/i;
+const FILTER_CHIPS = [
+  { label: '$1+', term: 'usd>=1', group: PRICE_TERM, needsPrices: true },
+  { label: '$5+', term: 'usd>=5', group: PRICE_TERM, needsPrices: true },
+  { label: '$20+', term: 'usd>=20', group: PRICE_TERM, needsPrices: true },
+  { label: 'Under $1', term: 'usd<1', group: PRICE_TERM, needsPrices: true },
+  null,
+  { label: 'Rare & mythic', term: 'r>=rare', group: /^r(arity)?(:|<=|>=|=|<|>)/i },
+  { label: 'No lands', term: '-t:land', group: /^-?t(ype)?:land$/i },
+  { label: 'Creatures', term: 't:creature', group: /^-?t(ype)?:creature$/i },
+  { label: 'Noncreature', term: '-t:creature', group: /^-?t(ype)?:creature$/i },
+  { label: 'Double-faced', term: 'is:dfc', group: /^-?is:dfc$/i },
+  { label: 'Single-faced', term: '-is:dfc', group: /^-?is:dfc$/i },
+];
+const MAX_TAG_CHIPS = 8;
+
 let activeDeck = null;
+let activeCards = [];
 let activeFormat = 'mtgprint';
+
+const escapeHtml = (text) => String(text).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+
+const filterInput = () => document.getElementById('export-filter');
+
+/** The term a tag chip adds: "#ramp", or tag:"card draw" when the tag has a space. */
+const tagTerm = (tag) => (/\s|"/.test(tag) ? `tag:"${tag.replace(/"/g, '')}"` : `#${tag}`);
+
+function tagChips(cards) {
+  const counts = new Map();
+  for (const card of cards) {
+    for (const tag of tagsOf(card)) counts.set(tag, (counts.get(tag) || 0) + (card.quantity ?? 1));
+  }
+  return [...counts]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, MAX_TAG_CHIPS)
+    .map(([tag]) => ({ label: `#${tag}`, term: tagTerm(tag) }));
+}
+
+function chipsFor(cards) {
+  const hasPrices = cards.some((c) => Number.isFinite(c.price) && c.price > 0);
+  const chips = FILTER_CHIPS.filter((chip) => !chip?.needsPrices || hasPrices);
+  if (chips[0] === null) chips.shift(); // no leading separator when the price chips are hidden
+  const tags = tagChips(cards);
+  return tags.length ? [...chips, null, ...tags] : chips;
+}
+
+function filterTokens() {
+  return tokenize(filterInput().value);
+}
+
+function renderChips() {
+  const tokens = filterTokens().map((t) => t.toLowerCase());
+  document.getElementById('export-filter-chips').innerHTML = chipsFor(activeCards).map((chip) => {
+    if (!chip) return '<span class="export-chip-sep" aria-hidden="true"></span>';
+    const on = tokens.includes(chip.term.toLowerCase());
+    return `<button type="button" class="tag-chip ${on ? 'active' : ''}" data-term="${escapeHtml(chip.term)}" aria-pressed="${on}">${escapeHtml(chip.label)}</button>`;
+  }).join('');
+}
+
+function toggleChip(term) {
+  const chip = chipsFor(activeCards).find((c) => c?.term === term);
+  const tokens = filterTokens();
+  const lower = term.toLowerCase();
+  const next = tokens.some((t) => t.toLowerCase() === lower)
+    ? tokens.filter((t) => t.toLowerCase() !== lower)
+    : [...tokens.filter((t) => !chip?.group?.test(t)), term];
+  filterInput().value = next.join(' ');
+  renderPreview();
+}
 
 function loadSavedFormat() {
   try {
@@ -47,6 +118,8 @@ function readOptions() {
     includeMaybeboard: Boolean(format.supportsMaybeboard) && document.getElementById('export-opt-maybeboard').checked,
     excludeBasics: document.getElementById('export-opt-basics').checked,
     unownedOnly: document.getElementById('export-opt-unowned').checked,
+    oneOfEach: document.getElementById('export-opt-oneofeach').checked,
+    filter: filterInput().value,
   };
 }
 
@@ -68,19 +141,29 @@ function renderFormatList() {
 function renderPreview() {
   const format = currentFormat();
   const options = readOptions();
-  const cards = activeDeck?.cards || [];
+  const cards = activeCards;
 
   document.getElementById('export-text').value = generateExport(format.id, cards, options);
 
   const count = countExportedCards(cards, options);
-  document.getElementById('export-count').textContent = `${count} ${count === 1 ? 'card' : 'cards'}`;
+  const unfiltered = countExportedCards(cards, { ...options, filter: '', oneOfEach: false });
+  const narrowed = count !== unfiltered;
+  document.getElementById('export-count').textContent = narrowed
+    ? `${count} of ${unfiltered} ${unfiltered === 1 ? 'card' : 'cards'}`
+    : `${count} ${count === 1 ? 'card' : 'cards'}`;
 
-  document.getElementById('export-note').textContent = FORMAT_NOTES[format.id] || '';
+  const filtering = options.filter.trim() !== '';
+  filterInput().classList.toggle('invalid', filtering && count === 0);
+  document.getElementById('export-note').textContent = filtering && count === 0
+    ? 'No cards match the filter.'
+    : FORMAT_NOTES[format.id] || '';
   document.getElementById('export-opt-maybeboard-wrap').classList.toggle('hidden', !format.supportsMaybeboard);
 
   const openBtn = document.getElementById('open-export');
   openBtn.classList.toggle('hidden', !format.openUrl);
   document.getElementById('open-export-label').textContent = format.openLabel || '';
+
+  renderChips();
 }
 
 function selectFormat(id) {
@@ -118,8 +201,20 @@ export function setupExportModal() {
     if (btn) selectFormat(btn.dataset.format);
   });
 
-  ['sideboard', 'maybeboard', 'basics', 'unowned'].forEach((name) => {
+  ['sideboard', 'maybeboard', 'basics', 'unowned', 'oneofeach'].forEach((name) => {
     document.getElementById(`export-opt-${name}`).addEventListener('change', renderPreview);
+  });
+
+  filterInput().addEventListener('input', renderPreview);
+  document.getElementById('export-filter-chips').addEventListener('click', (e) => {
+    const chip = e.target.closest('[data-term]');
+    if (chip) toggleChip(chip.dataset.term);
+  });
+  const helpBtn = document.getElementById('export-filter-help-btn');
+  helpBtn.addEventListener('click', () => {
+    const help = document.getElementById('export-filter-help');
+    const open = help.classList.toggle('hidden') === false;
+    helpBtn.setAttribute('aria-expanded', String(open));
   });
 
   document.getElementById('copy-export').addEventListener('click', async () => {
@@ -142,11 +237,19 @@ export function setupExportModal() {
 }
 
 /**
- * @param {{name: string, cards: Array}} deck
- * @param {{canFilterOwned?: boolean}} [options] the share page has no ownership data
+ * @param {{name: string, cards: Array}} deck cards may carry their own `price`
+ * @param {object} [options]
+ * @param {boolean} [options.canFilterOwned] the share page has no ownership data
+ * @param {Object<string, number>} [options.prices] price by deck_card_id, for the price filters
  */
-export function openExportModal(deck, { canFilterOwned = true } = {}) {
+export function openExportModal(deck, { canFilterOwned = true, prices = null } = {}) {
+  // A filter is about one deck, so a different deck starts unfiltered
+  if (activeDeck?.id !== deck.id) filterInput().value = '';
   activeDeck = deck;
+  activeCards = (deck.cards || []).map((card) => ({
+    ...card,
+    price: card.price ?? prices?.[card.deck_card_id] ?? null,
+  }));
 
   document.getElementById('export-deck-name').textContent = deck.name || 'deck';
 

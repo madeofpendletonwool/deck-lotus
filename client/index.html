@@ -1296,7 +1296,23 @@
                                 <label class="export-option" id="export-opt-maybeboard-wrap"><input type="checkbox" id="export-opt-maybeboard" /> Maybeboard</label>
                                 <label class="export-option"><input type="checkbox" id="export-opt-basics" /> Skip basic lands</label>
                                 <label class="export-option" id="export-opt-unowned-wrap"><input type="checkbox" id="export-opt-unowned" /> Only copies I don't own</label>
+                                <label class="export-option"><input type="checkbox" id="export-opt-oneofeach" /> One copy of each</label>
                                 <span id="export-count" class="export-count"></span>
+                            </div>
+                            <div class="export-filter">
+                                <div class="export-filter-field">
+                                    <i class="ph ph-funnel" aria-hidden="true"></i>
+                                    <input type="search" id="export-filter" placeholder="Filter cards, e.g. usd>=5 -t:land" autocomplete="off" spellcheck="false" aria-label="Filter exported cards" />
+                                    <button type="button" class="export-filter-help-btn" id="export-filter-help-btn" aria-expanded="false" aria-controls="export-filter-help" title="Filter syntax"><i class="ph ph-question"></i></button>
+                                </div>
+                                <div id="export-filter-chips" class="export-filter-chips"></div>
+                                <div id="export-filter-help" class="export-filter-help hidden">
+                                    <code>usd&gt;=5</code> price &middot; <code>r&gt;=rare</code> rarity &middot; <code>t:creature</code> type &middot; <code>o:"draw a card"</code> text &middot;
+                                    <code>mv&lt;=2</code> mana value &middot; <code>c:rg</code> colors &middot; <code>s:mh2</code> set &middot; <code>#ramp</code> tag &middot;
+                                    <code>is:dfc</code> <code>is:legendary</code> <code>is:owned</code> <code>is:unpriced</code> &middot; plain words search names.
+                                    Put <code>-</code> in front of a term to exclude it, and <code>or</code> between terms for either.
+                                    Prices are each card's printing, or its cheapest printing when that one has none.
+                                </div>
                             </div>
                             <textarea id="export-text" class="export-text" readonly spellcheck="false" aria-label="Exported deck list"></textarea>
                             <p id="export-note" class="export-note"></p>

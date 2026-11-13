@@ -12,6 +12,7 @@
  */
 
 import { toCubeCobraCsv } from './cube.js';
+import { compileQuery } from './cardQuery.js';
 
 const FACE_SEPARATOR = ' // ';
 
@@ -99,6 +100,10 @@ export const DEFAULT_EXPORT_OPTIONS = Object.freeze({
   includeMaybeboard: false,
   excludeBasics: false,
   unownedOnly: false,
+  // A cardQuery.js query, e.g. "usd>=5 -t:land" to proxy only the pricey spells.
+  filter: '',
+  // One copy of each card, e.g. to print a single proxy of every card for a playtest binder.
+  oneOfEach: false,
 });
 
 function boardOf(card) {
@@ -153,10 +158,22 @@ function subtractOwned(lists) {
   }));
 }
 
+/** Keep the first copy of each card across all the boards, as a single copy. */
+function onePerCard(lists) {
+  const seen = new Set();
+  return lists.map((list) => list.flatMap((card) => {
+    const key = card.card_id ?? card.name;
+    if (seen.has(key)) return [];
+    seen.add(key);
+    return [{ ...card, quantity: 1 }];
+  }));
+}
+
 /** Sort a deck into boards, applying the export options. Commanders never appear twice. */
 export function partitionDeck(cards, options = {}) {
   const opts = { ...DEFAULT_EXPORT_OPTIONS, ...options };
-  const kept = (cards || []).filter((card) => !(opts.excludeBasics && isBasicLand(card)));
+  const matches = compileQuery(opts.filter);
+  const kept = (cards || []).filter((card) => !(opts.excludeBasics && isBasicLand(card)) && matches(card));
   const inBoard = (board) => kept.filter((c) => boardOf(c) === board && !c.is_commander);
 
   const boards = [
@@ -165,7 +182,8 @@ export function partitionDeck(cards, options = {}) {
     opts.includeSideboard ? inBoard('sideboard') : [],
     opts.includeMaybeboard ? inBoard('maybeboard') : [],
   ];
-  const [commanders, main, side, maybe] = opts.unownedOnly ? subtractOwned(boards) : boards;
+  const missing = opts.unownedOnly ? subtractOwned(boards) : boards;
+  const [commanders, main, side, maybe] = opts.oneOfEach ? onePerCard(missing) : missing;
 
   return { commanders, main, side, maybe };
 }

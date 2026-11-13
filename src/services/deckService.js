@@ -2,6 +2,7 @@ import db from '../db/connection.js';
 import crypto from 'crypto';
 import { validateDeck, FORMATS, isCubeFormat, DEFAULT_CUBE_SETTINGS, parsePointsList } from '../../shared/formats.js';
 import { getSettings } from './settingsService.js';
+import { PRINTING_PRICE_SQL, CHEAPEST_PRINTING_SQL } from './pricingService.js';
 
 const RARITY_RANK_SQL = `CASE rarity WHEN 'common' THEN 0 WHEN 'uncommon' THEN 1 WHEN 'rare' THEN 2 WHEN 'mythic' THEN 3 ELSE 4 END`;
 
@@ -731,7 +732,9 @@ export function getDeckByShareToken(shareToken) {
       c.edhrec_rank,
       dc.tags,
       dc.color_category,
-      dc.notes
+      dc.notes,
+      -- So the export's price filters work for anyone proxying a shared deck
+      COALESCE(${PRINTING_PRICE_SQL}, ${CHEAPEST_PRINTING_SQL}) as price
      FROM deck_cards dc
      JOIN printings p ON dc.printing_id = p.id
      JOIN cards c ON p.card_id = c.id

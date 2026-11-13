@@ -8,7 +8,9 @@
  *   mv<=2  cmc=3         mana value       pow>=3  tou<2
  *   r:mythic  r>=rare    rarity           s:lea   set code
  *   tag:aggro  #aggro    cube tags        cat:m   cube color category
+ *   usd>=5  $<1          price, when the deck has prices loaded (unpriced cards never match)
  *   is:land is:fixing is:gold is:multicolor is:mono is:colorless is:hybrid is:owned is:commander
+ *   is:basic is:dfc is:priced is:unpriced
  *   -t:land              any term can be negated with a leading minus
  *
  * Plain text with no operators keeps working as a simple name search.
@@ -22,6 +24,11 @@ const GUILD_WORDS = {
 };
 const RARITIES = ['common', 'uncommon', 'rare', 'mythic'];
 const RARITY_SHORT = { c: 'common', u: 'uncommon', r: 'rare', m: 'mythic' };
+// Layouts with a second printed face, which a proxy needs a back for.
+const DOUBLE_FACED_LAYOUTS = new Set(['transform', 'modal_dfc', 'meld', 'reversible_card', 'double_faced_token']);
+
+/** A card's price in dollars, or null when nothing has priced it. A price of 0 means unknown. */
+const priceOf = (c) => (Number.isFinite(c.price) && c.price > 0 ? c.price : null);
 
 /** Split on spaces, keeping "quoted phrases" together. */
 export function tokenize(query) {
@@ -110,7 +117,7 @@ function predicateFor(token) {
     op = ':';
     value = t.slice(1);
   } else {
-    const m = t.match(/^([a-z]+)(:|!=|<=|>=|=|<|>)(.*)$/i);
+    const m = t.match(/^([a-z]+|\$)(:|!=|<=|>=|=|<|>)(.*)$/i);
     if (m) [, key, op, value] = m;
   }
 
@@ -180,6 +187,16 @@ function predicateFor(token) {
         };
         break;
       }
+      case 'usd':
+      case 'price':
+      case '$': {
+        const n = numberOf(value.replace(/^\$/, ''));
+        fn = (c) => {
+          const have = priceOf(c);
+          return have !== null && n !== null && compare(have, op === ':' ? '>=' : op, n);
+        };
+        break;
+      }
       case 's':
       case 'set':
       case 'e':
@@ -214,6 +231,11 @@ function predicateFor(token) {
           tagged: (c) => tagsOf(c).length > 0,
           untagged: (c) => tagsOf(c).length === 0,
           legendary: (c) => /\bLegendary\b/.test(c.type_line || ''),
+          basic: (c) => /\bBasic\b/.test(c.type_line || ''),
+          dfc: (c) => DOUBLE_FACED_LAYOUTS.has(c.layout),
+          priced: (c) => priceOf(c) !== null,
+          price: (c) => priceOf(c) !== null,
+          unpriced: (c) => priceOf(c) === null,
         }[lower] || (() => false);
         break;
       default: {
@@ -238,5 +260,5 @@ export function compileQuery(query) {
 
 /** Does the query use any operators, as opposed to plain name text? */
 export function isAdvancedQuery(query) {
-  return /(^|\s)-?([a-z]+(:|!=|<=|>=|=|<|>)|#)/i.test(String(query || ''));
+  return /(^|\s)-?(([a-z]+|\$)(:|!=|<=|>=|=|<|>)|#)/i.test(String(query || ''));
 }

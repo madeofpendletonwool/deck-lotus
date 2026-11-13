@@ -330,7 +330,7 @@ export function setupDeckBuilder() {
       showToast('Add some cards first', 'warning');
       return;
     }
-    openExportModal(currentDeck);
+    openExportModal(currentDeck, { prices: currentPriceData?.cardPrices });
   });
 
   // Back to decks

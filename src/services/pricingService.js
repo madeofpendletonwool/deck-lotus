@@ -47,7 +47,7 @@ export const DEFAULT_PRINTING_ORDER_SQL = `
 
 // Digital printings can't be bought, so they have no price. The card's cheapest paper price is
 // a fair stand-in, and callers must show it as an estimate.
-const CHEAPEST_PRINTING_SQL = `(SELECT MIN(pr.price)
+export const CHEAPEST_PRINTING_SQL = `(SELECT MIN(pr.price)
   FROM printings alt JOIN prices pr ON pr.printing_uuid = alt.uuid
   WHERE alt.card_id = p.card_id AND pr.${USD_PROVIDERS})`;
 

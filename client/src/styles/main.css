@@ -3955,6 +3955,7 @@ button.btn-icon.active { background: var(--primary-soft); color: var(--primary-l
 .cube-card:focus-visible { outline: 2px solid var(--primary-light); outline-offset: -1px; }
 .cube-card-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cube-card-qty { color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.cube-card-price { color: var(--text-muted); font-size: 0.6875rem; font-variant-numeric: tabular-nums; }
 .cube-card-flag { color: var(--text-muted); font-size: 0.6875rem; }
 .cube-card-tags {
   min-width: 16px;
@@ -3976,6 +3977,7 @@ button.btn-icon.active { background: var(--primary-soft); color: var(--primary-l
 .cube-visual-card:hover img { filter: brightness(1.08); }
 .cube-visual-card.selected { border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary-soft); }
 .cube-visual-qty,
+.cube-visual-price,
 .cube-visual-tags {
   position: absolute;
   padding: 1px 6px;
@@ -3985,6 +3987,7 @@ button.btn-icon.active { background: var(--primary-soft); color: var(--primary-l
   font-size: 0.6875rem;
 }
 .cube-visual-qty { top: 6px; right: 6px; }
+.cube-visual-price { top: 6px; left: 6px; font-variant-numeric: tabular-nums; }
 .cube-visual-tags { left: 6px; right: 6px; bottom: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* Card editor popover */

@@ -6,7 +6,7 @@ import { PRINTING_SORTS, printingPrice, printingFinishNote, formatPrice, sortPri
 import { resolveRules, canLead, canPairCommanders, isCubeFormat, getFormat, formatLabel, deckSizeLabel, TWO_HEADED_GIANT_BASES } from '../../../shared/formats.js';
 import { fillFormatSelect, formatOptionsHtml } from '../utils/formatUi.js';
 import { compileQuery } from '../utils/cardQuery.js';
-import { setupCubeTools, setCubeMode, renderCubeBoard, refreshCube, cubeViewShowsList, clearCubeSelection } from './cubeTools.js';
+import { setupCubeTools, setCubeMode, renderCubeBoard, refreshCube, cubeViewShowsList, clearCubeSelection, cubeSortsByPrice } from './cubeTools.js';
 import { DeckTools } from './deckAnalysis.js';
 import { DeckCollection } from './deckCollection.js';
 import { missingRows } from '../../../shared/collection.js';
@@ -164,6 +164,7 @@ export function setupDeckBuilder() {
     showCard: (printingId) => showCardModal(printingId),
     getFilter: () => deckFilterPredicate(),
     getActiveBoard: () => activeTab,
+    getPrices: () => currentPriceData?.cardPrices,
     rerender: () => renderDeckCards(),
   });
 
@@ -1791,7 +1792,7 @@ async function loadDeckStats() {
     currentPriceData = price;
     displayDeckPrice(price);
     // Rows render before this fetch returns, so without this they'd show the previous prices
-    if (pricingMode) renderDeckCards();
+    if (pricingMode || cubeSortsByPrice()) renderDeckCards();
   } catch (error) {
     console.error('Failed to load stats:', error);
   }

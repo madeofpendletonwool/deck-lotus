@@ -170,6 +170,10 @@ class ApiClient {
     return this.request(`/cards/${id}`);
   }
 
+  async getCardByName(name) {
+    return this.request(`/cards/name/${encodeURIComponent(name)}`);
+  }
+
   async getCardPrintings(id) {
     return this.request(`/cards/${id}/printings`);
   }
@@ -512,6 +516,10 @@ class ApiClient {
 
   async searchForInventoryAdd(query) {
     return this.request(`/inventory/search?q=${encodeURIComponent(query)}`);
+  }
+
+  async getInventoryIndex(cardIds = null) {
+    return this.request(`/inventory/index${cardIds?.length ? `?cards=${cardIds.join(',')}` : ''}`);
   }
 
   async getInventorySets() {

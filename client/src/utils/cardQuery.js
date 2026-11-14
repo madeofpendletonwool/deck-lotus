@@ -11,6 +11,7 @@
  *   usd>=5  $<1          price, when the deck has prices loaded (unpriced cards never match)
  *   is:land is:fixing is:gold is:multicolor is:mono is:colorless is:hybrid is:owned is:commander
  *   is:basic is:dfc is:priced is:unpriced
+ *   qty>=4  is:foil is:nonfoil is:free is:indeck is:unused   your copies, in the collection view
  *   -t:land              any term can be negated with a leading minus
  *
  * Plain text with no operators keeps working as a simple name search.
@@ -200,8 +201,16 @@ function predicateFor(token) {
       case 's':
       case 'set':
       case 'e':
-        fn = (c) => (c.set_code || '').toLowerCase() === lower;
+        // A collection entry can hold copies from several sets
+        fn = (c) => (Array.isArray(c.set_codes) ? c.set_codes.includes(lower) : (c.set_code || '').toLowerCase() === lower);
         break;
+      case 'qty':
+      case 'copies':
+      case 'own': {
+        const n = numberOf(value);
+        fn = (c) => n !== null && Number.isFinite(c.qty) && compare(c.qty, op, n);
+        break;
+      }
       case 'tag':
       case 'tags':
         fn = (c) => tagsOf(c).some((tag) => tag.toLowerCase() === lower);
@@ -236,6 +245,13 @@ function predicateFor(token) {
           priced: (c) => priceOf(c) !== null,
           price: (c) => priceOf(c) !== null,
           unpriced: (c) => priceOf(c) === null,
+          foil: (c) => !!c.has_foil,
+          nonfoil: (c) => !!c.has_nonfoil,
+          free: (c) => c.free > 0,
+          available: (c) => c.free > 0,
+          indeck: (c) => c.in_decks > 0,
+          used: (c) => c.in_decks > 0,
+          unused: (c) => Number.isFinite(c.in_decks) && c.in_decks === 0,
         }[lower] || (() => false);
         break;
       default: {

@@ -577,77 +577,119 @@
             <div id="shopping-page" class="page hidden">
                 <div class="page-header">
                     <h2>Shopping List</h2>
-                    <p style="color: var(--text-secondary); margin-top: 0.5rem;">Find cards you need from your decks, organized by set for easy LGS shopping</p>
+                    <div class="page-header-actions">
+                        <button id="shop-copy-btn" class="btn btn-secondary" title="Copy the list">
+                            <i class="ph ph-copy btn-icon"></i>
+                            <span class="btn-text">Copy</span>
+                        </button>
+                        <button id="shop-optimize-open" class="btn btn-secondary" title="Price the list on Mana Pool">
+                            <i class="ph ph-magic-wand btn-icon"></i>
+                            <span class="btn-text">Buy online</span>
+                        </button>
+                    </div>
                 </div>
 
-                <div class="shopping-content">
-                    <!-- Deck Selection -->
-                    <div class="shopping-section">
-                        <h3 style="margin-bottom: 1rem;">Select Decks to Shop For</h3>
-                        <div id="shopping-deck-selector"></div>
+                <div class="shop-bar" id="shop-bar">
+                    <button type="button" id="shop-decks-btn" class="shop-decks-btn" aria-haspopup="true">
+                        <i class="ph ph-stack"></i>
+                        <span id="shop-decks-label">Decks</span>
+                        <i class="ph ph-caret-down"></i>
+                    </button>
+                    <div class="shop-search">
+                        <i class="ph ph-magnifying-glass"></i>
+                        <input type="search" id="shop-search" placeholder="Find a card, or filter: usd>=5 r:mythic t:creature" autocomplete="off" spellcheck="false" aria-label="Find or filter cards" />
                     </div>
-
-                    <!-- Filters -->
-                    <div class="shopping-section">
-                        <h3 style="margin-bottom: 1rem;">Filters & Sorting</h3>
-                        <div id="shopping-filters"></div>
+                    <div class="seg shop-seg" id="shop-group" role="group" aria-label="Group by"></div>
+                    <div class="seg" id="shop-view" role="group" aria-label="View">
+                        <button type="button" class="seg-btn" data-view="list" title="List"><i class="ph ph-list"></i></button>
+                        <button type="button" class="seg-btn" data-view="images" title="Card images"><i class="ph ph-squares-four"></i></button>
                     </div>
+                </div>
+                <div class="shop-options" id="shop-options"></div>
+                <div class="shop-summary" id="shop-summary"></div>
+                <div id="shop-list" class="shop-list"></div>
+            </div>
 
-                    <!-- Statistics -->
-                    <div id="shopping-stats" class="shopping-stats"></div>
-
-                    <!-- Mana Pool Optimizer -->
-                    <div class="shopping-section" id="shopping-optimizer-section" style="display: none;">
-                        <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 1rem;">
-                            <h3 style="margin: 0;"><i class="ph ph-magic-wand"></i> Mana Pool Optimizer</h3>
-                            <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
-                                <select id="shopping-optimizer-strategy" class="form-control" style="font-size: 0.875rem;">
-                                    <option value="lowest_price">Lowest Total Price</option>
-                                    <option value="fewest_packages">Fewest Packages</option>
-                                    <option value="balanced">Balanced</option>
-                                    <option value="gathered_shipping_only">Gathered Shipping Only</option>
-                                </select>
-                                <button id="shopping-optimize-btn" class="btn btn-primary btn-sm">
-                                    <i class="ph ph-magic-wand"></i> Optimize Cart
-                                </button>
-                            </div>
-                        </div>
-                        <div id="shopping-optimizer-results"></div>
+            <!-- Mana Pool optimizer, opened from the shopping list -->
+            <div id="shop-optimizer-drawer" class="modal drawer-mode hidden">
+                <div class="modal-content">
+                    <span class="modal-close">&times;</span>
+                    <h2>Buy online</h2>
+                    <p class="modal-lede">Mana Pool finds the cheapest mix of sellers for the cards still on your list (the ones you haven't checked off).</p>
+                    <div class="toolbar" style="margin-bottom: var(--space-4);">
+                        <select id="shopping-optimizer-strategy" class="filter-select">
+                            <option value="lowest_price">Lowest total price</option>
+                            <option value="fewest_packages">Fewest packages</option>
+                            <option value="balanced">Balanced</option>
+                            <option value="gathered_shipping_only">Gathered shipping only</option>
+                        </select>
+                        <button id="shopping-optimize-btn" class="btn btn-primary">
+                            <i class="ph ph-magic-wand"></i> Optimize cart
+                        </button>
                     </div>
-
-                    <!-- Shopping List by Set -->
-                    <div class="shopping-section">
-                        <div id="shopping-list-container"></div>
-                    </div>
+                    <div id="shopping-optimizer-results"></div>
                 </div>
             </div>
 
             <!-- Inventory Page -->
             <div id="inventory-page" class="page hidden">
-                <div class="page-header">
-                    <h2>My Inventory</h2>
+                <div class="page-header inv-header">
+                    <h2>Inventory</h2>
+                    <div class="inventory-quick-add">
+                        <div class="quick-add-wrapper">
+                            <i class="ph ph-plus-circle"></i>
+                            <input type="text" id="inventory-quick-search" placeholder="Add a card to your collection" autocomplete="off" aria-label="Add a card to your collection" />
+                            <div id="inventory-quick-results" class="inventory-quick-results hidden"></div>
+                        </div>
+                    </div>
                     <div class="page-header-actions">
-                        <button id="inventory-select-toggle" class="btn btn-secondary" title="Select multiple cards">
+                        <button id="inventory-select-toggle" class="btn btn-secondary" title="Select cards to add to a deck or remove">
                             <i class="ph ph-selection btn-icon"></i>
                             <span class="btn-text">Select</span>
                         </button>
-                        <button id="inventory-bulk-add-btn" class="btn btn-primary">
-                            <i class="ph ph-plus-circle btn-icon"></i>
-                            <span class="btn-text">Bulk Add</span>
+                        <button id="inventory-bulk-add-btn" class="btn btn-primary" title="Paste a list of cards">
+                            <i class="ph ph-list-plus btn-icon"></i>
+                            <span class="btn-text">Bulk add</span>
                         </button>
                     </div>
                 </div>
 
-                <!-- Bulk Actions Bar (hidden by default) -->
+                <div id="inventory-stats" class="inv-stats"></div>
+
+                <div class="inv-bar" id="inv-bar">
+                    <div class="inv-search">
+                        <i class="ph ph-magnifying-glass"></i>
+                        <input type="search" id="inventory-search" placeholder="Search your collection, or filter: t:creature c:g usd>=5 s:m11 is:foil" autocomplete="off" spellcheck="false" aria-label="Search your collection" />
+                        <button type="button" id="inv-help-btn" class="inv-help-btn" title="Search tips" aria-label="Search tips" aria-expanded="false"><i class="ph ph-question"></i></button>
+                    </div>
+                    <label class="inv-select"><span>Sort</span><select id="inventory-sort"></select></label>
+                    <label class="inv-select"><span>Group</span><select id="inv-group"></select></label>
+                    <div class="seg" id="inv-view" role="group" aria-label="View">
+                        <button type="button" class="seg-btn" data-view="grid" title="Card images"><i class="ph ph-squares-four"></i></button>
+                        <button type="button" class="seg-btn" data-view="list" title="Table"><i class="ph ph-rows"></i></button>
+                    </div>
+                    <div class="seg" id="inv-size" role="group" aria-label="Card size"></div>
+                </div>
+                <div id="inv-help" class="export-filter-help inv-help hidden">
+                    Plain words search names. Mix in filters, e.g. <code>t:creature c:g mv&lt;=2</code>:
+                    <code>t:</code> type, <code>o:</code> rules text, <code>c:</code> colors (<code>c=rg</code> exactly, <code>c&lt;=rg</code> within),
+                    <code>ci:</code> color identity, <code>mv</code>, <code>pow</code>/<code>tou</code>, <code>r:mythic</code>,
+                    <code>s:m11</code> a set you have a copy from, <code>usd&gt;=5</code> your priciest copy,
+                    <code>qty&gt;=4</code> copies, <code>is:foil</code>, <code>is:free</code> (copies not in a deck), <code>is:indeck</code>, <code>is:unused</code>, <code>is:legendary</code>, <code>is:dfc</code>.
+                    Put <code>-</code> in front to exclude (<code>-t:land</code>) and <code>or</code> between alternatives.
+                </div>
+                <div class="inv-facets" id="inv-facets"></div>
+
+                <!-- Bulk actions, shown in select mode -->
                 <div id="inventory-bulk-actions" class="inventory-bulk-actions hidden">
                     <div class="bulk-actions-left">
                         <span id="inventory-selected-count">0 selected</span>
-                        <button id="inventory-select-all" class="btn btn-sm btn-secondary">Select All</button>
-                        <button id="inventory-clear-selection" class="btn btn-sm btn-secondary">Clear</button>
+                        <button id="inventory-select-all" class="btn btn-sm btn-secondary">Select all shown</button>
+                        <button id="inventory-clear-selection" class="btn btn-sm btn-ghost">Clear</button>
                     </div>
                     <div class="bulk-actions-right">
                         <button id="inventory-add-to-deck" class="btn btn-sm btn-primary">
-                            <i class="ph ph-folder-plus"></i> Add to Deck
+                            <i class="ph ph-folder-plus"></i> Add to deck
                         </button>
                         <button id="inventory-remove-selected" class="btn btn-sm btn-danger">
                             <i class="ph ph-trash"></i> Remove
@@ -655,117 +697,9 @@
                     </div>
                 </div>
 
-                <!-- Stats row -->
-                <div id="inventory-stats" class="inventory-stats"></div>
-
-                <!-- Quick Add search bar -->
-                <div class="inventory-quick-add">
-                    <div class="quick-add-wrapper">
-                        <input
-                            type="text"
-                            id="inventory-quick-search"
-                            placeholder="Quick add: type card name..."
-                            autocomplete="off"
-                        />
-                        <div id="inventory-quick-results" class="inventory-quick-results hidden"></div>
-                    </div>
-                </div>
-
-                <!-- Filters -->
-                <div class="inventory-filters">
-                    <div class="inventory-filter-row">
-                        <div class="filter-group">
-                            <label>Search</label>
-                            <input
-                                type="text"
-                                id="inventory-search"
-                                placeholder="Filter by name..."
-                                class="filter-input"
-                            />
-                        </div>
-                        <div class="filter-group">
-                            <label>Sort By</label>
-                            <select id="inventory-sort" class="filter-select">
-                                <option value="name">Name</option>
-                                <option value="quantity">Quantity</option>
-                                <option value="cmc">Mana Value</option>
-                                <option value="color">Color</option>
-                                <option value="type">Type</option>
-                            </select>
-                        </div>
-                        <div class="filter-group">
-                            <label>Card Type</label>
-                            <select id="inventory-type" class="filter-select">
-                                <option value="all">All Types</option>
-                                <option value="Creature">Creature</option>
-                                <option value="Instant">Instant</option>
-                                <option value="Sorcery">Sorcery</option>
-                                <option value="Enchantment">Enchantment</option>
-                                <option value="Artifact">Artifact</option>
-                                <option value="Planeswalker">Planeswalker</option>
-                                <option value="Land">Land</option>
-                            </select>
-                        </div>
-                        <div class="filter-group">
-                            <label>Availability</label>
-                            <select id="inventory-availability" class="filter-select">
-                                <option value="all">All Cards</option>
-                                <option value="available">Available Only</option>
-                                <option value="in_decks">In Decks Only</option>
-                            </select>
-                        </div>
-                        <div class="filter-group">
-                            <label>Colors</label>
-                            <div id="inventory-colors" class="color-filter-group">
-                                <label class="color-checkbox">
-                                    <input type="checkbox" value="W" />
-                                    <span class="color-checkbox-box"><i class="ms ms-w ms-cost"></i></span>
-                                </label>
-                                <label class="color-checkbox">
-                                    <input type="checkbox" value="U" />
-                                    <span class="color-checkbox-box"><i class="ms ms-u ms-cost"></i></span>
-                                </label>
-                                <label class="color-checkbox">
-                                    <input type="checkbox" value="B" />
-                                    <span class="color-checkbox-box"><i class="ms ms-b ms-cost"></i></span>
-                                </label>
-                                <label class="color-checkbox">
-                                    <input type="checkbox" value="R" />
-                                    <span class="color-checkbox-box"><i class="ms ms-r ms-cost"></i></span>
-                                </label>
-                                <label class="color-checkbox">
-                                    <input type="checkbox" value="G" />
-                                    <span class="color-checkbox-box"><i class="ms ms-g ms-cost"></i></span>
-                                </label>
-                                <label class="color-checkbox">
-                                    <input type="checkbox" value="C" />
-                                    <span class="color-checkbox-box"><i class="ms ms-c ms-cost"></i></span>
-                                </label>
-                            </div>
-                        </div>
-                        <div class="filter-group">
-                            <label>View</label>
-                            <div class="view-toggle">
-                                <button id="inventory-grid-view-btn" class="btn-icon active" title="Grid view">
-                                    <i class="ph ph-squares-four"></i>
-                                </button>
-                                <button id="inventory-list-view-btn" class="btn-icon" title="List view">
-                                    <i class="ph ph-list"></i>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Card Grid/List -->
-                <div id="inventory-grid" class="inventory-grid"></div>
-
-                <!-- Pagination -->
-                <div id="inventory-pagination" class="pagination">
-                    <button id="inventory-prev-page" class="btn btn-secondary" disabled>Previous</button>
-                    <span id="inventory-page-info" style="font-weight: 600">Page 1 of 1</span>
-                    <button id="inventory-next-page" class="btn btn-secondary" disabled>Next</button>
-                </div>
+                <div id="inv-summary" class="inv-summary"></div>
+                <div id="inventory-grid" class="inv-results"></div>
+                <div id="inv-sentinel" class="inv-sentinel" aria-hidden="true"></div>
             </div>
 
             <!-- Bulk Add Modal -->

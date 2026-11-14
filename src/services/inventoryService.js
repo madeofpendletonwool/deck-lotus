@@ -177,6 +177,81 @@ export function getInventory(userId, filters = {}) {
 }
 
 /**
+ * The whole collection in one go, for the web page to search, filter and sort locally. A big
+ * collection is a few thousand cards; one query and a gzipped response beats paging through
+ * the server on every keystroke.
+ *
+ * One entry per card with its rules fields (so the card filter language works on it) and every
+ * owned printing as [printing_id, set_code, collector_number, rarity, finish, quantity, price,
+ * image_url]. Sets come back once, keyed by code. In-deck counts leave out maybeboards, since
+ * those copies aren't taken.
+ */
+export function getInventoryIndex(userId, { cardIds = null } = {}) {
+  // With cardIds, just those cards: the page patches itself after a change instead of reloading
+  const only = Array.isArray(cardIds) && cardIds.length ? cardIds.slice(0, 200) : null;
+  const owned = db.all(`
+    SELECT p.card_id, op.printing_id, op.finish, op.quantity, op.updated_at,
+           p.set_code, p.collector_number, p.rarity, p.image_url,
+           ${OWNED_PRICE_SQL} AS price
+    FROM owned_printings op
+    JOIN printings p ON op.printing_id = p.id
+    WHERE op.user_id = ? AND op.quantity > 0${only ? ` AND p.card_id IN (${only.map(() => '?').join(',')})` : ''}
+    ORDER BY op.quantity DESC, op.printing_id
+  `, [userId, ...(only || [])]);
+
+  const byCard = new Map();
+  const setCodes = new Set();
+  for (const r of owned) {
+    let entry = byCard.get(r.card_id);
+    if (!entry) {
+      entry = { card_id: r.card_id, added: r.updated_at, printings: [] };
+      byCard.set(r.card_id, entry);
+    }
+    if (r.updated_at > entry.added) entry.added = r.updated_at;
+    entry.printings.push([r.printing_id, r.set_code, r.collector_number, r.rarity, r.finish, r.quantity, r.price, r.image_url]);
+    setCodes.add(r.set_code);
+  }
+
+  const ids = [...byCard.keys()];
+  const CHUNK = 900;
+  for (let i = 0; i < ids.length; i += CHUNK) {
+    const chunk = ids.slice(i, i + CHUNK);
+    const ph = chunk.map(() => '?').join(',');
+    for (const c of db.all(
+      `SELECT id, name, mana_cost, cmc, colors, color_identity, type_line, oracle_text, layout, power, toughness, loyalty
+       FROM cards WHERE id IN (${ph})`,
+      chunk
+    )) {
+      const { id, ...fields } = c;
+      Object.assign(byCard.get(id), fields);
+    }
+    for (const r of db.all(
+      `SELECT p.card_id, SUM(dc.quantity) AS in_decks
+       FROM deck_cards dc
+       JOIN decks d ON dc.deck_id = d.id
+       JOIN printings p ON dc.printing_id = p.id
+       WHERE d.user_id = ? AND p.card_id IN (${ph})
+         AND COALESCE(dc.board_type, CASE WHEN dc.is_sideboard = 1 THEN 'sideboard' ELSE 'mainboard' END) != 'maybeboard'
+       GROUP BY p.card_id`,
+      [userId, ...chunk]
+    )) {
+      byCard.get(r.card_id).in_decks = r.in_decks;
+    }
+  }
+
+  const sets = {};
+  const codes = [...setCodes];
+  for (let i = 0; i < codes.length; i += CHUNK) {
+    const chunk = codes.slice(i, i + CHUNK);
+    for (const s of db.all(`SELECT code, name, release_date FROM sets WHERE code IN (${chunk.map(() => '?').join(',')})`, chunk)) {
+      sets[s.code] = [s.name, s.release_date];
+    }
+  }
+
+  return { cards: [...byCard.values()], sets };
+}
+
+/**
  * Get inventory statistics
  */
 export function getInventoryStats(userId) {
@@ -260,9 +335,35 @@ export function searchCardsForInventoryAdd(userId, query, limit = 10) {
   return cards;
 }
 
+/** Add copies of one printing in one finish, on top of any you already have. */
+function addOwnedCopies(userId, printingId, cardId, quantity, finish) {
+  const existing = db.get(
+    `SELECT id FROM owned_printings WHERE user_id = ? AND printing_id = ? AND finish = ?`,
+    [userId, printingId, finish]
+  );
+  if (existing) {
+    db.run(
+      `UPDATE owned_printings SET quantity = quantity + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+      [quantity, existing.id]
+    );
+  } else {
+    db.run(
+      `INSERT INTO owned_printings (user_id, printing_id, quantity, finish) VALUES (?, ?, ?, ?)`,
+      [userId, printingId, quantity, finish]
+    );
+  }
+  // owned_cards is the card-level "do I own this" flag other queries still read
+  db.run(
+    `INSERT INTO owned_cards (user_id, card_id, quantity) VALUES (?, ?, 1)
+     ON CONFLICT(user_id, card_id) DO UPDATE SET quantity = 1`,
+    [userId, cardId]
+  );
+}
+
 /**
  * Bulk add cards to inventory
- * Accepts array of items: { cardName, setCode (optional), quantity, finish (optional) }
+ * Accepts array of items: { cardName, setCode (optional), quantity, finish (optional) }, or
+ * { printingId, quantity, finish } for an exact printing
  */
 export function bulkAddToInventory(userId, items) {
   const results = {
@@ -273,8 +374,17 @@ export function bulkAddToInventory(userId, items) {
 
   for (const item of items) {
     try {
-      const { cardName, setCode, quantity = 1 } = item;
+      const { cardName, setCode } = item;
+      const quantity = Math.max(1, parseInt(item.quantity, 10) || 1);
       const finish = parseFinish(item.finish);
+
+      // An exact printing (the shopping list sends the one your deck lists) skips the name lookup
+      const exact = item.printingId ? db.get(`SELECT id, card_id FROM printings WHERE id = ?`, [Number(item.printingId)]) : null;
+      if (exact) {
+        addOwnedCopies(userId, exact.id, exact.card_id, quantity, finish);
+        results.added += quantity;
+        continue;
+      }
 
       if (!cardName) {
         results.failed++;
@@ -327,31 +437,7 @@ export function bulkAddToInventory(userId, items) {
         continue;
       }
 
-      // Add or update owned_printings
-      const existing = db.get(
-        `SELECT id, quantity FROM owned_printings WHERE user_id = ? AND printing_id = ? AND finish = ?`,
-        [userId, printing.id, finish]
-      );
-
-      if (existing) {
-        db.run(
-          `UPDATE owned_printings SET quantity = quantity + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-          [quantity, existing.id]
-        );
-      } else {
-        db.run(
-          `INSERT INTO owned_printings (user_id, printing_id, quantity, finish) VALUES (?, ?, ?, ?)`,
-          [userId, printing.id, quantity, finish]
-        );
-      }
-
-      // Update owned_cards for backward compatibility
-      db.run(
-        `INSERT INTO owned_cards (user_id, card_id, quantity) VALUES (?, ?, 1)
-         ON CONFLICT(user_id, card_id) DO UPDATE SET quantity = 1`,
-        [userId, card.id]
-      );
-
+      addOwnedCopies(userId, printing.id, card.id, quantity, finish);
       results.added += quantity;
     } catch (error) {
       results.failed++;

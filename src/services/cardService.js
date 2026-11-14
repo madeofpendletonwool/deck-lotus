@@ -120,8 +120,10 @@ export function getCardById(cardId) {
   const printings = db.all(
     `SELECT p.*,
             s.name as set_name,
+            s.release_date as set_release_date,
             ${NORMAL_PRICE_SQL} as price_normal,
-            ${FOIL_PRICE_SQL} as price_foil
+            ${FOIL_PRICE_SQL} as price_foil,
+            ${ETCHED_PRICE_SQL} as price_etched
      FROM printings p
      LEFT JOIN sets s ON p.set_code = s.code
      WHERE p.card_id = ?

@@ -2,6 +2,7 @@ import express from 'express';
 import {
   getInventory,
   getInventoryStats,
+  getInventoryIndex,
   searchCardsForInventoryAdd,
   bulkAddToInventory,
   getOwnedSets,
@@ -45,6 +46,19 @@ router.get('/', authenticate, (req, res, next) => {
 
     const result = getInventory(req.user.id, filters);
     res.json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * GET /api/inventory/index[?cards=1,2]
+ * The whole collection, for searching and filtering in the browser, or just some cards of it
+ */
+router.get('/index', authenticate, (req, res, next) => {
+  try {
+    const cardIds = req.query.cards ? String(req.query.cards).split(',').map(Number).filter(Number.isInteger) : null;
+    res.json(getInventoryIndex(req.user.id, { cardIds }));
   } catch (error) {
     next(error);
   }

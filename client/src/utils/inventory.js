@@ -145,21 +145,27 @@ function colorRank(item) {
 const byName = (a, b) => a.name.localeCompare(b.name);
 const num = (v) => String(v ?? '');
 
+// Each sort's natural direction (A to Z, biggest first, newest first). Reversing flips only
+// this key: ties still go A to Z, and unpriced cards stay at the end either way.
 const COMPARE = {
   name: byName,
-  value: (a, b) => b.value - a.value || byName(a, b),
-  price: (a, b) => (b.price ?? -1) - (a.price ?? -1) || byName(a, b),
-  qty: (a, b) => b.qty - a.qty || byName(a, b),
-  added: (a, b) => b.added.localeCompare(a.added) || byName(a, b),
-  cmc: (a, b) => (a.cmc || 0) - (b.cmc || 0) || byName(a, b),
-  color: (a, b) => colorRank(a) - colorRank(b) || byName(a, b),
+  value: (a, b) => b.value - a.value,
+  price: (a, b) => (b.price ?? -1) - (a.price ?? -1),
+  qty: (a, b) => b.qty - a.qty,
+  added: (a, b) => b.added.localeCompare(a.added),
+  cmc: (a, b) => (a.cmc || 0) - (b.cmc || 0),
+  color: (a, b) => colorRank(a) - colorRank(b),
   set: (a, b) => (b.printings[0]?.release_date || '').localeCompare(a.printings[0]?.release_date || '')
     || a.set_name.localeCompare(b.set_name)
     || num(a.collector_number).localeCompare(num(b.collector_number), undefined, { numeric: true }),
 };
+const unpricedLast = (a, b) => (a.price == null) - (b.price == null);
 
-export function sortItems(items, sort = 'name') {
-  return [...items].sort(COMPARE[sort] || COMPARE.name);
+export function sortItems(items, sort = 'name', { reverse = false } = {}) {
+  const compare = COMPARE[sort] || COMPARE.name;
+  const dir = reverse ? -1 : 1;
+  return [...items].sort((a, b) =>
+    (sort === 'price' ? unpricedLast(a, b) : 0) || dir * compare(a, b) || byName(a, b));
 }
 
 /** Sets you own cards from, with how many of the given cards have a copy from each. */

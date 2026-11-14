@@ -1,4 +1,5 @@
 import db from '../db/connection.js';
+import { releaseExcessCopies } from './ownershipService.js';
 import { NORMAL_PRICE_SQL, FOIL_PRICE_SQL, ETCHED_PRICE_SQL, DEFAULT_PRINTING_ORDER_SQL } from './pricingService.js';
 
 /**
@@ -495,6 +496,7 @@ export function toggleCardOwnership(userId, cardId) {
       `DELETE FROM owned_cards WHERE user_id = ? AND card_id = ?`,
       [userId, cardId]
     );
+    releaseExcessCopies(userId, [cardId]);
     return { owned: false, message: 'Card removed from collection' };
   } else {
     // Add the default printing with quantity 1
@@ -620,6 +622,8 @@ export function setOwnedPrintingQuantity(userId, printingId, quantity, finish = 
       );
     }
 
+    // Decks give back copies that are gone
+    releaseExcessCopies(userId, [cardId]);
     return { success: true, message: 'Printing removed from collection' };
   }
 
@@ -650,6 +654,7 @@ export function setOwnedPrintingQuantity(userId, printingId, quantity, finish = 
     [userId, cardId]
   );
 
+  releaseExcessCopies(userId, [cardId]);
   return { success: true, quantity, finish };
 }
 
@@ -660,6 +665,7 @@ export function getCardDeckUsage(userId, cardId) {
   return db.all(
     `SELECT DISTINCT d.id, d.name, d.format,
             SUM(dc.quantity) as total_quantity,
+            SUM(dc.owned_quantity) as held_quantity,
             GROUP_CONCAT(CASE WHEN COALESCE(dc.board_type, CASE WHEN dc.is_sideboard = 1 THEN 'sideboard' ELSE 'mainboard' END) = 'sideboard' THEN dc.quantity ELSE 0 END) as sideboard_quantities,
             GROUP_CONCAT(CASE WHEN COALESCE(dc.board_type, CASE WHEN dc.is_sideboard = 1 THEN 'sideboard' ELSE 'mainboard' END) = 'mainboard' THEN dc.quantity ELSE 0 END) as mainboard_quantities
      FROM deck_cards dc
@@ -685,10 +691,8 @@ export function getCardOwnershipAndUsage(userId, cardId) {
   // Calculate total owned
   const totalOwned = ownedPrintings.reduce((sum, op) => sum + op.quantity, 0);
 
-  // Calculate total in decks
-  const totalInDecks = deckUsage.reduce((sum, deck) => sum + deck.total_quantity, 0);
-
-  // Calculate available (not in decks)
+  // Copies your decks hold (not just list), and the rest
+  const totalInDecks = deckUsage.reduce((sum, deck) => sum + (deck.held_quantity || 0), 0);
   const available = totalOwned - totalInDecks;
 
   return {

@@ -1504,6 +1504,15 @@ button.btn-icon.active { background: var(--primary-soft); color: var(--primary-l
 }
 .deck-card-item .ownership-toggle-btn:hover { color: var(--text-secondary); }
 .deck-card-item .ownership-toggle-btn.owned { color: var(--success); }
+/* Some of the row's copies are in this deck */
+.deck-card-item .ownership-toggle-btn.own-partial { color: var(--warning); width: auto; gap: 2px; }
+.deck-card-item .ownership-toggle-btn .own-count { font-size: 0.6875rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+/* Maybeboard rows don't hold copies */
+.deck-card-item .ownership-toggle-btn.own-maybe { cursor: default; opacity: 0.6; }
+.deck-card-item .ownership-toggle-btn.own-maybe:hover { color: var(--border-strong); }
+
+.own-dialog .own-choices { display: flex; flex-direction: column; gap: var(--space-2); margin-bottom: var(--space-4); }
+.own-dialog .own-choices .btn { justify-content: flex-start; text-align: left; white-space: normal; }
 
 /* Ultra-compact text-only layout */
 .deck-card-item.ultra-compact { min-height: 26px; padding: 1px 6px; }
@@ -4406,6 +4415,7 @@ button.tag-chip:hover { border-color: var(--border-strong); color: var(--text); 
 .col-pill[data-status='owned'] i { color: var(--success); }
 .col-pill[data-status='shared'] { background: rgba(229, 161, 58, 0.12); }
 .col-pill[data-status='shared'] i { color: var(--warning); }
+.col-pill[data-status='spare'] i { color: var(--success); }
 .col-pill[data-status='partial'] i,
 .col-pill[data-status='missing'] i { color: var(--danger); }
 .col-pill[data-status='missing'] { background: rgba(229, 83, 75, 0.12); }

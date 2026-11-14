@@ -54,16 +54,22 @@ export function deckDemand(rows) {
 }
 
 /**
- * Status of one card in a deck against your collection:
- *   'owned'   you own enough and no other deck wants those copies
- *   'shared'  you own enough for this deck, but not for every deck that lists it
- *   'partial' you own some, not enough for this deck alone
+ * Status of one card in a deck against your collection.
+ *
+ * For one of your own decks (`ownDeck`), copies are in particular decks:
+ *   'owned'   all the copies it needs are in this deck
+ *   'spare'   not all in this deck, but copies no deck holds would cover the rest
+ *   'shared'  you own enough, but some of them are in your other decks
+ *   'partial' you own some, not enough for this deck
  *   'missing' you own none
+ * For someone else's deck, 'owned' means copies no deck of yours holds would cover it, and
+ * 'shared' that you'd have to take some out of your decks.
  */
-export function cardStatus({ need, owned, otherDemand }) {
-  if (owned <= 0) return 'missing';
-  if (owned < need) return 'partial';
-  return otherDemand > 0 && need + otherDemand > owned ? 'shared' : 'owned';
+export function cardStatus({ need, owned, inDeck = 0, free = 0, ownDeck = false }) {
+  if (ownDeck ? inDeck >= need : free >= need) return 'owned';
+  if (ownDeck && inDeck + free >= need) return 'spare';
+  if (owned >= need) return 'shared';
+  return owned > 0 ? 'partial' : 'missing';
 }
 
 const money = (n) => Math.round(n * 100) / 100;
@@ -71,32 +77,44 @@ const money = (n) => Math.round(n * 100) / 100;
 /**
  * The full report for a deck.
  *
- * @param rows        the deck's cards, each with card_id, quantity, board_type, price (its printing's)
+ * @param rows        the deck's cards, each with card_id, quantity, board_type, price (its printing's),
+ *                    and for your own deck owned_quantity (copies of it in this deck)
  * @param owned       Map card_id → copies you own
- * @param otherDecks  rows of { deck_id, deck_name, format, card_id, quantity }, for your other decks
+ * @param otherDecks  rows of { deck_id, deck_name, format, card_id, quantity, held }, for your other
+ *                    decks: copies listed, and copies of yours in that deck
  * @param cheapest    Map card_id → price of the card's cheapest playable printing
+ * @param ownDeck     the deck is yours, so its rows say which copies are in it
  */
-export function collectionReport({ rows, owned = new Map(), otherDecks = [], cheapest = new Map() }) {
+export function collectionReport({ rows, owned = new Map(), otherDecks = [], cheapest = new Map(), ownDeck = false }) {
   const demand = deckDemand(rows);
+  const held = new Map(); // card_id → copies in this deck
+  if (ownDeck) {
+    for (const row of rows || []) {
+      if (!claimsCopies(row)) continue;
+      held.set(row.card_id, (held.get(row.card_id) || 0) + (Number(row.owned_quantity) || 0));
+    }
+  }
 
-  const others = new Map(); // card_id → [{ deck_id, name, format, quantity }]
+  const others = new Map(); // card_id → [{ deck_id, name, format, quantity, held }]
   for (const r of otherDecks) {
     if (!demand.has(r.card_id)) continue;
     const qty = Number(r.quantity) || 0;
     if (qty <= 0) continue;
     if (!others.has(r.card_id)) others.set(r.card_id, []);
-    others.get(r.card_id).push({ deck_id: r.deck_id, name: r.deck_name, format: r.format || null, quantity: qty });
+    others.get(r.card_id).push({ deck_id: r.deck_id, name: r.deck_name, format: r.format || null, quantity: qty, held: Number(r.held) || 0 });
   }
 
   const summary = {
     cards: 0,
     copies: 0,
-    ownedCards: 0, // cards you own enough of for this deck
+    ownedCards: 0, // cards with every copy covered (in this deck, for your own deck)
     ownedCopies: 0,
     missingCards: 0,
-    missingCopies: 0,
-    sharedCards: 0, // owned, but other decks claim the same copies
-    alongsideCopies: 0, // copies to buy so no other deck gives anything up
+    missingCopies: 0, // copies to buy if you take what you need out of your other decks
+    sharedCards: 0, // cards you own enough of, but some are in your other decks
+    spareCards: 0, // cards your free copies would finish
+    spareCopies: 0, // free copies this deck could take
+    alongsideCopies: 0, // copies to buy without taking any from another deck
     basics: 0,
     cost: 0, // missingCopies at the deck's printings (cheapest printing when the deck's has no price)
     cheapestCost: 0, // missingCopies at each card's cheapest printing
@@ -112,18 +130,20 @@ export function collectionReport({ rows, owned = new Map(), otherDecks = [], che
     }
     const need = entry.quantity;
     const have = Math.max(0, Number(owned.get(entry.card_id)) || 0);
-    const otherList = (others.get(entry.card_id) || []).sort((a, b) => b.quantity - a.quantity || String(a.name).localeCompare(String(b.name)));
-    const otherDemand = otherList.reduce((s, d) => s + d.quantity, 0);
+    const otherList = (others.get(entry.card_id) || []).sort((a, b) => b.held - a.held || b.quantity - a.quantity || String(a.name).localeCompare(String(b.name)));
+    const heldElsewhere = otherList.reduce((s, d) => s + d.held, 0);
+    const inDeck = Math.min(need, held.get(entry.card_id) || 0);
+    const free = Math.max(0, have - heldElsewhere - (held.get(entry.card_id) || 0));
     const missing = Math.max(0, need - have);
-    // If every other deck keeps its copies, how many are left for this one?
-    const spare = Math.max(0, have - otherDemand);
-    const alongside = Math.max(0, need - spare);
+    // Leaving every other deck its copies, what's left to buy?
+    const alongside = Math.max(0, need - inDeck - free);
+    const spare = ownDeck ? Math.min(need - inDeck, free) : 0;
 
     const cheapestEach = cheapest.has(entry.card_id) && cheapest.get(entry.card_id) != null ? Number(cheapest.get(entry.card_id)) : null;
     const deckEach = entry.pricedQty ? entry.value / entry.pricedQty : null;
     const priceEach = deckEach ?? cheapestEach;
 
-    const status = cardStatus({ need, owned: have, otherDemand });
+    const status = cardStatus({ need, owned: have, inDeck, free, ownDeck });
     cards.push({
       card_id: entry.card_id,
       name: entry.name,
@@ -134,23 +154,32 @@ export function collectionReport({ rows, owned = new Map(), otherDecks = [], che
       is_commander: entry.is_commander,
       need,
       owned: have,
+      in_deck: inDeck,
+      free,
+      spare,
       missing,
       alongside,
       status,
       price_each: priceEach == null ? null : money(priceEach),
       cheapest_each: cheapestEach == null ? null : money(cheapestEach),
       other_decks: otherList,
-      other_demand: otherDemand,
+      other_demand: otherList.reduce((s, d) => s + d.quantity, 0),
+      held_elsewhere: heldElsewhere,
     });
 
+    const covered = ownDeck ? inDeck : Math.min(need, free);
     summary.cards += 1;
     summary.copies += need;
-    summary.ownedCopies += Math.min(need, have);
+    summary.ownedCopies += covered;
     summary.missingCopies += missing;
     summary.alongsideCopies += alongside;
-    if (missing === 0) summary.ownedCards += 1;
+    if (covered >= need) summary.ownedCards += 1;
     else summary.missingCards += 1;
     if (status === 'shared') summary.sharedCards += 1;
+    if (spare > 0) {
+      summary.spareCards += 1;
+      summary.spareCopies += spare;
+    }
     if (missing > 0) {
       if (priceEach == null) summary.unpriced += 1;
       else summary.cost += missing * priceEach;
@@ -163,27 +192,28 @@ export function collectionReport({ rows, owned = new Map(), otherDecks = [], che
   summary.cheapestCost = money(summary.cheapestCost);
   summary.alongsideCost = money(summary.alongsideCost);
 
-  const order = { missing: 0, partial: 1, shared: 2, owned: 3 };
+  const order = { missing: 0, partial: 1, shared: 2, spare: 3, owned: 4 };
   cards.sort((a, b) => order[a.status] - order[b.status] || String(a.name).localeCompare(String(b.name)));
   return { summary, cards };
 }
 
 /**
- * Deck rows cut down to the copies you don't own, for a shopping list. Rows carry `owned_quantity`
- * (copies of the card owned, any printing), as the deck endpoint returns them. Owned copies are
- * used up by rows in the order given, so pass mainboard rows first. Basic lands and maybeboard
- * rows are left out.
+ * Deck rows cut down to the copies you'd have to buy, for a shopping list. Rows carry
+ * `owned_quantity` (copies of yours in this row) and `free_quantity` (copies of the card in no
+ * deck), as the deck endpoint returns them. Free copies aren't bought; they go to rows in the
+ * order given, so pass mainboard rows first. Basic lands and maybeboard rows are left out.
  */
 export function missingRows(rows) {
-  const left = new Map();
+  const free = new Map();
   const out = [];
   for (const row of rows || []) {
     if (!claimsCopies(row) || isBasicLand(row)) continue;
-    if (!left.has(row.card_id)) left.set(row.card_id, Math.max(0, Number(row.owned_quantity) || 0));
+    if (!free.has(row.card_id)) free.set(row.card_id, Math.max(0, Number(row.free_quantity) || 0));
     const qty = Number(row.quantity) || 0;
-    const covered = Math.min(qty, left.get(row.card_id));
-    left.set(row.card_id, left.get(row.card_id) - covered);
-    if (qty - covered > 0) out.push({ ...row, quantity: qty - covered });
+    const held = Math.min(qty, Math.max(0, Number(row.owned_quantity) || 0));
+    const fromFree = Math.min(qty - held, free.get(row.card_id));
+    free.set(row.card_id, free.get(row.card_id) - fromFree);
+    if (qty - held - fromFree > 0) out.push({ ...row, quantity: qty - held - fromFree });
   }
   return out;
 }

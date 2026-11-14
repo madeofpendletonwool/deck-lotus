@@ -124,21 +124,19 @@ test('options filter basics, owned cards and the sideboard', () => {
   assert.doesNotMatch(generateExport('mpc', deck, { includeMaybeboard: true, unownedOnly: true }), /Opt/);
 });
 
-test('only unowned exports the copies still missing', () => {
+test('only unowned exports the copies this deck does not hold', () => {
   const mpc = (cards) => generateExport('mpc', cards, { unownedOnly: true, includeMaybeboard: true });
 
-  assert.equal(mpc([card('Opt', { quantity: 4, is_owned: 1, owned_quantity: 1 })]), '3 Opt');
+  assert.equal(mpc([card('Opt', { quantity: 4, is_owned: 0, owned_quantity: 1 })]), '3 Opt');
   assert.equal(mpc([card('Opt', { quantity: 4, is_owned: 1, owned_quantity: 4 })]), '');
-  assert.equal(mpc([card('Opt', { quantity: 2, is_owned: 1, owned_quantity: 9 })]), '');
   assert.equal(mpc([card('Opt', { quantity: 4, is_owned: 0, owned_quantity: null })]), '4 Opt');
 });
 
-test('owned copies are shared across printings and boards, earliest board first', () => {
-  const opt = { card_id: 7, is_owned: 1, owned_quantity: 3 };
+test('owned copies are counted per row, so another deck holding the card does not help', () => {
   const cards = [
-    card('Opt', { ...opt, quantity: 2, set_code: 'xln' }),
-    card('Opt', { ...opt, quantity: 2, set_code: 'dom' }),
-    card('Opt', { ...opt, quantity: 2, board_type: 'sideboard' }),
+    card('Opt', { card_id: 7, quantity: 2, set_code: 'xln', owned_quantity: 2 }),
+    card('Opt', { card_id: 7, quantity: 2, set_code: 'dom', owned_quantity: 1 }),
+    card('Opt', { card_id: 7, quantity: 2, board_type: 'sideboard', owned_quantity: 0, collection_quantity: 5 }),
   ];
   const { main, side } = partitionDeck(cards, { unownedOnly: true });
   assert.deepEqual(main.map((c) => [c.set_code, c.quantity]), [['dom', 1]]);
@@ -146,27 +144,14 @@ test('owned copies are shared across printings and boards, earliest board first'
   assert.equal(countExportedCards(cards, { unownedOnly: true }), 3);
 });
 
-test('owned copies are not spent on a board that is left out', () => {
-  const opt = { card_id: 7, is_owned: 1, owned_quantity: 2 };
-  const cards = [
-    card('Opt', { ...opt, quantity: 2, board_type: 'sideboard' }),
-    card('Opt', { ...opt, quantity: 4 }),
-  ];
-  assert.equal(generateExport('mpc', cards, { unownedOnly: true, includeSideboard: false }), '2 Opt');
-});
-
-test('a card marked owned with no count covers every copy', () => {
-  const cards = [card('Opt', { quantity: 4, is_owned: 1 })];
-  assert.equal(generateExport('mpc', cards, { unownedOnly: true }), '');
-});
-
-test('removing ownership wins over a stale count', () => {
-  const cards = [card('Opt', { quantity: 4, is_owned: false, owned_quantity: 3 })];
-  assert.equal(generateExport('mpc', cards, { unownedOnly: true }), '4 Opt');
+test('a maybeboard row counts as owned when free copies would cover it', () => {
+  const mpc = (cards) => generateExport('mpc', cards, { unownedOnly: true, includeMaybeboard: true });
+  assert.equal(mpc([card('Opt', { board_type: 'maybeboard', quantity: 2, is_owned: 1, owned_quantity: 0 })]), '');
+  assert.equal(mpc([card('Opt', { board_type: 'maybeboard', quantity: 2, is_owned: 0, owned_quantity: 0 })]), '2 Opt');
 });
 
 test('the owned filter leaves the source deck unchanged', () => {
-  const cards = [card('Opt', { quantity: 4, is_owned: 1, owned_quantity: 1 })];
+  const cards = [card('Opt', { quantity: 4, is_owned: 0, owned_quantity: 1 })];
   generateExport('mpc', cards, { unownedOnly: true });
   assert.equal(cards[0].quantity, 4);
 });

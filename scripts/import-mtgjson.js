@@ -7,6 +7,7 @@ import Database from 'better-sqlite3';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { mergeCardRows } from '../src/utils/cardFaces.js';
+import { releaseExcessForAll } from '../src/db/ownership.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -695,7 +696,8 @@ async function main() {
 
       // Cube metadata columns arrive with migration 022; older databases don't have them yet
       const deckCardColumns = new Set(targetDb.prepare(`PRAGMA table_info(deck_cards)`).all().map((c) => c.name));
-      const cubeColumns = ['tags', 'color_category', 'notes'].filter((c) => deckCardColumns.has(c));
+      // owned_quantity (which deck holds your copies) arrives with migration 025
+      const cubeColumns = ['tags', 'color_category', 'notes', 'owned_quantity'].filter((c) => deckCardColumns.has(c));
       const deckCardsBackup = targetDb.prepare(`
         SELECT dc.deck_id, dc.quantity, dc.is_sideboard, dc.is_commander, dc.board_type, p.uuid
           ${cubeColumns.map((c) => `, dc.${c}`).join('')}
@@ -949,6 +951,12 @@ async function main() {
       if (ownedPrintingsResult.notFound > 0) {
         console.log(`  ⚠️  ${ownedPrintingsResult.notFound} printings not found in new import (may have been removed from MTGJSON)`);
       }
+    }
+
+    // Printings that didn't come back took their owned copies with them; decks give those back
+    if (targetDb._deckCardCubeColumns?.includes('owned_quantity')) {
+      const released = releaseExcessForAll(targetDb);
+      if (released) console.log(`✓ ${released} copies in decks were no longer in collections and were released`);
     }
 
     targetDb.exec('COMMIT');

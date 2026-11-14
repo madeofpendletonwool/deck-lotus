@@ -1,6 +1,7 @@
 import db from '../db/connection.js';
 import { DEFAULT_PRINTING_ORDER_SQL } from './pricingService.js';
 import { isCubeFormat, DEFAULT_CUBE_SETTINGS } from '../../shared/formats.js';
+import { claimFreeCopiesForDeck } from './ownershipService.js';
 
 /**
  * Split one CSV line into fields, honoring quotes ("a, b" and doubled "" escapes).
@@ -364,6 +365,8 @@ export function importDeck(userId, deckName, format, cardList) {
       if (logHistory) logChange.run(deckId, card.name, cardData.quantity, boardType);
       imported += cardData.quantity;
     }
+    // The new deck takes copies you own that no other deck is using
+    claimFreeCopiesForDeck(userId, deckId);
   });
 
   return { deckId, imported, notFound, missing };

@@ -1,4 +1,5 @@
 import { getDb } from '../db/index.js';
+import { releaseExcess, fillDeck } from '../db/ownership.js';
 import fs from 'fs';
 import path from 'path';
 import cron from 'node-cron';
@@ -112,7 +113,7 @@ export function createBackup(userId = null) {
     // Backup deck_cards with UUIDs (stable across imports)
     backup.data.deck_cards = db.prepare(`
       SELECT dc.id, dc.deck_id, dc.quantity, dc.is_sideboard, dc.is_commander,
-             dc.board_type, dc.added_at, dc.tags, dc.color_category, dc.notes, p.uuid as printing_uuid
+             dc.board_type, dc.added_at, dc.tags, dc.color_category, dc.notes, dc.owned_quantity, p.uuid as printing_uuid
       FROM deck_cards dc
       JOIN printings p ON dc.printing_id = p.id
       WHERE dc.deck_id IN (${deckIdsStr})
@@ -470,9 +471,11 @@ export function restoreBackup(backupData, options = {}) {
     `);
 
     const insertDeckCard = db.prepare(`
-      INSERT OR REPLACE INTO deck_cards (deck_id, printing_id, quantity, is_sideboard, is_commander, board_type, added_at, tags, color_category, notes)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT OR REPLACE INTO deck_cards (deck_id, printing_id, quantity, is_sideboard, is_commander, board_type, added_at, tags, color_category, notes, owned_quantity)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
+    // Backups from before per-deck ownership don't say which deck holds which copies
+    const legacyDeckCards = deckCards.length > 0 && deckCards.every((dc) => dc.owned_quantity === undefined);
 
     for (const deckCard of deckCards) {
       try {
@@ -488,7 +491,8 @@ export function restoreBackup(backupData, options = {}) {
             deckCard.added_at,
             deckCard.tags ?? null,
             deckCard.color_category ?? null,
-            deckCard.notes ?? null
+            deckCard.notes ?? null,
+            Number(deckCard.owned_quantity) || 0
           );
           results.deck_cards++;
         } else {
@@ -523,6 +527,18 @@ export function restoreBackup(backupData, options = {}) {
         results.deck_shares++;
       } catch (e) {
         results.errors.push(`Deck share: ${e.message}`);
+      }
+    }
+
+    // Keep each card's copies in decks within what the collection holds, and hand copies out
+    // oldest deck first when the backup predates per-deck ownership
+    const deckOwner = db.prepare(`SELECT user_id FROM decks WHERE id = ?`);
+    const restoredUsers = new Set(restoredDeckIds.map((id) => deckOwner.get(deckIdMap.get(id))?.user_id).filter((u) => u != null));
+    for (const uid of restoredUsers) {
+      releaseExcess(db, uid);
+      if (legacyDeckCards) {
+        const decks = db.prepare(`SELECT id FROM decks WHERE user_id = ? ORDER BY created_at, id`).all(uid);
+        for (const d of decks) fillDeck(db, uid, d.id);
       }
     }
   });

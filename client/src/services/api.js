@@ -286,6 +286,18 @@ class ApiClient {
     });
   }
 
+  // Copies from your collection in a deck row. { owned, takeFrom?: [deckId], addToCollection? }
+  async setDeckCardOwned(deckId, deckCardId, body) {
+    return this.request(`/decks/${deckId}/cards/${deckCardId}/owned`, {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    });
+  }
+
+  async claimFreeCopies(deckId) {
+    return this.request(`/decks/${deckId}/claim-free`, { method: 'POST' });
+  }
+
   async updateDeckCard(deckId, cardId, updates) {
     return this.request(`/decks/${deckId}/cards/${cardId}`, {
       method: 'PUT',

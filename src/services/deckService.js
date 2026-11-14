@@ -78,6 +78,8 @@ export function getUserDecks(userId) {
     [userId]
   );
 
+  const totals = deckTotals(userId);
+
   // Cover image: the commander if there is one, otherwise the highest mana value creature.
   // Stable on purpose, so a deck's tile doesn't change every time the page loads.
   return decks.map(deck => {
@@ -98,9 +100,32 @@ export function getUserDecks(userId) {
 
     return {
       ...deck,
+      total_price: totals.get(deck.id) ?? 0,
       preview_image: randomCard?.image_url || null
     };
   });
+}
+
+/**
+ * Every deck's value in one query, priced the way the deck builder's total is (getDeckPrice):
+ * each card's printing, or the card's cheapest paper price when the printing has none.
+ */
+function deckTotals(userId) {
+  const rows = db.all(
+    `SELECT dc.deck_id, dc.quantity,
+      COALESCE(${PRINTING_PRICE_SQL}, ${CHEAPEST_PRINTING_SQL}) as price
+     FROM deck_cards dc
+     JOIN decks d ON d.id = dc.deck_id
+     JOIN printings p ON dc.printing_id = p.id
+     WHERE d.user_id = ?`,
+    [userId]
+  );
+  const totals = new Map();
+  for (const row of rows) {
+    if (row.price == null) continue;
+    totals.set(row.deck_id, (totals.get(row.deck_id) || 0) + row.price * row.quantity);
+  }
+  return totals;
 }
 
 /**

@@ -33,7 +33,7 @@ let allItems = [];
 let loading = null;
 let stale = true;
 let filters = cloneFilters(EMPTY_FILTERS);
-let prefs = { sort: 'name', group: 'none', view: 'grid', size: 'm', ...readPrefs() };
+let prefs = { sort: 'name', reverse: false, group: 'none', view: 'grid', size: 'm', ...readPrefs() };
 let shown = [];
 let queue = [];
 let queuePos = 0;
@@ -176,6 +176,12 @@ function setupControls() {
   sort.value = prefs.sort;
   sort.addEventListener('change', () => {
     prefs.sort = sort.value;
+    prefs.reverse = false;
+    savePrefs();
+    render();
+  });
+  document.getElementById('inventory-sort-dir').addEventListener('click', () => {
+    prefs.reverse = !prefs.reverse;
     savePrefs();
     render();
   });
@@ -292,7 +298,7 @@ function openSetPicker(anchor) {
 function render({ keepScroll = false } = {}) {
   if (!index) return;
   const y = window.scrollY;
-  shown = sortItems(filterItems(allItems, filters), prefs.sort);
+  shown = sortItems(filterItems(allItems, filters), prefs.sort, { reverse: prefs.reverse });
 
   renderStats();
   renderBar();
@@ -313,6 +319,11 @@ function renderBar() {
   size.classList.toggle('hidden', prefs.view !== 'grid');
   size.innerHTML = SIZES.map(([v, l]) => `<button type="button" class="seg-btn ${prefs.size === v ? 'active' : ''}" data-size="${v}" title="${{ s: 'Small', m: 'Medium', l: 'Large' }[v]} cards">${l}</button>`).join('');
   document.getElementById('inventory-sort').value = prefs.sort;
+  const dirBtn = document.getElementById('inventory-sort-dir');
+  const ascending = ascendingSort(prefs.sort) !== prefs.reverse;
+  dirBtn.innerHTML = `<i class="ph ${ascending ? 'ph-sort-ascending' : 'ph-sort-descending'}"></i>`;
+  dirBtn.title = `${ascending ? 'Ascending' : 'Descending'}, click to reverse`;
+  dirBtn.setAttribute('aria-label', dirBtn.title);
   document.getElementById('inv-group').value = prefs.group;
 }
 
@@ -410,7 +421,9 @@ function renderResults() {
         </tr></thead>
       </table>`
     : '';
+  // Clicking the sorted column again flips it
   el.querySelectorAll('th[data-sort]').forEach((h) => h.addEventListener('click', () => {
+    prefs.reverse = prefs.sort === h.dataset.sort ? !prefs.reverse : false;
     prefs.sort = h.dataset.sort;
     savePrefs();
     render();
@@ -418,9 +431,13 @@ function renderResults() {
   renderMore();
 }
 
+/** Sorts that naturally run A to Z or smallest first; the rest start with the biggest or newest. */
+const ascendingSort = (sort) => ['name', 'cmc', 'color'].includes(sort);
+
 function th(sort, label, cls = '') {
   const active = prefs.sort === sort;
-  return `<th class="${cls} inv-sortable ${active ? 'is-sorted' : ''}" data-sort="${sort}" aria-sort="${active ? (sort === 'name' ? 'ascending' : 'descending') : 'none'}">${label}${active ? ' <i class="ph ph-caret-down"></i>' : ''}</th>`;
+  const ascending = ascendingSort(sort) !== prefs.reverse;
+  return `<th class="${cls} inv-sortable ${active ? 'is-sorted' : ''}" data-sort="${sort}" aria-sort="${active ? (ascending ? 'ascending' : 'descending') : 'none'}" title="${active ? 'Click to reverse' : ''}">${label}${active ? ` <i class="ph ${ascending ? 'ph-caret-up' : 'ph-caret-down'}"></i>` : ''}</th>`;
 }
 
 /** Append the next chunk of results. */

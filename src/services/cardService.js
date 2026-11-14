@@ -320,10 +320,17 @@ function buildBrowseFilter({ name, colors, type, rarities, sets, subtypes, cmcMi
  * are looked up afterwards for just those rows.
  */
 function selectBrowsePage({ whereSql, params }, { sort, name, seed, limit, offset }) {
-  if (sort === 'price') {
+  if (sort === 'price' || sort === 'price-asc') {
     const prices = getMaxPriceByCard();
     const matches = db.all(`SELECT c.id, c.name FROM cards c WHERE ${whereSql}`, params);
-    matches.sort((a, b) => (prices.get(b.id) ?? -1) - (prices.get(a.id) ?? -1) || a.name.localeCompare(b.name));
+    const byName = (a, b) => a.name.localeCompare(b.name);
+    if (sort === 'price') {
+      matches.sort((a, b) => (prices.get(b.id) ?? -1) - (prices.get(a.id) ?? -1) || byName(a, b));
+    } else {
+      // Cheapest first, with unpriced cards at the end rather than the start
+      const price = (m) => prices.get(m.id) ?? Infinity;
+      matches.sort((a, b) => (price(a) === price(b) ? 0 : price(a) < price(b) ? -1 : 1) || byName(a, b));
+    }
     return matches.slice(offset, offset + limit).map((m) => m.id);
   }
 

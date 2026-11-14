@@ -76,6 +76,8 @@ test('type, rarity, set, finish and availability facets', () => {
 test('sorts', () => {
   assert.deepEqual(names(sortItems(items, 'value')), ['Sol Ring', 'Lightning Bolt', 'Llanowar Elves', 'Boros Charm']);
   assert.deepEqual(names(sortItems(items, 'added')), ['Llanowar Elves', 'Boros Charm', 'Lightning Bolt', 'Sol Ring']);
+  assert.deepEqual(names(sortItems(items, 'value', { reverse: true })), ['Boros Charm', 'Llanowar Elves', 'Lightning Bolt', 'Sol Ring']);
+  assert.deepEqual(names(sortItems(items, 'name', { reverse: true })), names(sortItems(items, 'name')).reverse());
   assert.deepEqual(names(sortItems(items, 'color')), ['Lightning Bolt', 'Llanowar Elves', 'Boros Charm', 'Sol Ring']);
   assert.deepEqual(names(sortItems(items, 'set')), ['Boros Charm', 'Lightning Bolt', 'Llanowar Elves', 'Sol Ring']);
 });

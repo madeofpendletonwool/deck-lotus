@@ -3,6 +3,8 @@ import { showLoading, hideLoading, formatMana, showToast } from '../utils/ui.js'
 import { openExportModal } from './exportModal.js';
 import { formatLabel, isCubeFormat } from '../../../shared/formats.js';
 import { COLOR_CATEGORIES, COLORS, colorCategoryOf, sortForDisplay, tagsOf } from '../utils/cube.js';
+import { compileQuery } from '../utils/cardQuery.js';
+import { formatPrice } from '../utils/printings.js';
 import { DeckTools } from './deckAnalysis.js';
 import { DeckCollection } from './deckCollection.js';
 
@@ -16,6 +18,29 @@ let sharedDeck = null;
 let isAuthenticated = false;
 let sharedTools = null;
 let sharedCollection = null;
+let sharedFilter = '';
+let sharedSort = '';
+
+const priceOf = (c) => (Number(c.price) > 0 ? Number(c.price) : null);
+const byName = (a, b) => (a.name || '').localeCompare(b.name || '');
+
+/** Cards in the chosen order. Stable, so the cube table keeps its columns. Unpriced cards go last. */
+function sortCards(cards) {
+  if (sharedSort === 'name') return [...cards].sort(byName);
+  if (sharedSort === 'cmc') return [...cards].sort((a, b) => (Number(a.cmc) || 0) - (Number(b.cmc) || 0) || byName(a, b));
+  if (sharedSort.startsWith('price')) {
+    const dir = sharedSort === 'price-asc' ? 1 : -1;
+    return [...cards].sort((a, b) => {
+      const pa = priceOf(a);
+      const pb = priceOf(b);
+      return (!pa - !pb) || (pa && pb ? dir * (pa - pb) : 0) || byName(a, b);
+    });
+  }
+  return cards;
+}
+
+const showPrices = () => sharedSort.startsWith('price');
+const priceLabel = (c) => (priceOf(c) ? formatPrice(priceOf(c)) : '—');
 
 const shareToken = () => window.location.pathname.split('/share/')[1];
 
@@ -59,6 +84,15 @@ export function setupSharedDeck() {
       const tab = btn.dataset.tab;
       switchTab(tab);
     });
+  });
+
+  document.getElementById('shared-filter-search').addEventListener('input', (e) => {
+    sharedFilter = e.target.value;
+    if (sharedDeck) renderSharedDeckCards();
+  });
+  document.getElementById('shared-sort').addEventListener('change', (e) => {
+    sharedSort = e.target.value;
+    if (sharedDeck) renderSharedDeckCards();
   });
 
   // Anyone with the link can export the list, e.g. to print proxies of it.
@@ -122,7 +156,9 @@ export async function loadSharedDeck(token) {
       document.getElementById('login-to-import-btn').classList.remove('hidden');
     }
 
-    // Render deck cards
+    // Render deck cards, starting unfiltered
+    sharedFilter = '';
+    document.getElementById('shared-filter-search').value = '';
     renderSharedDeckCards();
 
     // Render stats
@@ -153,8 +189,10 @@ function renderSharedDeckCards() {
   const mainboard = document.getElementById('shared-mainboard');
   const sideboard = document.getElementById('shared-sideboard');
 
-  const mainboardCards = sharedDeck.cards.filter(isSharedMainboard);
-  const sideboardCards = sharedDeck.cards.filter(isSharedSideboard);
+  // Plain text matches names; "t:creature c:r mv<=2 usd>=5" style searches work too
+  const matches = sharedFilter.trim() ? compileQuery(sharedFilter.toLowerCase()) : () => true;
+  const mainboardCards = sharedDeck.cards.filter(isSharedMainboard).filter(matches);
+  const sideboardCards = sharedDeck.cards.filter(isSharedSideboard).filter(matches);
 
   // Update counts
   const mainboardTotal = mainboardCards.reduce((sum, c) => sum + c.quantity, 0);
@@ -173,19 +211,19 @@ const esc = (t) => String(t ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<
 function renderCubeTable(cards) {
   if (!cards.length) return renderCardsList(cards);
   const byCat = new Map(COLOR_CATEGORIES.map((c) => [c.id, []]));
-  for (const card of sortForDisplay(cards)) byCat.get(colorCategoryOf(card)).push(card);
+  for (const card of sortCards(sortForDisplay(cards))) byCat.get(colorCategoryOf(card)).push(card);
   const columns = COLOR_CATEGORIES.filter((c) => COLORS.includes(c.id) || byCat.get(c.id).length);
   const sum = (list) => list.reduce((s, c) => s + (c.quantity ?? 1), 0);
   return `<div class="cube-table" style="--cube-cols:${columns.length}">${columns.map((col) => `
     <section class="cube-column" data-cat="${col.id}">
       <header class="cube-column-head"><span>${col.label}</span><span class="cube-column-count">${sum(byCat.get(col.id))}</span></header>
-      ${byCat.get(col.id).map((c) => `<span class="cube-card is-static" data-cat="${col.id}" title="${esc([c.type_line, tagsOf(c).join(', ')].filter(Boolean).join('\n'))}">${(c.quantity ?? 1) > 1 ? `<span class="cube-card-qty">${c.quantity}×</span>` : ''}<span class="cube-card-name">${esc(c.name)}</span></span>`).join('') || '<p class="cube-column-empty">—</p>'}
+      ${byCat.get(col.id).map((c) => `<span class="cube-card is-static" data-cat="${col.id}" title="${esc([c.type_line, tagsOf(c).join(', ')].filter(Boolean).join('\n'))}">${(c.quantity ?? 1) > 1 ? `<span class="cube-card-qty">${c.quantity}×</span>` : ''}<span class="cube-card-name">${esc(c.name)}</span>${showPrices() ? `<span class="cube-card-price">${priceLabel(c)}</span>` : ''}</span>`).join('') || '<p class="cube-column-empty">—</p>'}
     </section>`).join('')}</div>`;
 }
 
 function renderCardsList(cards) {
   if (cards.length === 0) {
-    return '<div style="padding: 2rem; text-align: center; color: var(--text-secondary);">No cards</div>';
+    return `<div style="padding: 2rem; text-align: center; color: var(--text-secondary);">${sharedFilter.trim() ? 'No cards match this filter' : 'No cards'}</div>`;
   }
 
   // Group cards by type
@@ -220,7 +258,7 @@ function renderCardsList(cards) {
       html += `
         <div class="card-type-group">
           <div class="card-type-header">${pluralType} (${count})</div>
-          ${grouped[type].map(card => renderCardItem(card)).join('')}
+          ${sortCards(grouped[type]).map(card => renderCardItem(card)).join('')}
         </div>
       `;
     }
@@ -240,7 +278,7 @@ function renderCardItem(card) {
         <div class="card-name">${card.name}</div>
         <div class="card-type">${card.type_line || ''}</div>
         <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">
-          ${card.set_code} • ${card.artist || 'Unknown'}
+          ${esc(card.set_code)} • ${esc(card.artist || 'Unknown')}${showPrices() ? ` • ${priceLabel(card)}` : ''}
         </div>
       </div>
       <div class="deck-card-controls">

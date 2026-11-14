@@ -8,6 +8,7 @@
 import api from '../services/api.js';
 import { showToast, formatMana, popover, confirmDialog } from '../utils/ui.js';
 import { CUBE_CARD_POOLS, DEFAULT_CUBE_SETTINGS } from '../../../shared/formats.js';
+import { formatPrice } from '../utils/printings.js';
 import {
   COLOR_CATEGORIES,
   COLORS,
@@ -36,6 +37,7 @@ let host = null;
 let cubeMode = false;
 let view = readPref('cubeView', 'table');
 let tableRows = readPref('cubeTableRows', 'cmc'); // 'cmc' | 'type' | 'none'
+let cubeSort = readPref('cubeSort', ''); // '' (mana value) | 'price-asc' | 'price-desc' | 'edhrec'
 const selection = new Set();
 let lastClickedId = null;
 let playtestMode = 'pack';
@@ -99,8 +101,13 @@ export function setupCubeTools(hooks) {
         tableRows = e.target.value;
         writePref('cubeTableRows', tableRows);
         host.rerender();
+      } else if (e.target.matches('[data-cube-sort]')) {
+        cubeSort = e.target.value;
+        writePref('cubeSort', cubeSort);
+        host.rerender();
       }
     });
+    list.addEventListener('click', onTagChipClick);
   }
 
   document.getElementById('cube-bulk-bar').addEventListener('click', onBulkClick);
@@ -148,6 +155,11 @@ export function setCubeMode(on) {
 /** Do table/visual/list views show the deck panel (as opposed to analysis/playtest/history)? */
 export function cubeViewShowsList() {
   return view === 'list';
+}
+
+/** Whether the cube view on screen orders cards by price, so it needs redrawing once prices arrive. */
+export function cubeSortsByPrice() {
+  return cubeMode && view !== 'list' && cubeSort.startsWith('price');
 }
 
 export function clearCubeSelection() {
@@ -206,6 +218,77 @@ function renderSummary() {
 
 // ---- Table and visual views -----------------------------------------------------------------
 
+const priceOf = (card) => host?.getPrices?.()?.[card.deck_card_id] || null;
+
+const edhrecOf = (card) => Number(card.edhrec_rank) || null;
+
+/**
+ * Cards in display order: color category, then mana value and name, unless another sort is
+ * chosen. The sort is stable and each cell is filtered out of this list afterwards, so it orders
+ * cards within each color (and row) without mixing the groups. Cards without the value go last.
+ */
+function displayOrder(cards) {
+  const sorted = sortForDisplay(cards);
+  if (!cubeSort) return sorted;
+  // EDHREC rank 1 is the most played card, so ascending rank is most popular first
+  const value = cubeSort === 'edhrec' ? edhrecOf : priceOf;
+  const dir = cubeSort === 'price-desc' ? -1 : 1;
+  return sorted.sort((a, b) => {
+    const va = value(a);
+    const vb = value(b);
+    if (!va || !vb) return (va ? 0 : 1) - (vb ? 0 : 1);
+    return (va - vb) * dir;
+  });
+}
+
+const CUBE_SORTS = [['', 'Mana value'], ['price-asc', 'Price: low to high'], ['price-desc', 'Price: high to low'], ['edhrec', 'EDHREC popularity']];
+
+function sortControl() {
+  return `<label>Sort <select data-cube-sort>
+        ${CUBE_SORTS.map(([v, l]) => `<option value="${v}" ${cubeSort === v ? 'selected' : ''}>${l}</option>`).join('')}
+      </select></label>`;
+}
+
+/** What the cards are sorted by, on each card, so the order makes sense. */
+function sortBadge(card, cls) {
+  if (cubeSort === 'edhrec') {
+    const rank = edhrecOf(card);
+    return `<span class="${cls}" title="EDHREC rank">${rank ? `#${rank.toLocaleString()}` : '—'}</span>`;
+  }
+  if (!cubeSort) return '';
+  const price = priceOf(card);
+  return `<span class="${cls}">${price ? formatPrice(price) : '—'}</span>`;
+}
+
+// The filter box text that shows one tag, the way the analysis view's tag list writes it
+const tagQuery = (tag) => (/\s/.test(tag) ? `tag:"${tag}"` : `#${tag}`);
+
+/** Every tag in the cube as a chip that filters the board to it; click again to clear. */
+function tagChips() {
+  const counts = new Map();
+  for (const card of host.getDeck()?.cards || []) {
+    for (const tag of tagsOf(card)) counts.set(tag, (counts.get(tag) || 0) + (card.quantity ?? 1));
+  }
+  if (!counts.size) return '';
+  const current = document.getElementById('deck-filter-search')?.value.trim().toLowerCase();
+  const chips = [...counts]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .map(([tag, n]) => {
+      const on = current === tagQuery(tag).toLowerCase();
+      return `<button type="button" class="tag-chip cube-tag-chip" data-tag-chip="${escapeHtml(tag)}" aria-pressed="${on}" title="${on ? 'Show every card' : `Show cards tagged ${escapeHtml(tag)}`}">${escapeHtml(tag)} <strong>${n}</strong></button>`;
+    })
+    .join('');
+  return `<div class="cube-tag-chips" role="group" aria-label="Filter by tag">${chips}</div>`;
+}
+
+function onTagChipClick(e) {
+  const chip = e.target.closest('[data-tag-chip]');
+  if (!chip) return;
+  const input = document.getElementById('deck-filter-search');
+  input.value = chip.getAttribute('aria-pressed') === 'true' ? '' : tagQuery(chip.dataset.tagChip);
+  input.dispatchEvent(new Event('input'));
+}
+
 function cardButton(card) {
   const selected = selection.has(String(card.deck_card_id));
   const tags = tagsOf(card);
@@ -216,6 +299,7 @@ function cardButton(card) {
     <span class="cube-card-name">${escapeHtml(card.name)}</span>
     ${overridden ? '<i class="ph ph-push-pin cube-card-flag" title="Color category set by hand"></i>' : ''}
     ${tags.length ? `<span class="cube-card-tags" aria-label="${tags.length} tags">${tags.length}</span>` : ''}
+    ${sortBadge(card, 'cube-card-price')}
   </button>`;
 }
 
@@ -235,7 +319,7 @@ const rowLabel = (key) => (tableRows === 'cmc' && key !== 'Land' ? `${key} mana`
 
 function renderTable(cards, board) {
   const byCategory = new Map(COLOR_CATEGORIES.map((c) => [c.id, []]));
-  for (const card of sortForDisplay(cards)) byCategory.get(colorCategoryOf(card)).push(card);
+  for (const card of displayOrder(cards)) byCategory.get(colorCategoryOf(card)).push(card);
   // Always show the five colors; other columns only when something is in them
   const columns = COLOR_CATEGORIES.filter((c) => COLORS.includes(c.id) || byCategory.get(c.id).length);
 
@@ -245,8 +329,9 @@ function renderTable(cards, board) {
         <option value="type" ${tableRows === 'type' ? 'selected' : ''}>Card type</option>
         <option value="none" ${tableRows === 'none' ? 'selected' : ''}>None</option>
       </select></label>
+      ${sortControl()}
       <span class="muted cube-hint">Click a card to edit it. Ctrl/⌘-click or Shift-click to select several.</span>
-    </div>`;
+    </div>${tagChips()}`;
 
   if (!cards.length) {
     return controls + `<div class="deck-list-empty"><i class="ph ph-cube"></i><p>${board === 'maybeboard' ? 'Cards you are considering go here.' : 'Search above to add the first card to your cube.'}</p></div>`;
@@ -267,11 +352,12 @@ function renderTable(cards, board) {
 }
 
 function renderVisual(cards, board) {
+  const controls = `<div class="cube-table-controls">${sortControl()}</div>${tagChips()}`;
   if (!cards.length) {
     return `<div class="deck-list-empty"><i class="ph ph-cube"></i><p>${board === 'maybeboard' ? 'Cards you are considering go here.' : 'Search above to add the first card to your cube.'}</p></div>`;
   }
-  const sorted = sortForDisplay(cards);
-  return COLOR_CATEGORIES.map((cat) => {
+  const sorted = displayOrder(cards);
+  return controls + COLOR_CATEGORIES.map((cat) => {
     const list = sorted.filter((c) => colorCategoryOf(c) === cat.id);
     if (!list.length) return '';
     return `<section class="cube-visual-group">
@@ -281,6 +367,7 @@ function renderVisual(cards, board) {
         return `<button type="button" class="cube-visual-card${selected ? ' selected' : ''}" data-deck-card-id="${card.deck_card_id}" aria-pressed="${selected}" title="${escapeHtml(card.name)}">
           <img src="${escapeHtml(card.image_url || '')}" alt="${escapeHtml(card.name)}" loading="lazy" decoding="async">
           ${(card.quantity ?? 1) > 1 ? `<span class="cube-visual-qty">${card.quantity}×</span>` : ''}
+          ${sortBadge(card, 'cube-visual-price')}
           ${tagsOf(card).length ? `<span class="cube-visual-tags">${tagsOf(card).slice(0, 3).map(escapeHtml).join(' · ')}</span>` : ''}
         </button>`;
       }).join('')}</div>

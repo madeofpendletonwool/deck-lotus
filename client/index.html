@@ -322,10 +322,20 @@
                         </button>
                     </div>
                 </div>
-                <div id="decks-filter" class="decks-filter" role="tablist" aria-label="Show">
-                    <button class="decks-filter-btn active" data-kind="all">All</button>
-                    <button class="decks-filter-btn" data-kind="decks">Decks</button>
-                    <button class="decks-filter-btn" data-kind="cubes">Cubes</button>
+                <div class="decks-toolbar">
+                    <div id="decks-filter" class="decks-filter" role="tablist" aria-label="Show">
+                        <button class="decks-filter-btn active" data-kind="all">All</button>
+                        <button class="decks-filter-btn" data-kind="decks">Decks</button>
+                        <button class="decks-filter-btn" data-kind="cubes">Cubes</button>
+                    </div>
+                    <div class="decks-controls">
+                        <div class="decks-search">
+                            <i class="ph ph-magnifying-glass"></i>
+                            <input type="search" id="decks-search" placeholder="Search decks" autocomplete="off" spellcheck="false" aria-label="Search decks by name, format or description" />
+                        </div>
+                        <select id="decks-format" class="decks-select" aria-label="Format"></select>
+                        <select id="decks-sort" class="decks-select" aria-label="Sort decks"></select>
+                    </div>
                 </div>
                 <div id="decks-list" class="decks-grid"></div>
             </div>
@@ -429,6 +439,16 @@
                                             <i class="ph ph-x"></i>
                                         </button>
                                     </div>
+                                    <button id="deck-missing-btn" class="deck-chip-btn" aria-pressed="false" aria-label="Show only cards you don't own" title="Show only cards you don't own">
+                                        <i class="ph ph-shopping-cart-simple"></i><span class="deck-chip-label">Not owned</span>
+                                    </button>
+                                    <select id="deck-sort" class="deck-sort-select" aria-label="Sort cards within each group" title="Sort cards within each group">
+                                        <option value="">Sort: Default</option>
+                                        <option value="name">Sort: Name</option>
+                                        <option value="cmc">Sort: Mana value</option>
+                                        <option value="price-desc">Sort: Price, high to low</option>
+                                        <option value="price-asc">Sort: Price, low to high</option>
+                                    </select>
                                     <button id="toggle-compact-btn" class="icon-btn" title="Change list density" aria-label="Change list density">
                                         <i class="ph ph-rows"></i>
                                     </button>
@@ -525,6 +545,7 @@
                         <option value="cmc">Sort: Mana value</option>
                         <option value="color">Sort: Color</option>
                         <option value="price">Sort: Price, high to low</option>
+                        <option value="price-asc">Sort: Price, low to high</option>
                     </select>
                     <button id="browse-more-filters" class="btn btn-ghost" aria-expanded="false" aria-controls="browse-filters">
                         <i class="ph ph-sliders-horizontal"></i> Filters <span id="browse-filter-count" class="tab-count hidden"></span>
@@ -663,6 +684,7 @@
                         <button type="button" id="inv-help-btn" class="inv-help-btn" title="Search tips" aria-label="Search tips" aria-expanded="false"><i class="ph ph-question"></i></button>
                     </div>
                     <label class="inv-select"><span>Sort</span><select id="inventory-sort"></select></label>
+                    <button type="button" id="inventory-sort-dir" class="inv-sort-dir" title="Reverse the sort" aria-label="Reverse the sort"><i class="ph ph-sort-descending"></i></button>
                     <label class="inv-select"><span>Group</span><select id="inv-group"></select></label>
                     <div class="seg" id="inv-view" role="group" aria-label="View">
                         <button type="button" class="seg-btn" data-view="grid" title="Card images"><i class="ph ph-squares-four"></i></button>
@@ -1438,6 +1460,19 @@
                                         >0</span
                                     >)
                                 </button>
+                                <div class="deck-view-controls">
+                                    <div class="deck-filter">
+                                        <i class="ph ph-funnel-simple deck-filter-icon"></i>
+                                        <input type="search" id="shared-filter-search" placeholder="Filter" autocomplete="off" aria-label="Filter cards in this deck" title="Name, or a search like t:creature c:r mv<=2 usd>=5" />
+                                    </div>
+                                    <select id="shared-sort" class="deck-sort-select" aria-label="Sort cards" title="Sort cards">
+                                        <option value="">Sort: Default</option>
+                                        <option value="name">Sort: Name</option>
+                                        <option value="cmc">Sort: Mana value</option>
+                                        <option value="price-desc">Sort: Price, high to low</option>
+                                        <option value="price-asc">Sort: Price, low to high</option>
+                                    </select>
+                                </div>
                             </div>
                             <div
                                 id="shared-mainboard"

@@ -2,11 +2,16 @@ import api from '../services/api.js';
 import { showLoading, hideLoading, showToast, confirmDialog } from '../utils/ui.js';
 import { formatOptionsHtml, fillFormatSelect } from '../utils/formatUi.js';
 import { formatLabel, isCubeFormat, CUBE_CARD_POOLS, DEFAULT_CUBE_SETTINGS } from '../../../shared/formats.js';
+import { filterDecks, formatsInUse, DECK_SORTS } from '../utils/deckList.js';
 
 let decks = [];
 let kindFilter = 'all';
+let deckSort = 'updated';
+let formatFilter = '';
+let deckQuery = '';
 try {
   kindFilter = localStorage.getItem('decksKindFilter') || 'all';
+  deckSort = localStorage.getItem('decksSort') || 'updated';
 } catch {
   // Remembering the filter is only a convenience
 }
@@ -37,6 +42,28 @@ export function setupDecks() {
       document.querySelectorAll('.decks-filter-btn').forEach((b) => b.classList.toggle('active', b === btn));
       renderDecks();
     });
+  });
+
+  const sortSelect = document.getElementById('decks-sort');
+  sortSelect.innerHTML = DECK_SORTS.map(([v, l]) => `<option value="${v}">${l}</option>`).join('');
+  sortSelect.value = DECK_SORTS.some(([v]) => v === deckSort) ? deckSort : 'updated';
+  sortSelect.addEventListener('change', () => {
+    deckSort = sortSelect.value;
+    try {
+      localStorage.setItem('decksSort', deckSort);
+    } catch {
+      // see above
+    }
+    renderDecks();
+  });
+  // The format filter isn't remembered: coming back to a page that hides most decks is confusing
+  document.getElementById('decks-format').addEventListener('change', (e) => {
+    formatFilter = e.target.value;
+    renderDecks();
+  });
+  document.getElementById('decks-search').addEventListener('input', (e) => {
+    deckQuery = e.target.value;
+    renderDecks();
   });
 
   fillFormatSelect(document.getElementById('import-deck-format'), { noneLabel: 'No format' });
@@ -166,11 +193,35 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
+/** Only the formats your decks use, with All first. Hidden when every deck has the same one. */
+function renderFormatFilter() {
+  const select = document.getElementById('decks-format');
+  const formats = formatsInUse(decks)
+    .map((f) => [f, f === 'none' ? 'No format' : formatLabel(f)])
+    .sort((a, b) => a[1].localeCompare(b[1]));
+  if (formatFilter && !formats.some(([f]) => f === formatFilter)) formatFilter = '';
+  select.innerHTML = `<option value="">All formats</option>${formats.map(([f, l]) => `<option value="${escapeHtml(f)}">${escapeHtml(l)}</option>`).join('')}`;
+  select.value = formatFilter;
+  select.classList.toggle('hidden', formats.length < 2);
+}
+
 function renderDecks() {
   const decksList = document.getElementById('decks-list');
 
-  const shown = decks.filter((d) => kindFilter === 'all' || (kindFilter === 'cubes') === isCubeFormat(d.format));
+  renderFormatFilter();
+  const shown = filterDecks(decks, { kind: kindFilter, format: formatFilter, query: deckQuery, sort: deckSort, formatLabel });
   document.getElementById('decks-filter')?.classList.toggle('hidden', !decks.some((d) => isCubeFormat(d.format)) && kindFilter === 'all');
+
+  if (shown.length === 0 && decks.length && (formatFilter || deckQuery.trim())) {
+    decksList.innerHTML = `
+      <div class="grid-message">
+        <i class="ph ph-magnifying-glass"></i>
+        <h3>No matches</h3>
+        <p>Nothing here matches that search or format.</p>
+      </div>
+    `;
+    return;
+  }
 
   if (shown.length === 0) {
     const cubes = kindFilter === 'cubes';
@@ -206,6 +257,7 @@ function renderDecks() {
             <div class="deck-card-stats">
               ${deck.format ? `<span class="deck-format">${cube ? '<i class="ph ph-cube"></i> ' : ''}${escapeHtml(formatLabel(deck.format))}</span>` : ''}
               <span>${deck.mainboard_count || 0}${target ? ` / ${target}` : ''} cards${sideboard}</span>
+              ${deck.total_price > 0 ? `<span class="deck-card-value" title="Estimated value">$${Number(deck.total_price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>` : ''}
             </div>
           </div>
         </a>

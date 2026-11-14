@@ -37,7 +37,7 @@ let host = null;
 let cubeMode = false;
 let view = readPref('cubeView', 'table');
 let tableRows = readPref('cubeTableRows', 'cmc'); // 'cmc' | 'type' | 'none'
-let priceSort = readPref('cubePriceSort', ''); // '' | 'price-asc' | 'price-desc'
+let cubeSort = readPref('cubeSort', ''); // '' (mana value) | 'price-asc' | 'price-desc' | 'edhrec'
 const selection = new Set();
 let lastClickedId = null;
 let playtestMode = 'pack';
@@ -102,11 +102,12 @@ export function setupCubeTools(hooks) {
         writePref('cubeTableRows', tableRows);
         host.rerender();
       } else if (e.target.matches('[data-cube-sort]')) {
-        priceSort = e.target.value;
-        writePref('cubePriceSort', priceSort);
+        cubeSort = e.target.value;
+        writePref('cubeSort', cubeSort);
         host.rerender();
       }
     });
+    list.addEventListener('click', onTagChipClick);
   }
 
   document.getElementById('cube-bulk-bar').addEventListener('click', onBulkClick);
@@ -158,7 +159,7 @@ export function cubeViewShowsList() {
 
 /** Whether the cube view on screen orders cards by price, so it needs redrawing once prices arrive. */
 export function cubeSortsByPrice() {
-  return cubeMode && view !== 'list' && !!priceSort;
+  return cubeMode && view !== 'list' && cubeSort.startsWith('price');
 }
 
 export function clearCubeSelection() {
@@ -219,35 +220,73 @@ function renderSummary() {
 
 const priceOf = (card) => host?.getPrices?.()?.[card.deck_card_id] || null;
 
+const edhrecOf = (card) => Number(card.edhrec_rank) || null;
+
 /**
- * Cards in display order: color category, then mana value and name, unless a price sort is
- * chosen. The sort is stable and each cell is filtered out of this list afterwards, so a price
- * sort orders cards within each color (and row) without mixing the groups. Unpriced cards go last.
+ * Cards in display order: color category, then mana value and name, unless another sort is
+ * chosen. The sort is stable and each cell is filtered out of this list afterwards, so it orders
+ * cards within each color (and row) without mixing the groups. Cards without the value go last.
  */
 function displayOrder(cards) {
   const sorted = sortForDisplay(cards);
-  if (!priceSort) return sorted;
-  const dir = priceSort === 'price-desc' ? -1 : 1;
+  if (!cubeSort) return sorted;
+  // EDHREC rank 1 is the most played card, so ascending rank is most popular first
+  const value = cubeSort === 'edhrec' ? edhrecOf : priceOf;
+  const dir = cubeSort === 'price-desc' ? -1 : 1;
   return sorted.sort((a, b) => {
-    const pa = priceOf(a);
-    const pb = priceOf(b);
-    if (!pa || !pb) return (pa ? 0 : 1) - (pb ? 0 : 1);
-    return (pa - pb) * dir;
+    const va = value(a);
+    const vb = value(b);
+    if (!va || !vb) return (va ? 0 : 1) - (vb ? 0 : 1);
+    return (va - vb) * dir;
   });
 }
 
+const CUBE_SORTS = [['', 'Mana value'], ['price-asc', 'Price: low to high'], ['price-desc', 'Price: high to low'], ['edhrec', 'EDHREC popularity']];
+
 function sortControl() {
   return `<label>Sort <select data-cube-sort>
-        <option value="" ${!priceSort ? 'selected' : ''}>Mana value</option>
-        <option value="price-asc" ${priceSort === 'price-asc' ? 'selected' : ''}>Price: low to high</option>
-        <option value="price-desc" ${priceSort === 'price-desc' ? 'selected' : ''}>Price: high to low</option>
+        ${CUBE_SORTS.map(([v, l]) => `<option value="${v}" ${cubeSort === v ? 'selected' : ''}>${l}</option>`).join('')}
       </select></label>`;
 }
 
-function priceBadge(card, cls) {
-  if (!priceSort) return '';
+/** What the cards are sorted by, on each card, so the order makes sense. */
+function sortBadge(card, cls) {
+  if (cubeSort === 'edhrec') {
+    const rank = edhrecOf(card);
+    return `<span class="${cls}" title="EDHREC rank">${rank ? `#${rank.toLocaleString()}` : '—'}</span>`;
+  }
+  if (!cubeSort) return '';
   const price = priceOf(card);
   return `<span class="${cls}">${price ? formatPrice(price) : '—'}</span>`;
+}
+
+// The filter box text that shows one tag, the way the analysis view's tag list writes it
+const tagQuery = (tag) => (/\s/.test(tag) ? `tag:"${tag}"` : `#${tag}`);
+
+/** Every tag in the cube as a chip that filters the board to it; click again to clear. */
+function tagChips() {
+  const counts = new Map();
+  for (const card of host.getDeck()?.cards || []) {
+    for (const tag of tagsOf(card)) counts.set(tag, (counts.get(tag) || 0) + (card.quantity ?? 1));
+  }
+  if (!counts.size) return '';
+  const current = document.getElementById('deck-filter-search')?.value.trim().toLowerCase();
+  const chips = [...counts]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .map(([tag, n]) => {
+      const on = current === tagQuery(tag).toLowerCase();
+      return `<button type="button" class="tag-chip cube-tag-chip" data-tag-chip="${escapeHtml(tag)}" aria-pressed="${on}" title="${on ? 'Show every card' : `Show cards tagged ${escapeHtml(tag)}`}">${escapeHtml(tag)} <strong>${n}</strong></button>`;
+    })
+    .join('');
+  return `<div class="cube-tag-chips" role="group" aria-label="Filter by tag">${chips}</div>`;
+}
+
+function onTagChipClick(e) {
+  const chip = e.target.closest('[data-tag-chip]');
+  if (!chip) return;
+  const input = document.getElementById('deck-filter-search');
+  input.value = chip.getAttribute('aria-pressed') === 'true' ? '' : tagQuery(chip.dataset.tagChip);
+  input.dispatchEvent(new Event('input'));
 }
 
 function cardButton(card) {
@@ -260,7 +299,7 @@ function cardButton(card) {
     <span class="cube-card-name">${escapeHtml(card.name)}</span>
     ${overridden ? '<i class="ph ph-push-pin cube-card-flag" title="Color category set by hand"></i>' : ''}
     ${tags.length ? `<span class="cube-card-tags" aria-label="${tags.length} tags">${tags.length}</span>` : ''}
-    ${priceBadge(card, 'cube-card-price')}
+    ${sortBadge(card, 'cube-card-price')}
   </button>`;
 }
 
@@ -292,7 +331,7 @@ function renderTable(cards, board) {
       </select></label>
       ${sortControl()}
       <span class="muted cube-hint">Click a card to edit it. Ctrl/⌘-click or Shift-click to select several.</span>
-    </div>`;
+    </div>${tagChips()}`;
 
   if (!cards.length) {
     return controls + `<div class="deck-list-empty"><i class="ph ph-cube"></i><p>${board === 'maybeboard' ? 'Cards you are considering go here.' : 'Search above to add the first card to your cube.'}</p></div>`;
@@ -313,7 +352,7 @@ function renderTable(cards, board) {
 }
 
 function renderVisual(cards, board) {
-  const controls = `<div class="cube-table-controls">${sortControl()}</div>`;
+  const controls = `<div class="cube-table-controls">${sortControl()}</div>${tagChips()}`;
   if (!cards.length) {
     return `<div class="deck-list-empty"><i class="ph ph-cube"></i><p>${board === 'maybeboard' ? 'Cards you are considering go here.' : 'Search above to add the first card to your cube.'}</p></div>`;
   }
@@ -328,7 +367,7 @@ function renderVisual(cards, board) {
         return `<button type="button" class="cube-visual-card${selected ? ' selected' : ''}" data-deck-card-id="${card.deck_card_id}" aria-pressed="${selected}" title="${escapeHtml(card.name)}">
           <img src="${escapeHtml(card.image_url || '')}" alt="${escapeHtml(card.name)}" loading="lazy" decoding="async">
           ${(card.quantity ?? 1) > 1 ? `<span class="cube-visual-qty">${card.quantity}×</span>` : ''}
-          ${priceBadge(card, 'cube-visual-price')}
+          ${sortBadge(card, 'cube-visual-price')}
           ${tagsOf(card).length ? `<span class="cube-visual-tags">${tagsOf(card).slice(0, 3).map(escapeHtml).join(' · ')}</span>` : ''}
         </button>`;
       }).join('')}</div>

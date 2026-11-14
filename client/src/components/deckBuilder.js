@@ -26,6 +26,17 @@ let deckTools = null; // Analysis and playtest views
 let deckCollection = null; // The deck against your collection
 let activeTab = 'mainboard'; // Track which tab is currently active ('mainboard', 'sideboard', or 'maybeboard')
 let pricingMode = false; // Track if pricing mode is enabled
+// How cards are ordered inside each group: '' keeps the deck's order (by price, high to low, in
+// pricing mode), or 'name' | 'cmc' | 'price-desc' | 'price-asc'
+let deckSort = '';
+try {
+  deckSort = localStorage.getItem('deckSort') || '';
+} catch {
+  // A remembered sort is only a convenience
+}
+const sortsByPrice = () => deckSort.startsWith('price') || (!deckSort && pricingMode);
+// Prices show on each card in pricing mode, and whenever cards are sorted by them
+const showPrices = () => pricingMode || deckSort.startsWith('price');
 let setGroupMode = false; // Track if set grouping mode is enabled
 let currentPriceData = null; // Store current price data for cards
 let printingSort = PRINTING_SORTS[0].value; // Printing picker sort, kept between cards
@@ -308,6 +319,25 @@ export function setupDeckBuilder() {
       document.getElementById('decklist-preview').classList.remove('hidden');
       document.getElementById('decklist-text').value = deckText;
     });
+  });
+
+  const deckSortSelect = document.getElementById('deck-sort');
+  if ([...deckSortSelect.options].some((o) => o.value === deckSort)) deckSortSelect.value = deckSort;
+  else deckSort = '';
+  deckSortSelect.addEventListener('change', () => {
+    deckSort = deckSortSelect.value;
+    try {
+      localStorage.setItem('deckSort', deckSort);
+    } catch {
+      // see above
+    }
+    renderDeckCards();
+  });
+
+  document.getElementById('deck-missing-btn').addEventListener('click', () => {
+    currentFilter.ownership = currentFilter.ownership === 'not-owned' ? null : 'not-owned';
+    renderDeckCards();
+    loadDeckStats(); // The owned bar in the stats panel shows the same filter
   });
 
   // Layout view toggle - cycles through: compact -> ultra-compact -> full
@@ -820,6 +850,10 @@ function renderDeckCards() {
   clearFilterBtn.style.display = hasFilter ? 'inline-flex' : 'none';
 
   const cube = isCubeFormat(currentDeck.format);
+  const missingBtn = document.getElementById('deck-missing-btn');
+  missingBtn.setAttribute('aria-pressed', String(currentFilter.ownership === 'not-owned'));
+  // The cube table and visual views have their own sort
+  document.getElementById('deck-sort').classList.toggle('hidden', cube && !cubeViewShowsList());
   if (cube && !cubeViewShowsList()) {
     // Table and visual views draw the cube themselves
     renderCubeBoard(mainboard, mainboardCards, 'mainboard');
@@ -1106,15 +1140,7 @@ function renderCardsList(cards) {
         headerLabel = pluralType;
       }
 
-      // Sort cards by price if pricing mode is on, otherwise keep as-is
-      let cardsToRender = group.cards;
-      if (pricingMode && currentPriceData?.cardPrices) {
-        cardsToRender = [...group.cards].sort((a, b) => {
-          const priceA = currentPriceData.cardPrices[a.deck_card_id] || 0;
-          const priceB = currentPriceData.cardPrices[b.deck_card_id] || 0;
-          return priceB - priceA; // Sort descending (most expensive first)
-        });
-      }
+      const cardsToRender = sortGroupCards(group.cards);
 
       html += `
         <div class="card-type-group">
@@ -1126,6 +1152,20 @@ function renderCardsList(cards) {
   }
 
   return html;
+}
+
+/** A group's cards in the chosen order. Unpriced cards go last in either price order. */
+function sortGroupCards(cards) {
+  const byName = (a, b) => (a.name || '').localeCompare(b.name || '');
+  if (sortsByPrice()) {
+    if (!currentPriceData?.cardPrices) return cards;
+    const price = (c) => currentPriceData.cardPrices[c.deck_card_id] || 0;
+    const dir = deckSort === 'price-asc' ? 1 : -1;
+    return [...cards].sort((a, b) => (!price(a) - !price(b)) || dir * (price(a) - price(b)) || byName(a, b));
+  }
+  if (deckSort === 'name') return [...cards].sort(byName);
+  if (deckSort === 'cmc') return [...cards].sort((a, b) => calculateActualCMC(a) - calculateActualCMC(b) || byName(a, b));
+  return cards;
 }
 
 // The deck's commander rules (null when its format has no commander). Eligibility follows the
@@ -1156,7 +1196,7 @@ function renderPrintingLink(card) {
 }
 
 function renderCardPrice(card) {
-  if (!pricingMode) return '';
+  if (!showPrices()) return '';
   const price = currentPriceData?.cardPrices?.[card.deck_card_id];
   if (!price) return '<span class="deck-card-price deck-card-price-none" title="No price available for this card">—</span>';
   return currentPriceData.estimatedCards?.includes(card.deck_card_id)
@@ -1269,7 +1309,7 @@ function renderCardItem(card) {
         <div class="card-name">${card.name}</div>
         <div class="card-type">${card.type_line || ''}</div>
         <div class="deck-card-meta">
-          ${renderPrintingLink(card)} · ${card.artist || 'Unknown'}${pricingMode ? ` · ${renderCardPrice(card)}` : ''}
+          ${renderPrintingLink(card)} · ${card.artist || 'Unknown'}${showPrices() ? ` · ${renderCardPrice(card)}` : ''}
         </div>
       </div>
       <div class="deck-card-controls">
@@ -1792,7 +1832,7 @@ async function loadDeckStats() {
     currentPriceData = price;
     displayDeckPrice(price);
     // Rows render before this fetch returns, so without this they'd show the previous prices
-    if (pricingMode || cubeSortsByPrice()) renderDeckCards();
+    if (showPrices() || cubeSortsByPrice()) renderDeckCards();
   } catch (error) {
     console.error('Failed to load stats:', error);
   }

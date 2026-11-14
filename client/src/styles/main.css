@@ -1134,7 +1134,8 @@ select option {
   color: var(--text-muted);
   pointer-events: none;
 }
-#deck-filter-search {
+#deck-filter-search,
+#shared-filter-search {
   width: 130px;
   height: 28px;
   padding: 0 1.5rem 0 1.625rem;
@@ -1145,7 +1146,9 @@ select option {
   font-size: 0.75rem;
   transition: width var(--transition), border-color var(--transition);
 }
-#deck-filter-search:focus { outline: none; width: 180px; border-color: var(--border-strong); }
+#deck-filter-search:focus,
+#shared-filter-search:focus { outline: none; width: 180px; border-color: var(--border-strong); }
+#shared-filter-search { padding-right: 0.375rem; }
 #deck-filter-clear {
   position: absolute;
   right: 0.25rem;
@@ -1159,6 +1162,22 @@ select option {
   cursor: pointer;
 }
 #deck-filter-clear:hover { color: var(--text); }
+.deck-sort-select,
+.deck-chip-btn {
+  height: 28px;
+  padding: 0 0.5rem;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+.deck-chip-btn { display: inline-flex; align-items: center; gap: 0.25rem; white-space: nowrap; }
+.deck-sort-select:hover,
+.deck-chip-btn:hover { color: var(--text); border-color: var(--border-strong); }
+.deck-chip-btn[aria-pressed='true'] { background: var(--primary-soft); border-color: color-mix(in srgb, var(--primary) 50%, transparent); color: var(--text); }
 
 /* Standalone icon button (not inside a .btn) */
 button.btn-icon {
@@ -2501,6 +2520,13 @@ button.btn-icon.active { background: var(--primary-soft); color: var(--primary-l
   .browse-toolbar #browse-more-filters { flex-basis: 100%; }
   .deck-tabs { flex-wrap: wrap; }
   .deck-view-controls { flex-basis: 100%; margin-left: 0; padding-top: 4px; }
+  .deck-view-controls .deck-filter { flex: 1; min-width: 0; }
+  #deck-filter-search,
+  #deck-filter-search:focus,
+  #shared-filter-search,
+  #shared-filter-search:focus { width: 100%; }
+  .deck-sort-select { max-width: 7.5rem; }
+  .deck-chip-label { display: none; }
   .deck-filter { flex: 1; }
   #deck-filter-search, #deck-filter-search:focus { width: 100%; }
 
@@ -3784,7 +3810,39 @@ button.btn-icon.active { background: var(--primary-soft); color: var(--primary-l
 .legality-chip-count { margin-left: auto; color: var(--text-muted); font-size: 0.6875rem; font-variant-numeric: tabular-nums; }
 
 /* Decks page: All / Decks / Cubes */
-.decks-filter { display: flex; gap: 2px; margin-bottom: var(--space-4); border-bottom: 1px solid var(--border); }
+.decks-toolbar { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--space-2) var(--space-3); margin-bottom: var(--space-4); border-bottom: 1px solid var(--border); }
+.decks-filter { display: flex; gap: 2px; }
+.decks-controls { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-left: auto; padding-bottom: 6px; }
+.decks-search { position: relative; }
+.decks-search i { position: absolute; left: 0.5rem; top: 50%; transform: translateY(-50%); color: var(--text-muted); pointer-events: none; }
+.decks-search input {
+  width: 180px;
+  height: 30px;
+  padding: 0 0.5rem 0 1.75rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.8125rem;
+}
+.decks-search input:focus { outline: none; border-color: var(--border-strong); }
+.decks-select {
+  height: 30px;
+  padding: 0 0.5rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.8125rem;
+}
+.deck-card-value { margin-left: auto; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+@media (max-width: 640px) {
+  .decks-controls { margin-left: 0; width: 100%; }
+  .decks-search { flex: 1; }
+  .decks-search input { width: 100%; }
+}
 .decks-filter-btn {
   padding: 0.4rem 0.75rem;
   background: none;
@@ -3887,6 +3945,10 @@ button.btn-icon.active { background: var(--primary-soft); color: var(--primary-l
 .cube-table-controls { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); margin: var(--space-2) 0 var(--space-3); font-size: 0.75rem; color: var(--text-secondary); }
 .cube-table-controls label { display: flex; align-items: center; gap: var(--space-2); }
 .cube-hint { font-size: 0.75rem; }
+.cube-tag-chips { display: flex; flex-wrap: wrap; gap: 4px; margin: calc(-1 * var(--space-1)) 0 var(--space-3); }
+.cube-tag-chip { cursor: pointer; }
+.cube-tag-chip:hover { color: var(--text); border-color: var(--border-strong); }
+.cube-tag-chip[aria-pressed='true'] { background: var(--primary-soft); border-color: color-mix(in srgb, var(--primary) 50%, transparent); color: var(--text); }
 
 .cube-table {
   display: grid;
@@ -5245,6 +5307,21 @@ a.cd-fact:hover { border-color: var(--border-strong); }
   font-size: 0.8125rem;
 }
 .inv-bar .seg { height: 34px; align-items: center; }
+.inv-sort-dir {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  margin-left: -4px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.inv-sort-dir:hover { color: var(--text); border-color: var(--border-strong); }
+.inv-sort-dir i { font-size: 1rem; }
 .inv-bar .seg-btn { height: 28px; min-width: 30px; }
 .inv-bar .seg-btn i { font-size: 0.9375rem; vertical-align: -2px; }
 .inv-help { margin-top: var(--space-2); }

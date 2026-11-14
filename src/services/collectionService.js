@@ -33,7 +33,7 @@ function allInChunks(ids, build) {
 /** A deck's cards with what's needed here: card, board, and its printing's price. */
 function deckRows(deckId) {
   return db.all(
-    `SELECT dc.quantity, dc.is_sideboard, dc.is_commander, ${BOARD_SQL} as board_type,
+    `SELECT dc.quantity, dc.owned_quantity, dc.is_sideboard, dc.is_commander, ${BOARD_SQL} as board_type,
             p.card_id, p.image_url, c.name, c.type_line, c.mana_cost, c.cmc, c.color_identity,
             ${PRINTING_PRICE_SQL} as price
      FROM deck_cards dc
@@ -57,9 +57,12 @@ function ownedCounts(userId, cardIds) {
   return new Map(rows.map((r) => [r.card_id, r.owned]));
 }
 
-/** How many copies of each card the user's decks list, per deck (maybeboards excluded). */
+/**
+ * How many copies of each card the user's decks list (`quantity`) and hold (`held`), per deck.
+ * Maybeboards are left out.
+ */
 function deckUsage(userId, { cardIds = null, excludeDeckId = null } = {}) {
-  const base = `SELECT d.id as deck_id, d.name as deck_name, d.format, p.card_id, SUM(dc.quantity) as quantity
+  const base = `SELECT d.id as deck_id, d.name as deck_name, d.format, p.card_id, SUM(dc.quantity) as quantity, SUM(dc.owned_quantity) as held
      FROM deck_cards dc
      JOIN decks d ON dc.deck_id = d.id
      JOIN printings p ON dc.printing_id = p.id
@@ -76,44 +79,48 @@ function cheapestPrices(cardIds) {
   return new Map(cardIds.map((id) => [id, stmt.get(id)?.price ?? null]));
 }
 
-function buildReport(userId, rows, excludeDeckId) {
+/** `ownDeck`: the rows are one of the user's decks (deckId), so they say which copies are in it. */
+function buildReport(userId, rows, deckId, ownDeck) {
   const cardIds = [...new Set(rows.filter(claimsCopies).map((r) => r.card_id))];
   const owned = ownedCounts(userId, cardIds);
-  const otherDecks = deckUsage(userId, { cardIds, excludeDeckId });
+  const otherDecks = deckUsage(userId, { cardIds, excludeDeckId: ownDeck ? deckId : null });
 
-  // Only price what may need buying
+  // Only price what may need buying: cards the deck doesn't have every copy of
   const demand = new Map();
-  for (const r of rows.filter(claimsCopies)) demand.set(r.card_id, (demand.get(r.card_id) || 0) + r.quantity);
-  const others = new Map();
-  for (const r of otherDecks) others.set(r.card_id, (others.get(r.card_id) || 0) + r.quantity);
-  const toPrice = cardIds.filter((id) => (owned.get(id) || 0) < demand.get(id) + (others.get(id) || 0));
+  const held = new Map();
+  for (const r of rows.filter(claimsCopies)) {
+    demand.set(r.card_id, (demand.get(r.card_id) || 0) + r.quantity);
+    if (ownDeck) held.set(r.card_id, (held.get(r.card_id) || 0) + (r.owned_quantity || 0));
+  }
+  const toPrice = cardIds.filter((id) => (held.get(id) || 0) < demand.get(id));
 
-  return collectionReport({ rows, owned, otherDecks, cheapest: cheapestPrices(toPrice) });
+  return collectionReport({ rows, owned, otherDecks, cheapest: cheapestPrices(toPrice), ownDeck });
 }
 
 /** The ownership report for one of the user's decks, or null when it isn't theirs. */
 export function getDeckCollection(deckId, userId) {
   const deck = db.get(`SELECT id, format FROM decks WHERE id = ? AND user_id = ?`, [deckId, userId]);
   if (!deck) return null;
-  return buildReport(userId, deckRows(deck.id), deck.id);
+  return buildReport(userId, deckRows(deck.id), deck.id, true);
 }
 
 /**
  * The headline numbers of every deck's report, keyed by deck id, for a deck list:
- * { cards, ownedCards, missingCards, missingCopies, sharedCards, cost, unpriced }.
+ * { cards, ownedCards, missingCards, missingCopies, sharedCards, spareCards, cost, unpriced }.
  * Same counting rules as the full report, so the list and the deck page agree.
  */
 export function getDeckSummaries(userId) {
   const decks = db.all(`SELECT id FROM decks WHERE user_id = ?`, [userId]);
   const out = {};
   for (const { id } of decks) {
-    const { summary } = buildReport(userId, deckRows(id), id);
+    const { summary } = buildReport(userId, deckRows(id), id, true);
     out[id] = {
       cards: summary.cards,
       ownedCards: summary.ownedCards,
       missingCards: summary.missingCards,
       missingCopies: summary.missingCopies,
       sharedCards: summary.sharedCards,
+      spareCards: summary.spareCards,
       cost: summary.cost,
       unpriced: summary.unpriced,
     };
@@ -123,9 +130,9 @@ export function getDeckSummaries(userId) {
 
 /** The same report for someone else's shared deck, measured against the viewer's collection. */
 export function getSharedDeckCollection(deckId, viewerId) {
-  // Viewing your own share link: the deck doesn't compete with itself
+  // Viewing your own share link: that's just your deck
   const own = db.get(`SELECT id FROM decks WHERE id = ? AND user_id = ?`, [deckId, viewerId]);
-  return buildReport(viewerId, deckRows(deckId), own ? deckId : null);
+  return buildReport(viewerId, deckRows(deckId), deckId, !!own);
 }
 
 /**
@@ -171,8 +178,9 @@ export function getBinderFits(deckId, userId, options = {}) {
     if (!entry.image_url && r.image_url) entry.image_url = r.image_url;
   }
 
+  // A copy is in use when a deck holds it, not just because a deck lists the card
   const used = new Map();
-  for (const r of deckUsage(userId)) used.set(r.card_id, (used.get(r.card_id) || 0) + r.quantity);
+  for (const r of deckUsage(userId)) used.set(r.card_id, (used.get(r.card_id) || 0) + (r.held || 0));
 
   const result = binderFits([...byCard.values()].map(({ best, ...c }) => c), {
     rules,

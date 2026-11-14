@@ -17,12 +17,20 @@ test('deck demand adds up printings of one card and skips the maybeboard', () =>
   assert.equal(demand.get(2).quantity, 1);
 });
 
-test('card status', () => {
-  assert.equal(cardStatus({ need: 1, owned: 0, otherDemand: 0 }), 'missing');
-  assert.equal(cardStatus({ need: 4, owned: 2, otherDemand: 0 }), 'partial');
-  assert.equal(cardStatus({ need: 1, owned: 1, otherDemand: 0 }), 'owned');
-  assert.equal(cardStatus({ need: 1, owned: 1, otherDemand: 1 }), 'shared');
-  assert.equal(cardStatus({ need: 1, owned: 2, otherDemand: 1 }), 'owned');
+test('card status for your own deck follows the copies in it', () => {
+  const own = (o) => cardStatus({ ownDeck: true, ...o });
+  assert.equal(own({ need: 1, owned: 0 }), 'missing');
+  assert.equal(own({ need: 4, owned: 2, inDeck: 2 }), 'partial');
+  assert.equal(own({ need: 1, owned: 1, inDeck: 1 }), 'owned');
+  assert.equal(own({ need: 1, owned: 1, inDeck: 0, free: 0 }), 'shared', 'your only copy is in another deck');
+  assert.equal(own({ need: 2, owned: 3, inDeck: 1, free: 1 }), 'spare');
+});
+
+test("card status for someone else's deck counts copies no deck of yours holds", () => {
+  assert.equal(cardStatus({ need: 1, owned: 1, free: 1 }), 'owned');
+  assert.equal(cardStatus({ need: 1, owned: 1, free: 0 }), 'shared');
+  assert.equal(cardStatus({ need: 4, owned: 2, free: 2 }), 'partial');
+  assert.equal(cardStatus({ need: 1, owned: 0 }), 'missing');
 });
 
 test('report counts owned and missing copies and prices what is missing', () => {
@@ -61,30 +69,67 @@ test('a deck printing with no price falls back to the cheapest printing', () => 
   assert.equal(summary.unpriced, 0);
 });
 
-test('copies other decks claim make a card shared and are priced separately', () => {
+test('in your own deck, a card is owned only when its copies are in this deck', () => {
+  // One Ornithopter, held by another deck; two Sol Rings, one held here; a Bolt with a free copy
+  const rows = [
+    row(1, 'Ornithopter', 1, { price: 1, owned_quantity: 0 }),
+    row(2, 'Sol Ring', 1, { price: 2, owned_quantity: 1 }),
+    row(3, 'Bolt', 2, { price: 0.5, owned_quantity: 1 }),
+    row(4, 'Maybe', 1, { board_type: 'maybeboard', owned_quantity: 0 }),
+  ];
+  const owned = new Map([[1, 1], [2, 2], [3, 2]]);
+  const otherDecks = [
+    { deck_id: 10, deck_name: 'Affinity', card_id: 1, quantity: 1, held: 1 },
+    { deck_id: 11, deck_name: 'Cube', card_id: 2, quantity: 1, held: 1 },
+    { deck_id: 12, deck_name: 'Wishlist', card_id: 3, quantity: 4, held: 0 },
+  ];
+  const { summary, cards } = collectionReport({ rows, owned, otherDecks, ownDeck: true });
+  const by = Object.fromEntries(cards.map((c) => [c.name, c]));
+
+  assert.equal(by.Ornithopter.status, 'shared');
+  assert.equal(by.Ornithopter.in_deck, 0);
+  assert.equal(by.Ornithopter.missing, 0, 'you could take it out of Affinity');
+  assert.equal(by.Ornithopter.alongside, 1, 'or buy one so Affinity keeps it');
+  assert.deepEqual(by.Ornithopter.other_decks.map((d) => [d.name, d.held]), [['Affinity', 1]]);
+
+  assert.equal(by['Sol Ring'].status, 'owned');
+  assert.equal(by['Sol Ring'].alongside, 0);
+
+  assert.equal(by.Bolt.status, 'spare', 'a deck listing a card without holding it leaves the copy free');
+  assert.equal(by.Bolt.spare, 1);
+  assert.equal(by.Bolt.alongside, 0);
+
+  assert.equal(by.Maybe, undefined);
+  assert.equal(summary.ownedCards, 1);
+  assert.equal(summary.ownedCopies, 2);
+  assert.equal(summary.missingCards, 2);
+  assert.equal(summary.sharedCards, 1);
+  assert.equal(summary.spareCards, 1);
+  assert.equal(summary.spareCopies, 1);
+  assert.equal(summary.alongsideCopies, 1);
+  assert.equal(summary.alongsideCost, 1);
+});
+
+test("someone else's deck is measured against copies your decks don't hold", () => {
   const rows = [row(1, 'Sol Ring', 1, { price: 2 }), row(2, 'Rhystic Study', 1, { price: 30 })];
   const owned = new Map([[1, 1], [2, 2]]);
   const otherDecks = [
-    { deck_id: 10, deck_name: 'Atraxa', card_id: 1, quantity: 1 },
-    { deck_id: 11, deck_name: 'Krenko', card_id: 1, quantity: 1 },
-    { deck_id: 10, deck_name: 'Atraxa', card_id: 2, quantity: 1 },
-    { deck_id: 12, deck_name: 'Unrelated', card_id: 99, quantity: 1 },
+    { deck_id: 10, deck_name: 'Atraxa', card_id: 1, quantity: 1, held: 1 },
+    { deck_id: 11, deck_name: 'Krenko', card_id: 1, quantity: 1, held: 0 },
+    { deck_id: 10, deck_name: 'Atraxa', card_id: 2, quantity: 1, held: 1 },
   ];
   const { summary, cards } = collectionReport({ rows, owned, otherDecks });
   const sol = cards.find((c) => c.name === 'Sol Ring');
   const rhystic = cards.find((c) => c.name === 'Rhystic Study');
 
   assert.equal(sol.status, 'shared');
-  assert.equal(sol.other_demand, 2);
   assert.deepEqual(sol.other_decks.map((d) => d.name), ['Atraxa', 'Krenko']);
   assert.equal(sol.alongside, 1);
-  assert.equal(rhystic.status, 'owned', 'two copies cover both decks');
+  assert.equal(rhystic.status, 'owned', 'one copy is free');
   assert.equal(rhystic.alongside, 0);
-
   assert.equal(summary.missingCopies, 0);
   assert.equal(summary.sharedCards, 1);
   assert.equal(summary.alongsideCopies, 1);
-  assert.equal(summary.alongsideCost, 2);
 });
 
 test('contested cards need two decks wanting more copies than you own', () => {
@@ -175,10 +220,10 @@ test('binder fits use the deck format: Sol Ring is not legal in Modern', () => {
   assert.ok(names.includes('Mana Crypt'), 'banned in Commander only');
 });
 
-test('missing rows keep only the copies you are short of, mainboard first', () => {
+test('missing rows keep only the copies the deck does not hold', () => {
   const rows = [
     row(1, 'Bolt', 4, { owned_quantity: 3 }),
-    row(1, 'Bolt', 2, { board_type: 'sideboard', owned_quantity: 3 }),
+    row(1, 'Bolt', 2, { board_type: 'sideboard', owned_quantity: 0 }),
     row(2, 'Sol Ring', 1, { owned_quantity: 1 }),
     row(3, 'Mountain', 10, { type_line: 'Basic Land — Mountain', owned_quantity: 0 }),
     row(4, 'Maybe', 1, { board_type: 'maybeboard', owned_quantity: 0 }),
@@ -189,4 +234,12 @@ test('missing rows keep only the copies you are short of, mainboard first', () =
     ['Bolt', 'sideboard', 2],
     ['Unowned', 'mainboard', 2],
   ]);
+});
+
+test('missing rows do not buy copies you own that no deck holds', () => {
+  const rows = [
+    row(1, 'Bolt', 4, { owned_quantity: 1, free_quantity: 2 }),
+    row(1, 'Bolt', 2, { board_type: 'sideboard', owned_quantity: 0, free_quantity: 2 }),
+  ];
+  assert.deepEqual(missingRows(rows).map((r) => [r.board_type, r.quantity]), [['mainboard', 1], ['sideboard', 2]]);
 });

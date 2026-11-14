@@ -28,6 +28,7 @@ import {
   getAvailableSets
 } from '../services/printingOptimizerService.js';
 import { getDeckCollection, getSharedDeckCollection, getBinderFits, getDeckSummaries } from '../services/collectionService.js';
+import { getDeckCardOwnership, setDeckCardOwned, claimFreeForDeck } from '../services/ownershipService.js';
 import { authenticate, optionalAuthenticate } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -408,6 +409,48 @@ router.get('/share/:token/collection', authenticate, (req, res, next) => {
       return res.status(404).json({ error: 'Shared deck not found or no longer available' });
     }
     res.json(getSharedDeckCollection(deck.id, req.user.id));
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * GET /api/decks/:id/cards/:deckCardId/owned
+ * Where this card's copies are: in this deck, free, or in which other decks
+ */
+router.get('/:id/cards/:deckCardId/owned', authenticate, (req, res, next) => {
+  try {
+    res.json(getDeckCardOwnership(req.user.id, parseInt(req.params.id), parseInt(req.params.deckCardId)));
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * PUT /api/decks/:id/cards/:deckCardId/owned  { owned, takeFrom?: [deckId], addToCollection? }
+ * Set how many of the row's copies come from your collection. Free copies are used first, then
+ * copies moved out of the decks in takeFrom, then new copies added to the collection.
+ */
+router.put('/:id/cards/:deckCardId/owned', authenticate, (req, res, next) => {
+  try {
+    const { owned, takeFrom, addToCollection } = req.body || {};
+    res.json(setDeckCardOwned(req.user.id, parseInt(req.params.id), parseInt(req.params.deckCardId), {
+      owned,
+      takeFrom: takeFrom || [],
+      addToCollection: !!addToCollection,
+    }));
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /api/decks/:id/claim-free
+ * Put copies you own that no deck is using into this deck wherever it's short: { claimed }
+ */
+router.post('/:id/claim-free', authenticate, (req, res, next) => {
+  try {
+    res.json(claimFreeForDeck(req.user.id, parseInt(req.params.id)));
   } catch (error) {
     next(error);
   }

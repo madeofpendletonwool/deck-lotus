@@ -12,7 +12,8 @@ import { formatMana, showToast, copyText } from '../utils/ui.js';
 const STATUS = {
   missing: { label: 'Missing', icon: 'ph-x-circle' },
   partial: { label: 'Short', icon: 'ph-circle-half' },
-  shared: { label: 'Shared', icon: 'ph-arrows-left-right' },
+  shared: { label: 'In another deck', icon: 'ph-arrows-left-right' },
+  spare: { label: 'Free copy', icon: 'ph-hand-coins' },
   owned: { label: 'Owned', icon: 'ph-check-circle' },
 };
 const TYPE_LABELS = {
@@ -47,7 +48,7 @@ function writeJson(key, value) {
 /** Everything in the deck, boards included, so any change to it fetches a fresh report. */
 function deckKey(deck) {
   return (deck?.cards || [])
-    .map((c) => `${c.card_id}:${c.quantity}:${c.board_type || ''}:${c.is_commander ? 1 : 0}`)
+    .map((c) => `${c.card_id}:${c.quantity}:${c.owned_quantity ?? ''}:${c.board_type || ''}:${c.is_commander ? 1 : 0}`)
     .sort()
     .join('|') + `#${deck?.format || ''}`;
 }
@@ -64,6 +65,7 @@ export class DeckCollection {
    * @param host.fetchBinder   (params) => Promise of binder fits; leave out for no binder
    * @param host.addCard       (card) => Promise, adds an owned card to the deck
    * @param host.buyMissing    () => opens the buy flow for what's missing; optional
+   * @param host.claimFree     () => Promise, puts free copies into the deck; optional (your own deck)
    * @param host.deckLinks     false to show your other decks as plain names, not links
    * @param host.showCard, host.preview, host.hidePreview  card detail and hover preview; optional
    */
@@ -75,7 +77,7 @@ export class DeckCollection {
     this.reportKey = null;
     this.reportError = null;
     this.loading = false;
-    this.prefs = readJson('deckCollection', { alongside: false, filter: 'all' });
+    this.prefs = readJson('deckCollection.perDeck', { alongside: true, filter: 'all' });
     this.binderPrefs = readJson('deckBinder', { colors: 'deck', free: false, sort: '' });
     this.binder = null;
     this.binderKey = null;
@@ -206,14 +208,15 @@ export class DeckCollection {
     const cost = alongside ? s.alongsideCost : s.cost;
     const ownedPct = s.copies ? Math.round((s.ownedCopies / s.copies) * 100) : 0;
     return `<div class="an-tiles">
-      <div class="an-tile"><span class="an-tile-label">Owned</span><span class="an-tile-value">${s.ownedCards}<small> / ${s.cards}</small></span><span class="an-tile-sub">cards you have enough of${s.basics ? ', basics aside' : ''}</span></div>
+      <div class="an-tile"><span class="an-tile-label">Owned</span><span class="an-tile-value">${s.ownedCards}<small> / ${s.cards}</small></span><span class="an-tile-sub">${this.host.claimFree ? 'cards with your copies in this deck' : 'cards you have enough of'}${s.basics ? ', basics aside' : ''}</span></div>
       <div class="an-tile"><span class="an-tile-label">Copies</span><span class="an-tile-value">${ownedPct}%</span>
         <span class="col-meter" role="img" aria-label="${s.ownedCopies} of ${s.copies} copies owned"><span style="width:${ownedPct}%"></span></span>
         <span class="an-tile-sub">${s.ownedCopies} of ${s.copies} owned</span></div>
-      <div class="an-tile"><span class="an-tile-label">${alongside ? 'To build it alongside the rest' : 'To finish it'}</span><span class="an-tile-value">${toBuy ? money(cost) : '$0'}</span>
+      <div class="an-tile"><span class="an-tile-label">${alongside ? 'To buy, keeping other decks built' : 'To buy, taking from other decks'}</span><span class="an-tile-value">${toBuy ? money(cost) : '$0'}</span>
         <span class="an-tile-sub">${toBuy ? `${plural(toBuy, 'copy', 'copies')}${s.unpriced && !alongside ? `, ${s.unpriced} without a price` : ''}` : 'Nothing to buy'}</span></div>
       ${alongside ? '' : `<div class="an-tile"><span class="an-tile-label">Cheapest printings</span><span class="an-tile-value">${s.missingCopies ? money(s.cheapestCost) : '$0'}</span><span class="an-tile-sub">if you don't mind which printing</span></div>`}
-      <div class="an-tile"><span class="an-tile-label">Shared with other decks</span><span class="an-tile-value">${s.sharedCards}</span><span class="an-tile-sub">${s.sharedCards ? `${plural(s.alongsideCopies - s.missingCopies, 'more copy', 'more copies')} to have every deck built at once` : 'No copies borrowed'}</span></div>
+      <div class="an-tile"><span class="an-tile-label">In your other decks</span><span class="an-tile-value">${s.sharedCards}</span><span class="an-tile-sub">${s.sharedCards ? 'cards whose copies another deck holds' : 'Nothing to borrow'}</span></div>
+      ${s.spareCopies ? `<div class="an-tile"><span class="an-tile-label">Free copies</span><span class="an-tile-value">${s.spareCopies}</span><span class="an-tile-sub">owned, in no deck, and this deck could use them</span></div>` : ''}
     </div>`;
   }
 
@@ -224,12 +227,12 @@ export class DeckCollection {
     for (const c of cards) {
       if (c.missing > 0) counts.missing += 1;
       if (c.status === 'shared') counts.shared += 1;
-      if (c.status === 'owned' || c.status === 'shared') counts.owned += 1;
+      if (c.status === 'owned') counts.owned += 1;
     }
     const shown = cards.filter((c) => {
       if (filter === 'missing') return c.missing > 0;
-      if (filter === 'shared') return c.status === 'shared' || (c.other_demand > 0 && c.alongside > c.missing);
-      if (filter === 'owned') return c.missing === 0;
+      if (filter === 'shared') return c.status === 'shared' || c.held_elsewhere > 0;
+      if (filter === 'owned') return c.status === 'owned';
       return true;
     });
     const toBuy = this.prefs.alongside ? summary.alongsideCopies : summary.missingCopies;
@@ -239,20 +242,23 @@ export class DeckCollection {
       const buy = this.prefs.alongside ? c.alongside : c.missing;
       const others = c.other_decks.length
         ? c.other_decks.map((d) => {
-          const label = `${escapeHtml(d.name)}${d.quantity > 1 ? ` <span class="muted">×${d.quantity}</span>` : ''}`;
-          const title = `${escapeHtml(d.name)} lists ${d.quantity}`;
+          const label = `${escapeHtml(d.name)}${d.held ? ` <span class="muted">holds ${d.held}</span>` : ''}`;
+          const title = `${escapeHtml(d.name)} lists ${d.quantity} and holds ${d.held} of your copies`;
           return this.host.deckLinks === false
             ? `<span class="col-deck" title="${title}">${label}</span>`
             : `<a class="col-deck" href="/decks/${d.deck_id}" data-deck-link="${d.deck_id}" title="${title}">${label}</a>`;
         }).join('')
         : '<span class="muted">—</span>';
       const only = c.status === 'shared' && c.owned === 1 ? '<span class="col-only">your only copy</span>' : '';
+      const ownDeck = !!this.host.claimFree;
+      const held = ownDeck ? c.in_deck : Math.min(c.need, c.free);
       return `<tr data-status="${c.status}">
         <td><span class="col-pill" data-status="${c.status}"><i class="ph-fill ${st.icon}" aria-hidden="true"></i> ${st.label}</span></td>
         <th scope="row" class="col-name"><button type="button" class="link-btn" data-card="${c.card_id}" data-preview="${escapeHtml(c.image_url || '')}">${escapeHtml(c.name)}</button>${c.is_commander ? ' <span class="col-tag">Commander</span>' : ''}</th>
         <td class="col-cost">${formatMana(c.mana_cost || '')}</td>
         <td class="num">${c.need}</td>
-        <td class="num${c.owned < c.need ? ' col-short' : ''}">${c.owned}</td>
+        <td class="num${held < c.need ? ' col-short' : ''}">${held}</td>
+        <td class="num">${c.owned}${c.free ? ` <span class="muted">(${c.free} free)</span>` : ''}</td>
         <td class="col-others">${others}${only}</td>
         <td class="num">${c.price_each == null ? '<span class="muted">—</span>' : money(c.price_each)}</td>
         <td class="num">${buy ? (c.price_each == null ? `<span class="muted">${buy} unpriced</span>` : `${buy} · ${money(buy * c.price_each)}`) : '<span class="muted">—</span>'}</td>
@@ -262,19 +268,20 @@ export class DeckCollection {
     return `
       <div class="an-head">
         <h3 id="col-list-title">Against your collection</h3>
-        ${seg('col-filter', [['all', `All ${counts.all}`], ['missing', `Missing ${counts.missing}`], ['shared', `Shared ${counts.shared}`], ['owned', `Owned ${counts.owned}`]], filter)}
-        ${seg('col-alongside', [['0', 'This deck alone'], ['1', 'Alongside my other decks']], this.prefs.alongside ? '1' : '0')}
+        ${seg('col-filter', [['all', `All ${counts.all}`], ['missing', `Missing ${counts.missing}`], ['shared', `In other decks ${counts.shared}`], ['owned', `Owned ${counts.owned}`]], filter)}
+        ${seg('col-alongside', [['1', 'Keep my other decks built'], ['0', 'Take from my other decks']], this.prefs.alongside ? '1' : '0')}
       </div>
-      <p class="an-note">Copies count across every printing you own. "Alongside my other decks" treats copies your other decks list as taken, so it shows what to buy to have every deck built at once. Maybeboards don't claim copies, and basic lands aren't counted.</p>
+      <p class="an-note">Each copy you own is in one deck at most. "Keep my other decks built" counts only copies in this deck and copies in no deck, so it shows what to buy to have every deck built at once. "Take from my other decks" assumes you'd move copies over. Copies count across every printing you own. Maybeboards don't hold copies, and basic lands aren't counted.</p>
       <div class="col-actions">
-        ${this.host.buyMissing && summary.missingCopies ? `<button type="button" class="btn btn-primary btn-sm" data-action="buy"><i class="ph ph-shopping-cart"></i> Buy the missing ${plural(summary.missingCopies, 'copy', 'copies')}</button>` : ''}
+        ${this.host.claimFree && summary.spareCopies ? `<button type="button" class="btn btn-primary btn-sm" data-action="claim"${this.claiming ? ' disabled' : ''}><i class="ph ph-hand-coins"></i> Put ${plural(summary.spareCopies, 'free copy', 'free copies')} in this deck</button>` : ''}
+        ${this.host.buyMissing && summary.alongsideCopies ? `<button type="button" class="btn btn-primary btn-sm" data-action="buy"><i class="ph ph-shopping-cart"></i> Buy the missing ${plural(summary.alongsideCopies, 'copy', 'copies')}</button>` : ''}
         <button type="button" class="btn btn-secondary btn-sm" data-action="copy"${toBuy ? '' : ' disabled'}><i class="ph ph-copy"></i> Copy ${this.prefs.alongside ? 'what to buy' : 'missing list'}</button>
         ${this.loading ? '<span class="muted col-updating"><i class="ph ph-spinner"></i> Updating…</span>' : ''}
       </div>
       <div class="col-table-wrap">
         <table class="an-table col-table">
-          <thead><tr><th>Status</th><th>Card</th><th>Cost</th><th class="num">Need</th><th class="num">Own</th><th>Also in</th><th class="num">Each</th><th class="num">To buy</th></tr></thead>
-          <tbody>${rows || `<tr><td colspan="8" class="muted">Nothing here.</td></tr>`}</tbody>
+          <thead><tr><th>Status</th><th>Card</th><th>Cost</th><th class="num">Need</th><th class="num" title="${this.host.claimFree ? 'Copies of yours in this deck' : 'Copies of yours no deck holds'}">${this.host.claimFree ? 'In deck' : 'Free'}</th><th class="num">Own</th><th>Also in</th><th class="num">Each</th><th class="num">To buy</th></tr></thead>
+          <tbody>${rows || `<tr><td colspan="9" class="muted">Nothing here.</td></tr>`}</tbody>
         </table>
       </div>`;
   }
@@ -406,8 +413,19 @@ export class DeckCollection {
 
     const action = e.target.closest('[data-action]')?.dataset.action;
     if (action === 'buy') this.host.buyMissing();
+    else if (action === 'claim') this.claimFree();
     else if (action === 'copy') this.copyList();
     else if (action === 'more') this.loadBinder({ more: true });
+  }
+
+  async claimFree() {
+    if (this.claiming) return;
+    this.claiming = true;
+    try {
+      await this.host.claimFree();
+    } finally {
+      this.claiming = false;
+    }
   }
 
   onSeg(name, value) {
@@ -425,7 +443,7 @@ export class DeckCollection {
       this.loadBinder();
       return;
     }
-    writeJson('deckCollection', this.prefs);
+    writeJson('deckCollection.perDeck', this.prefs);
     // Re-render the report but keep the binder (and its scroll position) as it is
     const grid = this.el.querySelector('.an-grid:not(.col-binder-grid)');
     const tiles = this.el.querySelector('.an-tiles');

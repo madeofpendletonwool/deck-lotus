@@ -136,24 +136,20 @@ function printingSuffix(card) {
   return ` (${card.set_code.toUpperCase()})${collector}`;
 }
 
-/** Copies of a card the collection covers. A card marked owned with no count covers them all. */
+/**
+ * Copies of a row your collection covers: the copies of yours in this deck. A maybeboard row holds
+ * none, so it counts as covered when free copies would cover it (the deck endpoint's is_owned).
+ */
 function ownedCopies(card) {
-  if (!card.is_owned) return 0;
-  return card.owned_quantity ?? Infinity;
+  if (boardOf(card) === 'maybeboard') return card.is_owned ? (card.quantity ?? 1) : 0;
+  return Math.max(0, Number(card.owned_quantity) || 0);
 }
 
-/**
- * Reduce each list to the copies still missing. Owned copies are per card, not per printing, and
- * only count once across the deck, so they go to the earliest boards first.
- */
+/** Reduce each list to the copies this deck doesn't have from your collection. */
 function subtractOwned(lists) {
-  const used = new Map();
   return lists.map((list) => list.flatMap((card) => {
-    const key = card.card_id ?? card.name;
-    const available = Math.max(ownedCopies(card) - (used.get(key) || 0), 0);
     const quantity = card.quantity ?? 1;
-    const covered = Math.min(available, quantity);
-    used.set(key, (used.get(key) || 0) + covered);
+    const covered = Math.min(ownedCopies(card), quantity);
     return covered === quantity ? [] : [{ ...card, quantity: quantity - covered }];
   }));
 }

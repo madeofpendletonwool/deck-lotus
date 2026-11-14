@@ -9,6 +9,7 @@ import { compileQuery } from '../utils/cardQuery.js';
 import { setupCubeTools, setCubeMode, renderCubeBoard, refreshCube, cubeViewShowsList, clearCubeSelection, cubeSortsByPrice } from './cubeTools.js';
 import { DeckTools } from './deckAnalysis.js';
 import { DeckCollection } from './deckCollection.js';
+import { renderOwnershipToggle, toggleDeckOwnership } from './deckOwnership.js';
 import { missingRows } from '../../../shared/collection.js';
 import { shuffle } from '../utils/cube.js';
 import { hypergeometricAtLeast } from '../utils/manaMath.js';
@@ -194,6 +195,15 @@ export function setupDeckBuilder() {
     fetchReport: () => api.getDeckCollection(currentDeckId),
     fetchBinder: (params) => api.getBinderFits(currentDeckId, params),
     addCard: (card) => addOwnedCard(card),
+    claimFree: async () => {
+      try {
+        const { claimed } = await api.claimFreeCopies(currentDeckId);
+        showToast(claimed ? `${claimed} free ${claimed === 1 ? 'copy' : 'copies'} put in this deck` : 'No free copies to put in', 'success', 2000);
+        await refreshDeck();
+      } catch (error) {
+        showToast('Failed to put free copies in: ' + error.message, 'error');
+      }
+    },
     buyMissing: () => {
       openBuyDeckModal();
       document.getElementById('copy-non-owned-only').checked = true;
@@ -1184,13 +1194,6 @@ function canBeCommander(card) {
   return canLead(card, spec.skill);
 }
 
-function renderOwnershipToggle(card) {
-  const label = card.is_owned ? 'In your collection' : 'Add to collection';
-  return `<button class="ownership-toggle-btn ${card.is_owned ? 'owned' : ''}" data-card-id="${card.card_id}" title="${label}" aria-label="${label}">
-    <i class="${card.is_owned ? 'ph-fill ph-check-circle' : 'ph ph-circle'}"></i>
-  </button>`;
-}
-
 function renderPrintingLink(card) {
   return `<button type="button" class="set-code-link" data-card-id="${card.card_id}" data-deck-card-id="${card.deck_card_id}" title="Change printing" aria-label="Change printing, currently ${escapeHtml(card.set_code)}">${escapeHtml(card.set_code)}</button>`;
 }
@@ -1458,12 +1461,15 @@ function setupCardControls() {
     });
   });
 
-  // Ownership toggle
-  document.querySelectorAll('.ownership-toggle-btn').forEach(btn => {
+  // Ownership toggle: copies from your collection in this deck
+  document.querySelectorAll('.ownership-toggle-btn[data-deck-card-id]').forEach(btn => {
     btn.addEventListener('click', async (e) => {
       e.stopPropagation();
-      const cardId = btn.dataset.cardId;
-      await toggleCardOwnership(cardId, btn);
+      const card = currentDeck.cards.find(c => String(c.deck_card_id) === btn.dataset.deckCardId);
+      if (!card) return;
+      btn.disabled = true;
+      if (await toggleDeckOwnership(currentDeckId, card)) await refreshDeck();
+      else btn.disabled = false;
     });
   });
 
@@ -1776,36 +1782,12 @@ async function toggleCommander(deckCardId) {
   }
 }
 
-async function toggleCardOwnership(cardId, buttonEl) {
-  try {
-    const result = await api.toggleCardOwnership(cardId);
-
-    // Update the button appearance
-    if (result.owned) {
-      buttonEl.classList.add('owned');
-      buttonEl.innerHTML = '<i class="ph-fill ph-check-circle"></i>';
-      showToast('Added to collection', 'success', 1500);
-    } else {
-      buttonEl.classList.remove('owned');
-      buttonEl.innerHTML = '<i class="ph ph-circle"></i>';
-      showToast('Removed from collection', 'success', 1500);
-    }
-
-    // Update the card's is_owned status in currentDeck
-    currentDeck.cards.forEach(card => {
-      if (card.card_id == cardId) {
-        card.is_owned = result.owned;
-        // Marking a card owned adds one copy to the collection; unmarking removes them all.
-        card.owned_quantity = result.owned ? 1 : 0;
-      }
-    });
-
-    // Reload stats to update the ownership percentage
-    await loadDeckStats();
-  } catch (error) {
-    showToast('Failed to update collection', 'error');
-    console.error('Toggle ownership error:', error);
-  }
+/** Re-fetch the deck after a change made elsewhere (ownership), keeping the page where it is. */
+async function refreshDeck() {
+  const result = await api.getDeck(currentDeckId);
+  currentDeck = result.deck;
+  renderDeckCards();
+  await loadDeckStats();
 }
 
 function switchTab(tab) {
@@ -2268,7 +2250,8 @@ function renderStats(stats) {
   const totalCards = mainboardCards.reduce((sum, c) => sum + c.quantity, 0);
 
   // Calculate owned percentage
-  const ownedCards = mainboardCards.filter(c => c.is_owned).reduce((sum, c) => sum + c.quantity, 0);
+  // Copies from your collection that are in this deck
+  const ownedCards = mainboardCards.reduce((sum, c) => sum + Math.min(c.quantity, c.owned_quantity || 0), 0);
   const ownedPercentage = totalCards > 0 ? ((ownedCards / totalCards) * 100).toFixed(0) : 0;
 
   // Use calculated CMC for accurate totals

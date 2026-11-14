@@ -313,11 +313,12 @@ function renderOwnSummary() {
     el.innerHTML = '<span class="cd-own-none"><i class="ph ph-circle-dashed"></i> Not in your collection</span>';
     return;
   }
-  const free = o.totalOwned - o.totalInDecks;
+  const free = Math.max(0, o.totalOwned - o.totalInDecks);
+  const holding = o.deckUsage.filter((d) => d.held_quantity > 0).length;
   el.innerHTML = `
     <span class="cd-own-stat"><i class="ph-fill ph-check-circle"></i><strong>${o.totalOwned}</strong> owned</span>
-    <span class="cd-own-stat"><strong>${o.totalInDecks}</strong> in ${plural(o.deckUsage.length, 'deck')}</span>
-    <span class="cd-own-stat ${free < 0 ? 'is-short' : ''}" title="${free < 0 ? 'Your decks list more copies than you own' : 'Copies not in any deck'}">${free < 0 ? `<strong>${-free}</strong> short` : `<strong>${free}</strong> free`}</span>`;
+    <span class="cd-own-stat" title="Copies that are in a deck"><strong>${o.totalInDecks}</strong> in ${plural(holding, 'deck')}</span>
+    <span class="cd-own-stat" title="Copies not in any deck"><strong>${free}</strong> free</span>`;
 }
 
 function tabsList() {
@@ -401,7 +402,10 @@ function collectionPanel() {
       const side = sumList(d.sideboard_quantities);
       const main = sumList(d.mainboard_quantities);
       const other = d.total_quantity - side - main;
-      const where = [main && `${main} main`, side && `${side} side`, other > 0 && `${other} maybe`].filter(Boolean).join(', ');
+      const listed = main + side;
+      const held = d.held_quantity || 0;
+      const where = [main && `${main} main`, side && `${side} side`, other > 0 && `${other} maybe`].filter(Boolean).join(', ')
+        + (listed ? (held >= listed ? ' · all yours' : held ? ` · ${held} of yours` : ' · none of yours') : '');
       return `<a class="cd-deck" href="/decks/${d.id}" data-deck-link>
         <span class="cd-deck-name">${esc(d.name)}</span>
         <span class="cd-deck-meta">${esc(where)}</span>

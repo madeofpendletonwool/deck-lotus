@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import { validateDeck, FORMATS, isCubeFormat, DEFAULT_CUBE_SETTINGS, parsePointsList } from '../../shared/formats.js';
 import { getSettings } from './settingsService.js';
 import { PRINTING_PRICE_SQL, CHEAPEST_PRINTING_SQL } from './pricingService.js';
+import { claimFreeCopies, claimFreeCopiesForDeck } from './ownershipService.js';
 
 const RARITY_RANK_SQL = `CASE rarity WHEN 'common' THEN 0 WHEN 'uncommon' THEN 1 WHEN 'rare' THEN 2 WHEN 'mythic' THEN 3 ELSE 4 END`;
 
@@ -174,8 +175,9 @@ export function getDeckById(deckId, userId) {
       dc.tags,
       dc.color_category,
       dc.notes,
-      (SELECT CASE WHEN oc.id IS NOT NULL THEN 1 ELSE 0 END FROM owned_cards oc WHERE oc.user_id = ? AND oc.card_id = c.id LIMIT 1) as is_owned,
-      (SELECT SUM(op.quantity) FROM owned_printings op JOIN printings op_p ON op.printing_id = op_p.id WHERE op.user_id = ? AND op_p.card_id = c.id) as owned_quantity
+      dc.owned_quantity,
+      (SELECT COALESCE(SUM(op.quantity), 0) FROM owned_printings op JOIN printings op_p ON op.printing_id = op_p.id WHERE op.user_id = ? AND op_p.card_id = c.id) as collection_quantity,
+      (SELECT COALESCE(SUM(dc2.owned_quantity), 0) FROM deck_cards dc2 JOIN decks d2 ON d2.id = dc2.deck_id JOIN printings p2 ON p2.id = dc2.printing_id WHERE d2.user_id = ? AND p2.card_id = c.id) as assigned_quantity
      FROM deck_cards dc
      JOIN printings p ON dc.printing_id = p.id
      JOIN cards c ON p.card_id = c.id
@@ -195,8 +197,21 @@ export function getDeckById(deckId, userId) {
   return {
     ...deck,
     settings: parseSettings(deck.settings),
-    cards,
+    cards: cards.map(withOwnership),
   };
+}
+
+/**
+ * A deck row's ownership, per deck: owned_quantity is the copies of it from your collection that
+ * are in this deck, free_quantity the copies you own that no deck holds. A row is owned when all
+ * its copies are in the deck. Maybeboard rows hold none, so they count as owned when free copies
+ * would cover them.
+ */
+function withOwnership(card) {
+  const { assigned_quantity, ...rest } = card;
+  const free = Math.max(0, (card.collection_quantity || 0) - (assigned_quantity || 0));
+  const covered = card.board_type === 'maybeboard' ? free : card.owned_quantity;
+  return { ...rest, free_quantity: free, is_owned: covered >= card.quantity ? 1 : 0 };
 }
 
 /**
@@ -301,6 +316,7 @@ export function addCardToDeck(deckId, userId, printingId, quantity = 1, isSidebo
     [deckId, printingId, finalBoardType]
   );
 
+  let rowId;
   if (existing) {
     // Update quantity
     db.run(
@@ -308,14 +324,17 @@ export function addCardToDeck(deckId, userId, printingId, quantity = 1, isSidebo
        WHERE id = ?`,
       [quantity, isCommander ? 1 : 0, existing.id]
     );
+    rowId = existing.id;
   } else {
     // Insert new
-    db.run(
+    rowId = db.run(
       `INSERT INTO deck_cards (deck_id, printing_id, quantity, is_sideboard, is_commander, board_type)
        VALUES (?, ?, ?, ?, ?, ?)`,
       [deckId, printingId, quantity, isSideboard ? 1 : 0, isCommander ? 1 : 0, finalBoardType]
-    );
+    ).lastInsertRowid;
   }
+  // New copies take any you own that no deck is using
+  claimFreeCopies(userId, rowId, quantity);
 
   if (isCubeFormat(deck.format)) {
     const card = db.get(`SELECT c.name FROM printings p JOIN cards c ON p.card_id = c.id WHERE p.id = ?`, [printingId]);
@@ -348,11 +367,12 @@ export function addScannedPrintingToDeck(deck, printingId, quantity, board = 'ma
     [deck.id, printingId, isSideboard]
   );
   let landed = board;
+  let rowId = row?.id;
   if (!row) {
-    db.run(
+    rowId = db.run(
       `INSERT INTO deck_cards (deck_id, printing_id, quantity, is_sideboard, board_type) VALUES (?, ?, ?, ?, ?)`,
       [deck.id, printingId, quantity, isSideboard, board]
-    );
+    ).lastInsertRowid;
   } else if (row.board_type === board || (row.board_type === 'maybeboard' && board === 'mainboard')) {
     db.run(`UPDATE deck_cards SET quantity = quantity + ?, board_type = ? WHERE id = ?`, [quantity, board, row.id]);
   } else {
@@ -360,6 +380,9 @@ export function addScannedPrintingToDeck(deck, printingId, quantity, board = 'ma
     db.run(`UPDATE deck_cards SET quantity = quantity + ? WHERE id = ?`, [quantity, row.id]);
     landed = row.board_type;
   }
+  // A scanned card is a physical copy: put free copies (including any this scan just added) in the deck
+  const owner = db.get(`SELECT user_id FROM decks WHERE id = ?`, [deck.id]);
+  if (owner) claimFreeCopies(owner.user_id, rowId, quantity);
   if (isCubeFormat(deck.format)) {
     const card = db.get(`SELECT c.name FROM printings p JOIN cards c ON p.card_id = c.id WHERE p.id = ?`, [printingId]);
     logChange(deck.id, 'add', card?.name, quantity, landed);
@@ -374,7 +397,7 @@ export function addScannedPrintingToDeck(deck, printingId, quantity, board = 'ma
  */
 function mergeIntoExistingPrinting(deckId, deckCardId, printingId) {
   const row = db.get(
-    `SELECT id, quantity, is_sideboard, is_commander, board_type FROM deck_cards WHERE id = ? AND deck_id = ?`,
+    `SELECT id, quantity, owned_quantity, is_sideboard, is_commander, board_type FROM deck_cards WHERE id = ? AND deck_id = ?`,
     [deckCardId, deckId]
   );
   if (!row) return false;
@@ -396,8 +419,8 @@ function mergeIntoExistingPrinting(deckId, deckCardId, printingId) {
 
   db.transaction(() => {
     db.run(
-      `UPDATE deck_cards SET quantity = quantity + ?, is_commander = MAX(is_commander, ?) WHERE id = ?`,
-      [row.quantity, row.is_commander, other.id]
+      `UPDATE deck_cards SET quantity = quantity + ?, owned_quantity = owned_quantity + ?, is_commander = MAX(is_commander, ?) WHERE id = ?`,
+      [row.quantity, row.owned_quantity, row.is_commander, other.id]
     );
     db.run(`DELETE FROM deck_cards WHERE id = ?`, [row.id]);
   });
@@ -410,7 +433,8 @@ function mergeIntoExistingPrinting(deckId, deckCardId, printingId) {
 export function updateDeckCard(deckId, userId, deckCardId, updates) {
   const deck = ownedDeck(deckId, userId);
   const { quantity, isSideboard, isCommander, printingId, boardType, tags, colorCategory, notes } = updates;
-  const before = isCubeFormat(deck.format) ? deckCardInfo(deckId, deckCardId) : null;
+  const cube = isCubeFormat(deck.format);
+  const before = deckCardInfo(deckId, deckCardId);
 
   const fields = [];
   const params = [];
@@ -473,12 +497,24 @@ export function updateDeckCard(deckId, userId, deckCardId, updates) {
     params
   );
 
-  if (before) logRowChange(deckId, before, deckCardInfo(deckId, deckCardId));
+  const after = deckCardInfo(deckId, deckCardId);
+  if (before && cube) logRowChange(deckId, before, after);
+  claimForGrowth(userId, before, after);
 
   // Update deck timestamp
   db.run(`UPDATE decks SET updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [deckId]);
 
   return getDeckById(deckId, userId);
+}
+
+/**
+ * A row that now asks for more copies (more of them, or out of the maybeboard) takes free copies
+ * for the difference. Copies it already had stay; one you took out of the deck isn't put back.
+ */
+function claimForGrowth(userId, before, after) {
+  if (!before || !after || after.board_type === 'maybeboard') return;
+  const grew = before.board_type === 'maybeboard' ? after.quantity : after.quantity - before.quantity;
+  if (grew > 0) claimFreeCopies(userId, after.id, grew);
 }
 
 /** Record what a row edit changed: copies added or removed, or a move between boards. */
@@ -511,10 +547,10 @@ export function bulkUpdateDeckCards(deckId, userId, deckCardIds, changes = {}) {
     for (const id of deckCardIds) {
       const row = db.get(`SELECT id, tags FROM deck_cards WHERE id = ? AND deck_id = ?`, [id, deckId]);
       if (!row) continue;
-      const before = cube ? deckCardInfo(deckId, id) : null;
+      const before = deckCardInfo(deckId, id);
 
       if (remove) {
-        if (before) logChange(deckId, 'remove', before.name, before.quantity, before.board_type);
+        if (before && cube) logChange(deckId, 'remove', before.name, before.quantity, before.board_type);
         db.run(`DELETE FROM deck_cards WHERE id = ?`, [id]);
         continue;
       }
@@ -537,7 +573,9 @@ export function bulkUpdateDeckCards(deckId, userId, deckCardIds, changes = {}) {
           // The same printing is already on the other board (see mergeIntoExistingPrinting); leave this one
           if (!/UNIQUE/.test(error.message)) throw error;
         }
-        if (before) logRowChange(deckId, before, deckCardInfo(deckId, id));
+        const after = deckCardInfo(deckId, id);
+        if (before && cube) logRowChange(deckId, before, after);
+        claimForGrowth(userId, before, after);
       }
     }
     db.run(`UPDATE decks SET updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [deckId]);
@@ -839,6 +877,7 @@ export function importSharedDeck(shareToken, userId) {
       [newDeck.id, card.printing_id, card.quantity, card.is_sideboard, card.is_commander, card.board_type, card.tags, card.color_category, card.notes]
     );
   }
+  claimFreeCopiesForDeck(userId, newDeck.id);
 
   return getDeckById(newDeck.id, userId);
 }

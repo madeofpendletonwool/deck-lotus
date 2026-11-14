@@ -60,7 +60,7 @@ export function getInventory(userId, filters = {}) {
       GROUP BY card_id
     ),
     in_decks AS (
-      SELECT p.card_id, SUM(dc.quantity) AS total_in_decks
+      SELECT p.card_id, SUM(dc.owned_quantity) AS total_in_decks
       FROM deck_cards dc
       JOIN decks d ON dc.deck_id = d.id
       JOIN printings p ON dc.printing_id = p.id
@@ -183,8 +183,8 @@ export function getInventory(userId, filters = {}) {
  *
  * One entry per card with its rules fields (so the card filter language works on it) and every
  * owned printing as [printing_id, set_code, collector_number, rarity, finish, quantity, price,
- * image_url]. Sets come back once, keyed by code. In-deck counts leave out maybeboards, since
- * those copies aren't taken.
+ * image_url]. Sets come back once, keyed by code. In-deck counts are the copies your decks hold
+ * (deck_cards.owned_quantity), not the copies they list.
  */
 export function getInventoryIndex(userId, { cardIds = null } = {}) {
   // With cardIds, just those cards: the page patches itself after a change instead of reloading
@@ -226,7 +226,7 @@ export function getInventoryIndex(userId, { cardIds = null } = {}) {
       Object.assign(byCard.get(id), fields);
     }
     for (const r of db.all(
-      `SELECT p.card_id, SUM(dc.quantity) AS in_decks
+      `SELECT p.card_id, SUM(dc.owned_quantity) AS in_decks
        FROM deck_cards dc
        JOIN decks d ON dc.deck_id = d.id
        JOIN printings p ON dc.printing_id = p.id

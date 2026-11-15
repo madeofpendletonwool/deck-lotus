@@ -118,6 +118,7 @@ function readOptions() {
     includeMaybeboard: Boolean(format.supportsMaybeboard) && document.getElementById('export-opt-maybeboard').checked,
     excludeBasics: document.getElementById('export-opt-basics').checked,
     unownedOnly: document.getElementById('export-opt-unowned').checked,
+    proxiedOnly: document.getElementById('export-opt-proxied').checked,
     oneOfEach: document.getElementById('export-opt-oneofeach').checked,
     filter: filterInput().value,
   };
@@ -201,7 +202,7 @@ export function setupExportModal() {
     if (btn) selectFormat(btn.dataset.format);
   });
 
-  ['sideboard', 'maybeboard', 'basics', 'unowned', 'oneofeach'].forEach((name) => {
+  ['sideboard', 'maybeboard', 'basics', 'unowned', 'proxied', 'oneofeach'].forEach((name) => {
     document.getElementById(`export-opt-${name}`).addEventListener('change', renderPreview);
   });
 
@@ -256,6 +257,11 @@ export function openExportModal(deck, { canFilterOwned = true, prices = null } =
   const unowned = document.getElementById('export-opt-unowned');
   document.getElementById('export-opt-unowned-wrap').classList.toggle('hidden', !canFilterOwned);
   if (!canFilterOwned) unowned.checked = false;
+  // The proxies option only shows for a deck that has some
+  const proxied = document.getElementById('export-opt-proxied');
+  const hasProxies = canFilterOwned && (deck.cards || []).some((c) => Number(c.proxy_quantity) > 0);
+  document.getElementById('export-opt-proxied-wrap').classList.toggle('hidden', !hasProxies);
+  if (!hasProxies) proxied.checked = false;
 
   renderFormatList();
   renderPreview();

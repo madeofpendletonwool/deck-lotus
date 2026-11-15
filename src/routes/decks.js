@@ -28,7 +28,7 @@ import {
   getAvailableSets
 } from '../services/printingOptimizerService.js';
 import { getDeckCollection, getSharedDeckCollection, getBinderFits, getDeckSummaries } from '../services/collectionService.js';
-import { getDeckCardOwnership, setDeckCardOwned, claimFreeForDeck } from '../services/ownershipService.js';
+import { getDeckCardOwnership, setDeckCardOwned, claimFreeForDeck, setDeckCardProxies, setDeckProxies } from '../services/ownershipService.js';
 import { authenticate, optionalAuthenticate } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -439,6 +439,31 @@ router.put('/:id/cards/:deckCardId/owned', authenticate, (req, res, next) => {
       takeFrom: takeFrom || [],
       addToCollection: !!addToCollection,
     }));
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * PUT /api/decks/:id/cards/:deckCardId/proxy  { proxied }
+ * Set how many of the row's copies are proxies (never more than the copies it's short).
+ */
+router.put('/:id/cards/:deckCardId/proxy', authenticate, (req, res, next) => {
+  try {
+    res.json(setDeckCardProxies(req.user.id, parseInt(req.params.id), parseInt(req.params.deckCardId), (req.body || {}).proxied));
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /api/decks/:id/proxies  { mode: 'missing' | 'clear', deckCardIds?: [id] }
+ * Proxy every missing copy of these rows, or take their proxies off: { changed, proxied, skippedFree }
+ */
+router.post('/:id/proxies', authenticate, (req, res, next) => {
+  try {
+    const { mode, deckCardIds } = req.body || {};
+    res.json(setDeckProxies(req.user.id, parseInt(req.params.id), { mode, deckCardIds: deckCardIds ?? null }));
   } catch (error) {
     next(error);
   }

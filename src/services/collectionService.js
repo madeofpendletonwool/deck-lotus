@@ -33,7 +33,7 @@ function allInChunks(ids, build) {
 /** A deck's cards with what's needed here: card, board, and its printing's price. */
 function deckRows(deckId) {
   return db.all(
-    `SELECT dc.quantity, dc.owned_quantity, dc.is_sideboard, dc.is_commander, ${BOARD_SQL} as board_type,
+    `SELECT dc.quantity, dc.owned_quantity, dc.proxy_quantity, dc.is_sideboard, dc.is_commander, ${BOARD_SQL} as board_type,
             p.card_id, p.image_url, c.name, c.type_line, c.mana_cost, c.cmc, c.color_identity,
             ${PRINTING_PRICE_SQL} as price
      FROM deck_cards dc
@@ -121,6 +121,8 @@ export function getDeckSummaries(userId) {
       missingCopies: summary.missingCopies,
       sharedCards: summary.sharedCards,
       spareCards: summary.spareCards,
+      proxiedCards: summary.proxiedCards,
+      proxiedCopies: summary.proxiedCopies,
       cost: summary.cost,
       unpriced: summary.unpriced,
     };

@@ -20,7 +20,8 @@ function allInChunks(ids, build) {
  *
  * One entry per card (not per printing): the store sells you a card, and any printing you own
  * counts against what your decks want. Each card says how many copies each deck lists on each
- * board and how many you own; the page works out what's left to buy.
+ * board and how many you own; the page works out what's left to buy. Proxied copies aren't
+ * bought, so they're taken off the board counts (and reported per deck as `proxied`).
  *
  * @param {number} userId
  * @param {number[]|null} deckIds limit to these decks; null or empty means all of them
@@ -35,7 +36,7 @@ export function getShoppingList(userId, deckIds = null) {
   if (!deckList.length) return { decks: [], cards: [] };
 
   const rows = allInChunks(deckList.map((d) => d.id), (ph, ids) => [
-    `SELECT dc.deck_id, ${BOARD_SQL} as board_type, dc.is_commander, dc.quantity,
+    `SELECT dc.deck_id, ${BOARD_SQL} as board_type, dc.is_commander, dc.quantity, dc.proxy_quantity,
             p.id as printing_id, p.set_code, p.collector_number, p.rarity, p.image_url,
             s.name as set_name, s.release_date,
             c.id as card_id, c.name, c.mana_cost, c.cmc, c.colors, c.color_identity, c.type_line,
@@ -88,16 +89,19 @@ export function getShoppingList(userId, deckIds = null) {
       };
       card.printings.set(r.printing_id, printing);
     }
-    printing.quantity += r.quantity;
+    const proxied = r.board_type === 'maybeboard' ? 0 : Math.min(r.quantity, Math.max(0, r.proxy_quantity || 0));
+    const wanted = r.quantity - proxied;
+    printing.quantity += wanted;
 
     let deck = card.decks.get(r.deck_id);
     if (!deck) {
-      deck = { deck_id: r.deck_id, main: 0, side: 0, maybe: 0, commander: false };
+      deck = { deck_id: r.deck_id, main: 0, side: 0, maybe: 0, proxied: 0, commander: false };
       card.decks.set(r.deck_id, deck);
     }
-    if (r.board_type === 'maybeboard') deck.maybe += r.quantity;
-    else if (r.board_type === 'sideboard') deck.side += r.quantity;
-    else deck.main += r.quantity;
+    deck.proxied += proxied;
+    if (r.board_type === 'maybeboard') deck.maybe += wanted;
+    else if (r.board_type === 'sideboard') deck.side += wanted;
+    else deck.main += wanted;
     if (r.is_commander) deck.commander = true;
   }
 

@@ -176,6 +176,7 @@ export function getDeckById(deckId, userId) {
       dc.color_category,
       dc.notes,
       dc.owned_quantity,
+      dc.proxy_quantity,
       (SELECT COALESCE(SUM(op.quantity), 0) FROM owned_printings op JOIN printings op_p ON op.printing_id = op_p.id WHERE op.user_id = ? AND op_p.card_id = c.id) as collection_quantity,
       (SELECT COALESCE(SUM(dc2.owned_quantity), 0) FROM deck_cards dc2 JOIN decks d2 ON d2.id = dc2.deck_id JOIN printings p2 ON p2.id = dc2.printing_id WHERE d2.user_id = ? AND p2.card_id = c.id) as assigned_quantity
      FROM deck_cards dc
@@ -206,12 +207,24 @@ export function getDeckById(deckId, userId) {
  * are in this deck, free_quantity the copies you own that no deck holds. A row is owned when all
  * its copies are in the deck. Maybeboard rows hold none, so they count as owned when free copies
  * would cover them.
+ *
+ * proxy_quantity is the copies that are proxies. A row is covered (is_covered) when real copies
+ * and proxies between them fill it, so it isn't missing; is_proxied when some of those are proxies.
  */
 function withOwnership(card) {
   const { assigned_quantity, ...rest } = card;
   const free = Math.max(0, (card.collection_quantity || 0) - (assigned_quantity || 0));
-  const covered = card.board_type === 'maybeboard' ? free : card.owned_quantity;
-  return { ...rest, free_quantity: free, is_owned: covered >= card.quantity ? 1 : 0 };
+  const maybe = card.board_type === 'maybeboard';
+  const covered = maybe ? free : card.owned_quantity;
+  const proxies = maybe ? 0 : Math.max(0, Number(card.proxy_quantity) || 0);
+  return {
+    ...rest,
+    proxy_quantity: proxies,
+    free_quantity: free,
+    is_owned: covered >= card.quantity ? 1 : 0,
+    is_proxied: proxies > 0 ? 1 : 0,
+    is_covered: covered + proxies >= card.quantity ? 1 : 0,
+  };
 }
 
 /**
@@ -397,7 +410,7 @@ export function addScannedPrintingToDeck(deck, printingId, quantity, board = 'ma
  */
 function mergeIntoExistingPrinting(deckId, deckCardId, printingId) {
   const row = db.get(
-    `SELECT id, quantity, owned_quantity, is_sideboard, is_commander, board_type FROM deck_cards WHERE id = ? AND deck_id = ?`,
+    `SELECT id, quantity, owned_quantity, proxy_quantity, is_sideboard, is_commander, board_type FROM deck_cards WHERE id = ? AND deck_id = ?`,
     [deckCardId, deckId]
   );
   if (!row) return false;
@@ -419,8 +432,8 @@ function mergeIntoExistingPrinting(deckId, deckCardId, printingId) {
 
   db.transaction(() => {
     db.run(
-      `UPDATE deck_cards SET quantity = quantity + ?, owned_quantity = owned_quantity + ?, is_commander = MAX(is_commander, ?) WHERE id = ?`,
-      [row.quantity, row.owned_quantity, row.is_commander, other.id]
+      `UPDATE deck_cards SET quantity = quantity + ?, owned_quantity = owned_quantity + ?, proxy_quantity = proxy_quantity + ?, is_commander = MAX(is_commander, ?) WHERE id = ?`,
+      [row.quantity, row.owned_quantity, row.proxy_quantity, row.is_commander, other.id]
     );
     db.run(`DELETE FROM deck_cards WHERE id = ?`, [row.id]);
   });

@@ -666,6 +666,7 @@ export function getCardDeckUsage(userId, cardId) {
     `SELECT DISTINCT d.id, d.name, d.format,
             SUM(dc.quantity) as total_quantity,
             SUM(dc.owned_quantity) as held_quantity,
+            SUM(dc.proxy_quantity) as proxy_quantity,
             GROUP_CONCAT(CASE WHEN COALESCE(dc.board_type, CASE WHEN dc.is_sideboard = 1 THEN 'sideboard' ELSE 'mainboard' END) = 'sideboard' THEN dc.quantity ELSE 0 END) as sideboard_quantities,
             GROUP_CONCAT(CASE WHEN COALESCE(dc.board_type, CASE WHEN dc.is_sideboard = 1 THEN 'sideboard' ELSE 'mainboard' END) = 'mainboard' THEN dc.quantity ELSE 0 END) as mainboard_quantities
      FROM deck_cards dc

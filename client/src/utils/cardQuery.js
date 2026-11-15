@@ -10,7 +10,7 @@
  *   tag:aggro  #aggro    cube tags        cat:m   cube color category
  *   usd>=5  $<1          price, when the deck has prices loaded (unpriced cards never match)
  *   is:land is:fixing is:gold is:multicolor is:mono is:colorless is:hybrid is:owned is:commander
- *   is:basic is:dfc is:priced is:unpriced
+ *   is:basic is:dfc is:priced is:unpriced is:proxy (deck rows with proxied copies)
  *   qty>=4  is:foil is:nonfoil is:free is:indeck is:unused   your copies, in the collection view
  *   -t:land              any term can be negated with a leading minus
  *
@@ -236,6 +236,8 @@ function predicateFor(token) {
           colorless: (c) => colorsOf(c).length === 0,
           hybrid: (c) => colorCategoryOf(c) === 'H',
           owned: (c) => !!c.is_owned,
+          proxy: (c) => Number(c.proxy_quantity) > 0,
+          proxied: (c) => Number(c.proxy_quantity) > 0,
           commander: (c) => !!c.is_commander,
           tagged: (c) => tagsOf(c).length > 0,
           untagged: (c) => tagsOf(c).length === 0,

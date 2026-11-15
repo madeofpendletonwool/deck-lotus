@@ -404,8 +404,10 @@ function collectionPanel() {
       const other = d.total_quantity - side - main;
       const listed = main + side;
       const held = d.held_quantity || 0;
+      const proxies = d.proxy_quantity || 0;
       const where = [main && `${main} main`, side && `${side} side`, other > 0 && `${other} maybe`].filter(Boolean).join(', ')
-        + (listed ? (held >= listed ? ' · all yours' : held ? ` · ${held} of yours` : ' · none of yours') : '');
+        + (listed ? (held >= listed ? ' · all yours' : held ? ` · ${held} of yours` : proxies ? '' : ' · none of yours') : '')
+        + (proxies ? ` · ${proxies} ${proxies === 1 ? 'proxy' : 'proxies'}` : '');
       return `<a class="cd-deck" href="/decks/${d.id}" data-deck-link>
         <span class="cd-deck-name">${esc(d.name)}</span>
         <span class="cd-deck-meta">${esc(where)}</span>

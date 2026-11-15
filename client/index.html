@@ -439,8 +439,11 @@
                                             <i class="ph ph-x"></i>
                                         </button>
                                     </div>
-                                    <button id="deck-missing-btn" class="deck-chip-btn" aria-pressed="false" aria-label="Show only cards you don't own" title="Show only cards you don't own">
+                                    <button id="deck-missing-btn" class="deck-chip-btn" aria-pressed="false" aria-label="Show only cards you're missing" title="Show only cards you're missing: not yours and not proxied">
                                         <i class="ph ph-shopping-cart-simple"></i><span class="deck-chip-label">Not owned</span>
+                                    </button>
+                                    <button id="deck-proxy-btn" class="deck-chip-btn hidden" title="Mark the copies shown as proxies">
+                                        <i class="ph ph-printer"></i><span class="deck-chip-label" id="deck-proxy-label">Proxy these</span>
                                     </button>
                                     <select id="deck-sort" class="deck-sort-select" aria-label="Sort cards within each group" title="Sort cards within each group">
                                         <option value="">Sort: Default</option>
@@ -1251,7 +1254,8 @@
                                 <label class="export-option"><input type="checkbox" id="export-opt-sideboard" checked /> Sideboard</label>
                                 <label class="export-option" id="export-opt-maybeboard-wrap"><input type="checkbox" id="export-opt-maybeboard" /> Maybeboard</label>
                                 <label class="export-option"><input type="checkbox" id="export-opt-basics" /> Skip basic lands</label>
-                                <label class="export-option" id="export-opt-unowned-wrap"><input type="checkbox" id="export-opt-unowned" /> Only copies I don't own</label>
+                                <label class="export-option" id="export-opt-unowned-wrap" title="Copies that aren't yours and aren't proxied"><input type="checkbox" id="export-opt-unowned" /> Only copies I'm missing</label>
+                                <label class="export-option hidden" id="export-opt-proxied-wrap" title="Copies marked as proxies, e.g. to print them"><input type="checkbox" id="export-opt-proxied" /> Only proxies</label>
                                 <label class="export-option"><input type="checkbox" id="export-opt-oneofeach" /> One copy of each</label>
                                 <span id="export-count" class="export-count"></span>
                             </div>

@@ -44,6 +44,11 @@ app.use(helmet({
 app.use(cors()); // CORS
 app.use(compression()); // Gzip compression
 app.use(express.json({ limit: '10mb' })); // JSON body parser with increased limit for backups
+// Express 5 leaves req.body undefined when a request has no JSON body; routes destructure it
+app.use((req, res, next) => {
+  if (req.body === undefined) req.body = {};
+  next();
+});
 // app.use(limiter); // Rate limiting - REMOVED for self-hosted app
 
 // Serve static files from client build (in production)
@@ -91,7 +96,8 @@ app.use('/api/admin', adminRoutes);
 // SPA catch-all route (MUST be last)
 if (process.env.NODE_ENV === 'production') {
   const clientBuildPath = join(__dirname, '../client/dist');
-  app.get('*', (req, res) => {
+  // Express 5 (path-to-regexp 8) needs the wildcard named; the braces also match "/"
+  app.get('/{*splat}', (req, res) => {
     res.sendFile(join(clientBuildPath, 'index.html'), { headers: { 'Cache-Control': 'no-cache' } });
   });
 }

@@ -210,7 +210,7 @@ export function getPriceCheckSchedule() {
 export function setPriceCheckSchedule(expression) {
   if (!cron.validate(expression)) throw new Error(`Invalid cron expression: ${expression}`);
   const isReschedule = !!activeScheduleJob;
-  if (activeScheduleJob) { activeScheduleJob.stop(); activeScheduleJob = null; }
+  if (activeScheduleJob) { activeScheduleJob.destroy(); activeScheduleJob = null; }
   activeScheduleExpression = expression;
   activeScheduleJob = cron.schedule(expression, async () => {
     console.log('\n⏰ Running scheduled price checks...');

@@ -31,6 +31,6 @@
   },
   "homepage": "https://mana.andrewgioia.com",
   "devDependencies": {
-    "sass": "^1.80.4"
+    "sass": "^1.108.2"
   }
 }

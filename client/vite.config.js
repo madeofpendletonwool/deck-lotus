@@ -15,11 +15,11 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: false,
-    minify: 'esbuild',
-    rollupOptions: {
+    // Vite 8 bundles with Rolldown and minifies with Oxc by default
+    rolldownOptions: {
       output: {
-        manualChunks: {
-          vendor: ['./src/services/api.js'],
+        manualChunks(id) {
+          if (id.endsWith('/src/services/api.js')) return 'vendor';
         },
       },
     },

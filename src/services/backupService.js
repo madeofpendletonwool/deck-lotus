@@ -690,7 +690,7 @@ export function configureScheduledBackups(config) {
 
   // Stop existing job if any
   if (scheduledBackupJob) {
-    scheduledBackupJob.stop();
+    scheduledBackupJob.destroy();
     scheduledBackupJob = null;
   }
 

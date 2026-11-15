@@ -1,7 +1,7 @@
 # Multi-stage build for minimal image size
 
 # Stage 1: Build frontend
-FROM node:20-alpine AS frontend-builder
+FROM node:26-alpine AS frontend-builder
 
 WORKDIR /app/client
 
@@ -19,9 +19,12 @@ COPY shared/ ../shared/
 RUN npm run build
 
 # Stage 2: Build backend dependencies
-FROM node:20-alpine AS backend-builder
+FROM node:26-alpine AS backend-builder
 
 WORKDIR /app
+
+# better-sqlite3 and bcrypt compile from source; the toolchain stays in this stage
+RUN apk add --no-cache python3 make g++
 
 # Copy backend package files
 COPY package*.json ./
@@ -30,7 +33,7 @@ COPY package*.json ./
 RUN npm install --omit=dev
 
 # Stage 3: Final production image
-FROM node:20-alpine
+FROM node:26-alpine
 
 # Install bzip2 for MTGJSON decompression
 RUN apk add --no-cache bzip2

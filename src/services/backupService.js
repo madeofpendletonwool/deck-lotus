@@ -113,7 +113,7 @@ export function createBackup(userId = null) {
     // Backup deck_cards with UUIDs (stable across imports)
     backup.data.deck_cards = db.prepare(`
       SELECT dc.id, dc.deck_id, dc.quantity, dc.is_sideboard, dc.is_commander,
-             dc.board_type, dc.added_at, dc.tags, dc.color_category, dc.notes, dc.owned_quantity, p.uuid as printing_uuid
+             dc.board_type, dc.added_at, dc.tags, dc.color_category, dc.notes, dc.owned_quantity, dc.proxy_quantity, p.uuid as printing_uuid
       FROM deck_cards dc
       JOIN printings p ON dc.printing_id = p.id
       WHERE dc.deck_id IN (${deckIdsStr})
@@ -471,8 +471,8 @@ export function restoreBackup(backupData, options = {}) {
     `);
 
     const insertDeckCard = db.prepare(`
-      INSERT OR REPLACE INTO deck_cards (deck_id, printing_id, quantity, is_sideboard, is_commander, board_type, added_at, tags, color_category, notes, owned_quantity)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT OR REPLACE INTO deck_cards (deck_id, printing_id, quantity, is_sideboard, is_commander, board_type, added_at, tags, color_category, notes, owned_quantity, proxy_quantity)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     // Backups from before per-deck ownership don't say which deck holds which copies
     const legacyDeckCards = deckCards.length > 0 && deckCards.every((dc) => dc.owned_quantity === undefined);
@@ -492,7 +492,8 @@ export function restoreBackup(backupData, options = {}) {
             deckCard.tags ?? null,
             deckCard.color_category ?? null,
             deckCard.notes ?? null,
-            Number(deckCard.owned_quantity) || 0
+            Number(deckCard.owned_quantity) || 0,
+            Number(deckCard.proxy_quantity) || 0
           );
           results.deck_cards++;
         } else {

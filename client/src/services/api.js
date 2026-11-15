@@ -294,6 +294,22 @@ class ApiClient {
     });
   }
 
+  // Proxied copies in a deck row
+  async setDeckCardProxies(deckId, deckCardId, proxied) {
+    return this.request(`/decks/${deckId}/cards/${deckCardId}/proxy`, {
+      method: 'PUT',
+      body: JSON.stringify({ proxied }),
+    });
+  }
+
+  // Proxy every missing copy of these rows, or clear their proxies. { mode: 'missing' | 'clear', deckCardIds? }
+  async setDeckProxies(deckId, body) {
+    return this.request(`/decks/${deckId}/proxies`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  }
+
   async claimFreeCopies(deckId) {
     return this.request(`/decks/${deckId}/claim-free`, { method: 'POST' });
   }

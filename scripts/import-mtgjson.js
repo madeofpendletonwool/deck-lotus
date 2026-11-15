@@ -696,8 +696,8 @@ async function main() {
 
       // Cube metadata columns arrive with migration 022; older databases don't have them yet
       const deckCardColumns = new Set(targetDb.prepare(`PRAGMA table_info(deck_cards)`).all().map((c) => c.name));
-      // owned_quantity (which deck holds your copies) arrives with migration 025
-      const cubeColumns = ['tags', 'color_category', 'notes', 'owned_quantity'].filter((c) => deckCardColumns.has(c));
+      // owned_quantity (which deck holds your copies) arrives with migration 025, proxy_quantity with 026
+      const cubeColumns = ['tags', 'color_category', 'notes', 'owned_quantity', 'proxy_quantity'].filter((c) => deckCardColumns.has(c));
       const deckCardsBackup = targetDb.prepare(`
         SELECT dc.deck_id, dc.quantity, dc.is_sideboard, dc.is_commander, dc.board_type, p.uuid
           ${cubeColumns.map((c) => `, dc.${c}`).join('')}

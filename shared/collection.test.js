@@ -243,3 +243,49 @@ test('missing rows do not buy copies you own that no deck holds', () => {
   ];
   assert.deepEqual(missingRows(rows).map((r) => [r.board_type, r.quantity]), [['mainboard', 1], ['sideboard', 2]]);
 });
+
+test('proxies cover a card without owning it, and are not bought', () => {
+  const rows = [
+    row(1, 'Volcanic Island', 1, { owned_quantity: 0, proxy_quantity: 1, price: 600 }),
+    row(2, 'Opt', 4, { owned_quantity: 1, proxy_quantity: 1, price: 1 }),
+    row(3, 'Bolt', 1, { owned_quantity: 1, price: 1 }),
+  ];
+  const owned = new Map([[2, 1], [3, 1]]);
+  const { summary, cards } = collectionReport({ rows, owned, ownDeck: true });
+  const by = new Map(cards.map((c) => [c.name, c]));
+
+  assert.equal(by.get('Volcanic Island').status, 'proxied');
+  assert.equal(by.get('Volcanic Island').missing, 0);
+  assert.equal(by.get('Volcanic Island').alongside, 0);
+  assert.equal(by.get('Opt').status, 'partial');
+  assert.equal(by.get('Opt').proxied, 1);
+  assert.equal(by.get('Opt').missing, 2);
+
+  assert.equal(summary.ownedCards, 1, 'proxies are not owned');
+  assert.equal(summary.missingCards, 1, 'a fully proxied card is not missing');
+  assert.equal(summary.proxiedCards, 2);
+  assert.equal(summary.proxiedCopies, 2);
+  assert.equal(summary.missingCopies, 2);
+  assert.equal(summary.cost, 2);
+  assert.equal(summary.proxyCost, 601);
+});
+
+test("another person's proxies mean nothing when measuring their deck against your collection", () => {
+  const { summary } = collectionReport({ rows: [row(1, 'Volcanic Island', 1, { proxy_quantity: 1 })], owned: new Map() });
+  assert.equal(summary.missingCards, 1);
+  assert.equal(summary.proxiedCopies, 0);
+});
+
+test('a free real copy beats a proxy', () => {
+  const { cards } = collectionReport({ rows: [row(1, 'Opt', 1, { owned_quantity: 0, proxy_quantity: 1 })], owned: new Map([[1, 1]]), ownDeck: true });
+  assert.equal(cards[0].status, 'spare');
+  assert.equal(cards[0].spare, 1);
+});
+
+test('the shopping list skips proxied copies', () => {
+  const rows = [
+    row(1, 'Opt', 4, { owned_quantity: 1, proxy_quantity: 2, free_quantity: 0 }),
+    row(2, 'Bolt', 1, { proxy_quantity: 1 }),
+  ];
+  assert.deepEqual(missingRows(rows).map((r) => [r.name, r.quantity]), [['Opt', 1]]);
+});

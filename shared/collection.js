@@ -59,15 +59,17 @@ export function deckDemand(rows) {
  * For one of your own decks (`ownDeck`), copies are in particular decks:
  *   'owned'   all the copies it needs are in this deck
  *   'spare'   not all in this deck, but copies no deck holds would cover the rest
+ *   'proxied' real copies and proxies in this deck cover it, and there are proxies
  *   'shared'  you own enough, but some of them are in your other decks
  *   'partial' you own some, not enough for this deck
  *   'missing' you own none
  * For someone else's deck, 'owned' means copies no deck of yours holds would cover it, and
  * 'shared' that you'd have to take some out of your decks.
  */
-export function cardStatus({ need, owned, inDeck = 0, free = 0, ownDeck = false }) {
+export function cardStatus({ need, owned, inDeck = 0, free = 0, proxied = 0, ownDeck = false }) {
   if (ownDeck ? inDeck >= need : free >= need) return 'owned';
   if (ownDeck && inDeck + free >= need) return 'spare';
+  if (ownDeck && proxied > 0 && inDeck + proxied >= need) return 'proxied';
   if (owned >= need) return 'shared';
   return owned > 0 ? 'partial' : 'missing';
 }
@@ -78,7 +80,9 @@ const money = (n) => Math.round(n * 100) / 100;
  * The full report for a deck.
  *
  * @param rows        the deck's cards, each with card_id, quantity, board_type, price (its printing's),
- *                    and for your own deck owned_quantity (copies of it in this deck)
+ *                    and for your own deck owned_quantity (copies of it in this deck) and
+ *                    proxy_quantity (copies of it that are proxies). Proxies aren't bought, so
+ *                    they're left out of what's missing, but they aren't owned either.
  * @param owned       Map card_id → copies you own
  * @param otherDecks  rows of { deck_id, deck_name, format, card_id, quantity, held }, for your other
  *                    decks: copies listed, and copies of yours in that deck
@@ -88,10 +92,12 @@ const money = (n) => Math.round(n * 100) / 100;
 export function collectionReport({ rows, owned = new Map(), otherDecks = [], cheapest = new Map(), ownDeck = false }) {
   const demand = deckDemand(rows);
   const held = new Map(); // card_id → copies in this deck
+  const proxies = new Map(); // card_id → proxies in this deck
   if (ownDeck) {
     for (const row of rows || []) {
       if (!claimsCopies(row)) continue;
       held.set(row.card_id, (held.get(row.card_id) || 0) + (Number(row.owned_quantity) || 0));
+      proxies.set(row.card_id, (proxies.get(row.card_id) || 0) + Math.max(0, Number(row.proxy_quantity) || 0));
     }
   }
 
@@ -114,6 +120,9 @@ export function collectionReport({ rows, owned = new Map(), otherDecks = [], che
     sharedCards: 0, // cards you own enough of, but some are in your other decks
     spareCards: 0, // cards your free copies would finish
     spareCopies: 0, // free copies this deck could take
+    proxiedCards: 0, // cards with proxies in this deck
+    proxiedCopies: 0,
+    proxyCost: 0, // what replacing the proxies with real copies would cost
     alongsideCopies: 0, // copies to buy without taking any from another deck
     basics: 0,
     cost: 0, // missingCopies at the deck's printings (cheapest printing when the deck's has no price)
@@ -134,16 +143,18 @@ export function collectionReport({ rows, owned = new Map(), otherDecks = [], che
     const heldElsewhere = otherList.reduce((s, d) => s + d.held, 0);
     const inDeck = Math.min(need, held.get(entry.card_id) || 0);
     const free = Math.max(0, have - heldElsewhere - (held.get(entry.card_id) || 0));
-    const missing = Math.max(0, need - have);
+    const proxied = Math.min(need - inDeck, proxies.get(entry.card_id) || 0);
+    // Proxied copies aren't bought
+    const missing = Math.max(0, need - have - proxied);
     // Leaving every other deck its copies, what's left to buy?
-    const alongside = Math.max(0, need - inDeck - free);
+    const alongside = Math.max(0, need - inDeck - proxied - free);
     const spare = ownDeck ? Math.min(need - inDeck, free) : 0;
 
     const cheapestEach = cheapest.has(entry.card_id) && cheapest.get(entry.card_id) != null ? Number(cheapest.get(entry.card_id)) : null;
     const deckEach = entry.pricedQty ? entry.value / entry.pricedQty : null;
     const priceEach = deckEach ?? cheapestEach;
 
-    const status = cardStatus({ need, owned: have, inDeck, free, ownDeck });
+    const status = cardStatus({ need, owned: have, inDeck, free, proxied, ownDeck });
     cards.push({
       card_id: entry.card_id,
       name: entry.name,
@@ -157,6 +168,7 @@ export function collectionReport({ rows, owned = new Map(), otherDecks = [], che
       in_deck: inDeck,
       free,
       spare,
+      proxied,
       missing,
       alongside,
       status,
@@ -174,7 +186,12 @@ export function collectionReport({ rows, owned = new Map(), otherDecks = [], che
     summary.missingCopies += missing;
     summary.alongsideCopies += alongside;
     if (covered >= need) summary.ownedCards += 1;
-    else summary.missingCards += 1;
+    else if (covered + proxied < need) summary.missingCards += 1;
+    if (proxied > 0) {
+      summary.proxiedCards += 1;
+      summary.proxiedCopies += proxied;
+      summary.proxyCost += proxied * (priceEach ?? 0);
+    }
     if (status === 'shared') summary.sharedCards += 1;
     if (spare > 0) {
       summary.spareCards += 1;
@@ -191,8 +208,9 @@ export function collectionReport({ rows, owned = new Map(), otherDecks = [], che
   summary.cost = money(summary.cost);
   summary.cheapestCost = money(summary.cheapestCost);
   summary.alongsideCost = money(summary.alongsideCost);
+  summary.proxyCost = money(summary.proxyCost);
 
-  const order = { missing: 0, partial: 1, shared: 2, spare: 3, owned: 4 };
+  const order = { missing: 0, partial: 1, shared: 2, spare: 3, proxied: 4, owned: 5 };
   cards.sort((a, b) => order[a.status] - order[b.status] || String(a.name).localeCompare(String(b.name)));
   return { summary, cards };
 }
@@ -201,7 +219,8 @@ export function collectionReport({ rows, owned = new Map(), otherDecks = [], che
  * Deck rows cut down to the copies you'd have to buy, for a shopping list. Rows carry
  * `owned_quantity` (copies of yours in this row) and `free_quantity` (copies of the card in no
  * deck), as the deck endpoint returns them. Free copies aren't bought; they go to rows in the
- * order given, so pass mainboard rows first. Basic lands and maybeboard rows are left out.
+ * order given, so pass mainboard rows first. Proxied copies (`proxy_quantity`) aren't bought.
+ * Basic lands and maybeboard rows are left out.
  */
 export function missingRows(rows) {
   const free = new Map();
@@ -211,9 +230,11 @@ export function missingRows(rows) {
     if (!free.has(row.card_id)) free.set(row.card_id, Math.max(0, Number(row.free_quantity) || 0));
     const qty = Number(row.quantity) || 0;
     const held = Math.min(qty, Math.max(0, Number(row.owned_quantity) || 0));
-    const fromFree = Math.min(qty - held, free.get(row.card_id));
+    const proxied = Math.min(qty - held, Math.max(0, Number(row.proxy_quantity) || 0));
+    const fromFree = Math.min(qty - held - proxied, free.get(row.card_id));
     free.set(row.card_id, free.get(row.card_id) - fromFree);
-    if (qty - held - fromFree > 0) out.push({ ...row, quantity: qty - held - fromFree });
+    const short = qty - held - proxied - fromFree;
+    if (short > 0) out.push({ ...row, quantity: short });
   }
   return out;
 }

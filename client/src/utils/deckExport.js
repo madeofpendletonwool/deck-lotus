@@ -99,7 +99,10 @@ export const DEFAULT_EXPORT_OPTIONS = Object.freeze({
   includeSideboard: true,
   includeMaybeboard: false,
   excludeBasics: false,
+  // The copies you'd have to get: not yours, and not proxied
   unownedOnly: false,
+  // The copies that are proxies, e.g. to print them. With unownedOnly, every copy that isn't yours.
+  proxiedOnly: false,
   // A cardQuery.js query, e.g. "usd>=5 -t:land" to proxy only the pricey spells.
   filter: '',
   // One copy of each card, e.g. to print a single proxy of every card for a playtest binder.
@@ -145,12 +148,23 @@ function ownedCopies(card) {
   return Math.max(0, Number(card.owned_quantity) || 0);
 }
 
-/** Reduce each list to the copies this deck doesn't have from your collection. */
-function subtractOwned(lists) {
+/** Copies of a row that are proxies. Maybeboard rows hold none. */
+function proxyCopies(card) {
+  if (boardOf(card) === 'maybeboard') return 0;
+  return Math.max(0, Number(card.proxy_quantity) || 0);
+}
+
+/**
+ * Reduce each list to the copies that aren't yours: the missing ones (not proxied either), the
+ * proxied ones, or both.
+ */
+function notOwned(lists, { missing, proxied }) {
   return lists.map((list) => list.flatMap((card) => {
     const quantity = card.quantity ?? 1;
-    const covered = Math.min(ownedCopies(card), quantity);
-    return covered === quantity ? [] : [{ ...card, quantity: quantity - covered }];
+    const owned = Math.min(ownedCopies(card), quantity);
+    const proxies = Math.min(proxyCopies(card), quantity - owned);
+    const keep = (missing ? quantity - owned - proxies : 0) + (proxied ? proxies : 0);
+    return keep > 0 ? [{ ...card, quantity: keep }] : [];
   }));
 }
 
@@ -178,7 +192,9 @@ export function partitionDeck(cards, options = {}) {
     opts.includeSideboard ? inBoard('sideboard') : [],
     opts.includeMaybeboard ? inBoard('maybeboard') : [],
   ];
-  const missing = opts.unownedOnly ? subtractOwned(boards) : boards;
+  const missing = opts.unownedOnly || opts.proxiedOnly
+    ? notOwned(boards, { missing: opts.unownedOnly, proxied: opts.proxiedOnly })
+    : boards;
   const [commanders, main, side, maybe] = opts.oneOfEach ? onePerCard(missing) : missing;
 
   return { commanders, main, side, maybe };

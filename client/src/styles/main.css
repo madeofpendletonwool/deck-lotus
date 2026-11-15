@@ -1507,6 +1507,8 @@ button.btn-icon.active { background: var(--primary-soft); color: var(--primary-l
 /* Some of the row's copies are in this deck */
 .deck-card-item .ownership-toggle-btn.own-partial { color: var(--warning); width: auto; gap: 2px; }
 .deck-card-item .ownership-toggle-btn .own-count { font-size: 0.6875rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+/* Proxies fill the row: covered, but not yours */
+.deck-card-item .ownership-toggle-btn.own-proxy { color: var(--info); width: auto; gap: 2px; }
 /* Maybeboard rows don't hold copies */
 .deck-card-item .ownership-toggle-btn.own-maybe { cursor: default; opacity: 0.6; }
 .deck-card-item .ownership-toggle-btn.own-maybe:hover { color: var(--border-strong); }
@@ -4416,6 +4418,7 @@ button.tag-chip:hover { border-color: var(--border-strong); color: var(--text); 
 .col-pill[data-status='shared'] { background: rgba(229, 161, 58, 0.12); }
 .col-pill[data-status='shared'] i { color: var(--warning); }
 .col-pill[data-status='spare'] i { color: var(--success); }
+.col-pill[data-status='proxied'] i { color: var(--info); }
 .col-pill[data-status='partial'] i,
 .col-pill[data-status='missing'] i { color: var(--danger); }
 .col-pill[data-status='missing'] { background: rgba(229, 83, 75, 0.12); }
@@ -5558,3 +5561,7 @@ a.cd-fact:hover { border-color: var(--border-strong); }
   .inv-facets::-webkit-scrollbar { display: none; }
   .inv-facet-group { flex-wrap: nowrap; }
 }
+
+/* Proxied copies in the deck's collection bar */
+.owned-stat-proxy-fill { background: var(--info); opacity: 0.85; }
+.owned-stat-proxied { color: var(--info); font-weight: 500; }

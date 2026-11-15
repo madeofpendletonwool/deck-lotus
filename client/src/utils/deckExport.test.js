@@ -221,3 +221,14 @@ test('one copy of each runs after the ownership filter, so owned cards stay out'
   const cards = [card('Sol Ring', { quantity: 1, is_owned: 1, owned_quantity: 1, card_id: 1 }), card('Mana Crypt', { card_id: 2 })];
   assert.equal(generateExport('mpc', cards, { unownedOnly: true, oneOfEach: true }), '1 Mana Crypt');
 });
+
+test('missing copies leave out proxies, and the proxies option exports just those', () => {
+  const opt = card('Opt', { quantity: 4, owned_quantity: 1, proxy_quantity: 2 });
+  assert.equal(generateExport('mpc', [opt], { unownedOnly: true }), '1 Opt');
+  assert.equal(generateExport('mpc', [opt], { proxiedOnly: true }), '2 Opt');
+  assert.equal(generateExport('mpc', [opt], { unownedOnly: true, proxiedOnly: true }), '3 Opt', 'both: every copy that is not yours');
+  // A proxy count past the copies the row is short never exports more than the row has
+  assert.equal(generateExport('mpc', [card('Opt', { quantity: 2, owned_quantity: 1, proxy_quantity: 5 })], { proxiedOnly: true }), '1 Opt');
+  // The maybeboard holds no proxies
+  assert.equal(generateExport('mpc', [card('Opt', { board_type: 'maybeboard', quantity: 2, proxy_quantity: 2 })], { proxiedOnly: true, includeMaybeboard: true }), '');
+});

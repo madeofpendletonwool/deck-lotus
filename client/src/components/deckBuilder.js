@@ -19,7 +19,9 @@ let currentDeckId = null;
 let searchController = null; // Aborts the in-flight search when a newer one starts
 let activeResultIndex = -1;
 let saveTimer = null;
-let currentFilter = { cmc: null, color: null, ownership: null }; // Filter state for deck cards (null, 'owned', 'not-owned')
+let currentFilter = { cmc: null, color: null, ownership: null }; // Filter state for deck cards (null, 'owned', 'proxied', 'not-owned')
+// The rows the proxy button acts on, and what it does to them ('missing' or 'clear')
+let proxyBulk = { mode: null, ids: [] };
 let deckFilterQuery = ''; // Name filter for deck cards
 let exampleHand = []; // Current example hand
 let deckView = 'build'; // 'build' | 'analysis' | 'playtest' | 'collection' (decks that aren't cubes)
@@ -342,6 +344,27 @@ export function setupDeckBuilder() {
       // see above
     }
     renderDeckCards();
+  });
+
+  document.getElementById('deck-proxy-btn').addEventListener('click', async (e) => {
+    const { mode, ids } = proxyBulk;
+    if (!mode || !ids.length) return;
+    const btn = e.currentTarget;
+    btn.disabled = true;
+    try {
+      const result = await api.setDeckProxies(currentDeckId, { mode, deckCardIds: ids });
+      const free = result.skippedFree
+        ? ` ${result.skippedFree} left alone: you have free copies (Collection tab puts them in)`
+        : '';
+      showToast(mode === 'missing'
+        ? `${result.proxied === 1 ? '1 copy marked as a proxy' : `${result.proxied} copies marked as proxies`}.${free}`
+        : `Proxies taken off ${result.changed} ${result.changed === 1 ? 'card' : 'cards'}`, 'success', 3500);
+      await refreshDeck();
+    } catch (error) {
+      showToast(`Couldn't update proxies: ${error.message}`, 'error');
+    } finally {
+      btn.disabled = false;
+    }
   });
 
   document.getElementById('deck-missing-btn').addEventListener('click', () => {
@@ -780,6 +803,43 @@ function updateLayoutButton() {
   document.getElementById('toggle-compact-btn').innerHTML = `<i class="ph ${LAYOUT_ICONS[layoutView]}"></i>`;
 }
 
+/**
+ * The proxy button shows with the ownership filters: with "Not owned" on it proxies the missing
+ * copies shown (a text filter like t:land narrows it), with the proxied filter on it takes the
+ * proxies off the cards shown.
+ */
+function updateProxyButton(rows) {
+  const btn = document.getElementById('deck-proxy-btn');
+  const label = document.getElementById('deck-proxy-label');
+  let mode = null;
+  let ids = [];
+  if (currentFilter.ownership === 'not-owned') {
+    mode = 'missing';
+    // Basic lands aren't proxied, and neither are copies your free copies could cover (the
+    // server skips both too)
+    const free = new Map();
+    ids = rows.filter((c) => {
+      if (/\bBasic\b/.test(c.type_line || '')) return false;
+      if (!free.has(c.card_id)) free.set(c.card_id, Math.max(0, Number(c.free_quantity) || 0));
+      const short = (Number(c.quantity) || 0) - (Number(c.owned_quantity) || 0) - (Number(c.proxy_quantity) || 0);
+      const fromFree = Math.min(Math.max(0, short), free.get(c.card_id));
+      free.set(c.card_id, free.get(c.card_id) - fromFree);
+      return short - fromFree > 0;
+    }).map((c) => c.deck_card_id);
+  } else if (currentFilter.ownership === 'proxied') {
+    mode = 'clear';
+    ids = rows.filter((c) => Number(c.proxy_quantity) > 0).map((c) => c.deck_card_id);
+  }
+  proxyBulk = { mode, ids };
+  btn.classList.toggle('hidden', !ids.length);
+  if (!ids.length) return;
+  const cards = `${ids.length} ${ids.length === 1 ? 'card' : 'cards'}`;
+  label.textContent = mode === 'missing' ? `Proxy ${cards}` : `Un-proxy ${cards}`;
+  btn.title = mode === 'missing'
+    ? `Mark the missing copies of the ${cards} shown as proxies. They stop counting as missing, but not as owned.`
+    : `Take the proxies off the ${cards} shown`;
+}
+
 function renderDeckCards() {
   const mainboard = document.getElementById('mainboard');
   const sideboard = document.getElementById('sideboard');
@@ -814,15 +874,18 @@ function renderDeckCards() {
     maybeboardCards = maybeboardCards.filter(c => c.colors === currentFilter.color);
   }
 
-  if (currentFilter.ownership === 'owned') {
-    mainboardCards = mainboardCards.filter(c => c.is_owned);
-    sideboardCards = sideboardCards.filter(c => c.is_owned);
-    maybeboardCards = maybeboardCards.filter(c => c.is_owned);
-  } else if (currentFilter.ownership === 'not-owned') {
-    mainboardCards = mainboardCards.filter(c => !c.is_owned);
-    sideboardCards = sideboardCards.filter(c => !c.is_owned);
-    maybeboardCards = maybeboardCards.filter(c => !c.is_owned);
+  const ownershipFilter = {
+    owned: (c) => c.is_owned,
+    proxied: (c) => c.is_proxied,
+    // Missing: not yours and not proxied
+    'not-owned': (c) => !(c.is_covered ?? c.is_owned),
+  }[currentFilter.ownership];
+  if (ownershipFilter) {
+    mainboardCards = mainboardCards.filter(ownershipFilter);
+    sideboardCards = sideboardCards.filter(ownershipFilter);
+    maybeboardCards = maybeboardCards.filter(ownershipFilter);
   }
+  updateProxyButton([...mainboardCards, ...sideboardCards]);
 
   // Update counts
   const mainboardTotal = mainboardCards.reduce((sum, c) => sum + c.quantity, 0);
@@ -2250,9 +2313,12 @@ function renderStats(stats) {
   const totalCards = mainboardCards.reduce((sum, c) => sum + c.quantity, 0);
 
   // Calculate owned percentage
-  // Copies from your collection that are in this deck
+  // Copies from your collection that are in this deck, and proxies filling the rest
   const ownedCards = mainboardCards.reduce((sum, c) => sum + Math.min(c.quantity, c.owned_quantity || 0), 0);
+  const proxiedCards = mainboardCards.reduce((sum, c) => sum + Math.min(c.quantity - Math.min(c.quantity, c.owned_quantity || 0), c.proxy_quantity || 0), 0);
   const ownedPercentage = totalCards > 0 ? ((ownedCards / totalCards) * 100).toFixed(0) : 0;
+  const proxiedPercentage = totalCards > 0 ? ((proxiedCards / totalCards) * 100).toFixed(0) : 0;
+  const anyProxies = currentDeck.cards.some((c) => Number(c.proxy_quantity) > 0);
 
   // Use calculated CMC for accurate totals
   const totalManaValue = mainboardCards.reduce((sum, c) => {
@@ -2313,21 +2379,23 @@ function renderStats(stats) {
     statsPanel.insertBefore(ownedStatSection, statsPanel.firstChild);
   }
 
-  const ownedFilterClass = currentFilter.ownership === 'owned' ? 'filtered' : currentFilter.ownership === 'not-owned' ? 'filtered' : '';
+  const ownedFilterClass = currentFilter.ownership ? 'filtered' : '';
+  const filterNote = { owned: '✓ Showing owned cards only', proxied: 'Showing proxied cards only', 'not-owned': '○ Showing missing cards only' }[currentFilter.ownership];
 
   ownedStatSection.innerHTML = `
     <h4>Collection Status</h4>
     <div class="owned-stat-bar ${ownedFilterClass}" style="cursor: pointer;" title="Click to filter by ownership">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-        <span style="font-weight: 600; font-size: 0.8125rem;">${ownedPercentage}% owned</span>
-        <span style="font-size: 0.75rem; color: var(--text-muted);">${ownedCards} / ${totalCards} cards</span>
+        <span style="font-weight: 600; font-size: 0.8125rem;">${ownedPercentage}% owned${proxiedCards ? ` <span class="owned-stat-proxied">· ${proxiedPercentage}% proxied</span>` : ''}</span>
+        <span style="font-size: 0.75rem; color: var(--text-muted);" title="${proxiedCards ? `${proxiedCards} proxied, ${totalCards - ownedCards - proxiedCards} missing` : ''}">${ownedCards}${proxiedCards ? ` + ${proxiedCards}P` : ''} / ${totalCards} cards</span>
       </div>
-      <div style="width: 100%; height: 4px; background: var(--border); border-radius: 2px; overflow: hidden;">
-        <div style="width: ${ownedPercentage}%; height: 100%; background: var(--success); transition: width 0.3s;"></div>
+      <div style="width: 100%; height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; display: flex;">
+        <div style="width: ${totalCards ? (ownedCards / totalCards) * 100 : 0}%; height: 100%; background: var(--success); transition: width 0.3s;"></div>
+        <div class="owned-stat-proxy-fill" style="width: ${totalCards ? (proxiedCards / totalCards) * 100 : 0}%; height: 100%; transition: width 0.3s;"></div>
       </div>
-      ${currentFilter.ownership ? `
+      ${filterNote ? `
         <div style="margin-top: 0.5rem; font-size: 0.75rem; color: var(--primary); font-weight: 600;">
-          ${currentFilter.ownership === 'owned' ? '✓ Showing owned cards only' : '○ Showing unowned cards only'}
+          ${filterNote}
         </div>
       ` : ''}
     </div>
@@ -2336,13 +2404,9 @@ function renderStats(stats) {
   // Add click handler for ownership filter cycling
   const ownedStatBar = ownedStatSection.querySelector('.owned-stat-bar');
   ownedStatBar.addEventListener('click', () => {
-    if (currentFilter.ownership === null) {
-      currentFilter.ownership = 'owned';
-    } else if (currentFilter.ownership === 'owned') {
-      currentFilter.ownership = 'not-owned';
-    } else {
-      currentFilter.ownership = null;
-    }
+    // All → owned → proxied (when there are any) → missing → all
+    const cycle = [null, 'owned', ...(anyProxies ? ['proxied'] : []), 'not-owned'];
+    currentFilter.ownership = cycle[(cycle.indexOf(currentFilter.ownership) + 1) % cycle.length];
     currentFilter.cmc = null; // Clear other filters
     currentFilter.color = null;
     renderDeckCards();

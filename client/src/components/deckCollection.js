@@ -14,6 +14,7 @@ const STATUS = {
   partial: { label: 'Short', icon: 'ph-circle-half' },
   shared: { label: 'In another deck', icon: 'ph-arrows-left-right' },
   spare: { label: 'Free copy', icon: 'ph-hand-coins' },
+  proxied: { label: 'Proxied', icon: 'ph-printer' },
   owned: { label: 'Owned', icon: 'ph-check-circle' },
 };
 const TYPE_LABELS = {
@@ -48,7 +49,7 @@ function writeJson(key, value) {
 /** Everything in the deck, boards included, so any change to it fetches a fresh report. */
 function deckKey(deck) {
   return (deck?.cards || [])
-    .map((c) => `${c.card_id}:${c.quantity}:${c.owned_quantity ?? ''}:${c.board_type || ''}:${c.is_commander ? 1 : 0}`)
+    .map((c) => `${c.card_id}:${c.quantity}:${c.owned_quantity ?? ''}:${c.proxy_quantity ?? ''}:${c.board_type || ''}:${c.is_commander ? 1 : 0}`)
     .sort()
     .join('|') + `#${deck?.format || ''}`;
 }
@@ -216,6 +217,7 @@ export class DeckCollection {
         <span class="an-tile-sub">${toBuy ? `${plural(toBuy, 'copy', 'copies')}${s.unpriced && !alongside ? `, ${s.unpriced} without a price` : ''}` : 'Nothing to buy'}</span></div>
       ${alongside ? '' : `<div class="an-tile"><span class="an-tile-label">Cheapest printings</span><span class="an-tile-value">${s.missingCopies ? money(s.cheapestCost) : '$0'}</span><span class="an-tile-sub">if you don't mind which printing</span></div>`}
       <div class="an-tile"><span class="an-tile-label">In your other decks</span><span class="an-tile-value">${s.sharedCards}</span><span class="an-tile-sub">${s.sharedCards ? 'cards whose copies another deck holds' : 'Nothing to borrow'}</span></div>
+      ${s.proxiedCopies ? `<div class="an-tile"><span class="an-tile-label">Proxied</span><span class="an-tile-value">${s.proxiedCopies}</span><span class="an-tile-sub">${plural(s.proxiedCopies, 'copy', 'copies')} not bought${s.proxyCost ? `, ${money(s.proxyCost)} to replace with real ones` : ''}</span></div>` : ''}
       ${s.spareCopies ? `<div class="an-tile"><span class="an-tile-label">Free copies</span><span class="an-tile-value">${s.spareCopies}</span><span class="an-tile-sub">owned, in no deck, and this deck could use them</span></div>` : ''}
     </div>`;
   }
@@ -223,9 +225,10 @@ export class DeckCollection {
   listHtml() {
     const { cards, summary } = this.report;
     const filter = this.prefs.filter;
-    const counts = { all: cards.length, missing: 0, shared: 0, owned: 0 };
+    const counts = { all: cards.length, missing: 0, shared: 0, owned: 0, proxied: 0 };
     for (const c of cards) {
       if (c.missing > 0) counts.missing += 1;
+      if (c.proxied > 0) counts.proxied += 1;
       if (c.status === 'shared') counts.shared += 1;
       if (c.status === 'owned') counts.owned += 1;
     }
@@ -233,6 +236,7 @@ export class DeckCollection {
       if (filter === 'missing') return c.missing > 0;
       if (filter === 'shared') return c.status === 'shared' || c.held_elsewhere > 0;
       if (filter === 'owned') return c.status === 'owned';
+      if (filter === 'proxied') return c.proxied > 0;
       return true;
     });
     const toBuy = this.prefs.alongside ? summary.alongsideCopies : summary.missingCopies;
@@ -257,7 +261,7 @@ export class DeckCollection {
         <th scope="row" class="col-name"><button type="button" class="link-btn" data-card="${c.card_id}" data-preview="${escapeHtml(c.image_url || '')}">${escapeHtml(c.name)}</button>${c.is_commander ? ' <span class="col-tag">Commander</span>' : ''}</th>
         <td class="col-cost">${formatMana(c.mana_cost || '')}</td>
         <td class="num">${c.need}</td>
-        <td class="num${held < c.need ? ' col-short' : ''}">${held}</td>
+        <td class="num${held + (c.proxied || 0) < c.need ? ' col-short' : ''}">${held}${c.proxied ? ` <span class="muted" title="Proxies">+${c.proxied}P</span>` : ''}</td>
         <td class="num">${c.owned}${c.free ? ` <span class="muted">(${c.free} free)</span>` : ''}</td>
         <td class="col-others">${others}${only}</td>
         <td class="num">${c.price_each == null ? '<span class="muted">—</span>' : money(c.price_each)}</td>
@@ -268,10 +272,10 @@ export class DeckCollection {
     return `
       <div class="an-head">
         <h3 id="col-list-title">Against your collection</h3>
-        ${seg('col-filter', [['all', `All ${counts.all}`], ['missing', `Missing ${counts.missing}`], ['shared', `In other decks ${counts.shared}`], ['owned', `Owned ${counts.owned}`]], filter)}
+        ${seg('col-filter', [['all', `All ${counts.all}`], ['missing', `Missing ${counts.missing}`], ['shared', `In other decks ${counts.shared}`], ['owned', `Owned ${counts.owned}`], ...(counts.proxied || filter === 'proxied' ? [['proxied', `Proxied ${counts.proxied}`]] : [])], filter)}
         ${seg('col-alongside', [['1', 'Keep my other decks built'], ['0', 'Take from my other decks']], this.prefs.alongside ? '1' : '0')}
       </div>
-      <p class="an-note">Each copy you own is in one deck at most. "Keep my other decks built" counts only copies in this deck and copies in no deck, so it shows what to buy to have every deck built at once. "Take from my other decks" assumes you'd move copies over. Copies count across every printing you own. Maybeboards don't hold copies, and basic lands aren't counted.</p>
+      <p class="an-note">Each copy you own is in one deck at most. "Keep my other decks built" counts only copies in this deck and copies in no deck, so it shows what to buy to have every deck built at once. "Take from my other decks" assumes you'd move copies over. Copies count across every printing you own. Proxies aren't yours, so they don't count as owned, but they aren't bought either. Maybeboards don't hold copies, and basic lands aren't counted.</p>
       <div class="col-actions">
         ${this.host.claimFree && summary.spareCopies ? `<button type="button" class="btn btn-primary btn-sm" data-action="claim"${this.claiming ? ' disabled' : ''}><i class="ph ph-hand-coins"></i> Put ${plural(summary.spareCopies, 'free copy', 'free copies')} in this deck</button>` : ''}
         ${this.host.buyMissing && summary.alongsideCopies ? `<button type="button" class="btn btn-primary btn-sm" data-action="buy"><i class="ph ph-shopping-cart"></i> Buy the missing ${plural(summary.alongsideCopies, 'copy', 'copies')}</button>` : ''}

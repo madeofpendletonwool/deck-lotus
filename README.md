@@ -1,10 +1,190 @@
 <div align="center">
-  <img src="assets/decklotus-icon.png" alt="Deck Lotus" width="200">
+  <img src="assets/decklotus-icon.png" alt="Deck Lotus" width="220">
+
   <h1>Deck Lotus</h1>
-  <p>A modern, self-hosted Magic: The Gathering deck builder with Mana Pool integration, price monitoring, cart optimization, and multi-user support.</p>
+
+  <p><strong>A self-hosted home for your Magic: The Gathering decks, cubes and collection.</strong><br>
+  Build it, test it, see what you already own, and buy the rest for the least money.</p>
+
+  <p>
+    <a href="https://github.com/madeofpendletonwool/deck-lotus/actions/workflows/docker-publish.yml"><img alt="Docker build" src="https://img.shields.io/github/actions/workflow/status/madeofpendletonwool/deck-lotus/docker-publish.yml?label=docker&logo=docker&logoColor=white&style=flat-square"></a>
+    <a href="https://github.com/madeofpendletonwool/deck-lotus/pkgs/container/deck-lotus"><img alt="ghcr.io" src="https://img.shields.io/badge/ghcr.io-deck--lotus-e8a838?style=flat-square&logo=github"></a>
+    <img alt="Self-hosted" src="https://img.shields.io/badge/self--hosted-yes-2ea44f?style=flat-square">
+    <img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue?style=flat-square">
+  </p>
+
+  <p>
+    <a href="#-quick-start"><strong>Quick start</strong></a> ·
+    <a href="#-a-quick-tour">Tour</a> ·
+    <a href="#-everything-it-does">All features</a> ·
+    <a href="#-configuration">Configuration</a> ·
+    <a href="#-api">API</a>
+  </p>
+
+  <br>
+
+  <img src="docs/screenshots/builder.png" alt="The Deck Lotus deck builder showing an Atraxa commander deck" width="100%">
 </div>
 
-## Features
+<br>
+
+## Why Deck Lotus?
+
+Most deck builders stop at the list. Deck Lotus covers the rest: will the mana work, which cards are already in your binder, what the missing ones cost, and which seller is cheapest. You run it on your own server, and your collection and your playgroup's decks stay there.
+
+<table>
+  <tr>
+    <td width="33%" valign="top">
+      <h3>🛠️ Build</h3>
+      Decks for 20+ formats with real legality checks, and cubes laid out the way CubeCobra users expect. Pick every printing, drag between boards, import from anywhere.
+    </td>
+    <td width="33%" valign="top">
+      <h3>🧪 Test</h3>
+      Frank Karsten-style mana base math, draw odds for any condition you can describe, and a goldfish playtester with mulligans, zones, tokens and undo. Cubes get draft bots.
+    </td>
+    <td width="33%" valign="top">
+      <h3>💰 Own &amp; buy</h3>
+      Track your collection, see which deck holds each copy, get a shopping list across all your decks, and let the Mana Pool optimizer find the cheapest cart. Price alerts go to your phone.
+    </td>
+  </tr>
+</table>
+
+<br>
+
+## ✨ A quick tour
+
+### Your decks and cubes, at a glance
+
+Every deck and cube shows its art, format and current value.
+
+<img src="docs/screenshots/decks.png" alt="My Decks page with deck tiles showing art, format, card count and price" width="100%">
+
+### Know the mana works before you sleeve it
+
+The **Analysis** tab works out, for every colored cost in the deck, the chance you'll have the right sources on the turn you want to cast it. It follows Frank Karsten's method: London mulligans, on the play or the draw, against a 90% target. Fetches, double-faced lands and Command Tower count for the colors they can really produce in your deck.
+
+<img src="docs/screenshots/analysis.png" alt="Mana base analysis with per-color source counts, targets and a per-cost probability table" width="100%">
+
+### Goldfish it in the browser
+
+A playtester with London mulligans, untap and draw, tapping, counters, tokens, a graveyard, exile, a command zone with commander tax, scry, surveil, library search, a game log and undo. It also has keyboard shortcuts.
+
+<img src="docs/screenshots/playtest.png" alt="Goldfish playtester on turn 5 with lands and artifacts on the battlefield and the commander in the command zone" width="100%">
+
+### Build from what you own
+
+The **Collection** view checks a deck against your binder. You see what you own, which copies another deck is using, and what the rest costs. One click puts free copies into the deck, or copies the missing cards as a list for TCGplayer or Mana Pool.
+
+<img src="docs/screenshots/collection.png" alt="Collection view showing owned percentage, cost to finish, and a per-card status table" width="100%">
+
+### Cubes
+
+A cube is a deck with the Cube format, so pricing, printings, ownership and sharing all work on it. Lay it out in CubeCobra's color columns or as a visual spoiler, tag and recategorize cards in bulk, then check color balance and fixing for every color pair.
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/cube.png" alt="Cube table view with color columns grouped by mana value"></td>
+    <td width="50%"><img src="docs/screenshots/cube-visual.jpg" alt="Cube visual spoiler view showing card images by color"></td>
+  </tr>
+  <tr>
+    <td colspan="2"><img src="docs/screenshots/cube-analysis.png" alt="Cube analysis showing color balance, color pair fixing and mana curve by color"></td>
+  </tr>
+</table>
+
+You can also open sample packs or a sealed pool, or draft against bots that pick by power and settle into colors. Any pool you end up with can be saved as a Limited deck.
+
+### Every card, every printing
+
+Browse the full card pool with color, type, set and rarity filters. The card detail view has prices for each printing, buy links, legality, rulings, languages, and which of your decks use the card.
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/browse.jpg" alt="Card browser grid with color and type filters"></td>
+    <td width="50%"><img src="docs/screenshots/card-detail.png" alt="Card detail modal for Atraxa, Praetors' Voice with prices, printings and ownership"></td>
+  </tr>
+</table>
+
+### Your collection, valued
+
+The inventory tracks quantity per printing and finish and shows what the collection is worth. You can see which copies are in decks, which are free, and which cards are **contested**, meaning more than one deck wants your only copy. Search it with the same syntax as everywhere else: `t:creature c:g usd>=5 is:foil`.
+
+<img src="docs/screenshots/inventory.jpg" alt="Inventory page with value summary, filter chips and a card grid" width="100%">
+
+### Shop smarter
+
+The shopping list combines every missing card from the decks you pick, grouped by set, color, type, rarity or price. Check cards off as you find them at your LGS, or send the whole list to the **Mana Pool cart optimizer**. It finds the cheapest mix of sellers with four strategies: lowest price, fewest packages, balanced, or gathered shipping only.
+
+<img src="docs/screenshots/shopping.png" alt="Shopping list grouped by set with prices and found checkboxes" width="100%">
+
+### And the rest
+
+- 🔔 **Price watches**: set a target price and condition. Deck Lotus checks on a schedule and pushes an alert to your phone through [ntfy](https://ntfy.sh), with a price history chart for each watch.
+- 🔁 **Import and export**: Moxfield, MTG Arena, MTGO, plain text, CSV and CubeCobra.
+- 🔗 **Share links**: a read-only deck page anyone can open. Signed-in viewers see how much of it they already own and can save a copy.
+- 🎨 **Themes**: nine per-user color themes.
+- 👥 **Multi-user**: everyone gets their own decks, inventory and watches, with JWT auth, API keys, and admin tools for backup and restore.
+
+<br>
+
+## 🚀 Quick start
+
+One container, SQLite, no external database. On first boot it downloads card data from MTGJSON, which takes about two minutes.
+
+```bash
+mkdir -p deck-lotus-data
+
+cat > docker-compose.yml << 'EOF'
+services:
+  deck-lotus:
+    image: ghcr.io/madeofpendletonwool/deck-lotus:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - JWT_SECRET=replace-with-a-long-random-secret
+      - ADMIN_USERNAME=admin
+      - ADMIN_EMAIL=admin@example.com
+      - ADMIN_PASSWORD=changeme123
+      # Optional but recommended: enables price monitoring and the cart optimizer
+      - MANAPOOL_USER_EMAIL=
+      - MANAPOOL_API_TOKEN=
+      # Optional: push notifications for price alerts
+      - NTFY_TOPIC=
+    volumes:
+      - ./deck-lotus-data:/app/data
+    restart: unless-stopped
+EOF
+
+docker compose up -d
+```
+
+Open **http://localhost:3000** and sign in. To generate a proper JWT secret:
+
+```bash
+node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
+```
+
+<details>
+<summary><strong>Build from source instead</strong></summary>
+
+```bash
+git clone https://github.com/madeofpendletonwool/deck-lotus.git
+cd deck-lotus
+
+cp .env.example .env
+# Edit .env and set JWT_SECRET at minimum
+
+docker compose up -d --build
+```
+
+</details>
+
+<br>
+
+## 📋 Everything it does
+
+<details>
+<summary><strong>Full feature list</strong> (click to expand)</summary>
 
 ### Deck Building
 - **Intuitive Deck Builder** — real-time search with autocomplete as you type
@@ -102,60 +282,13 @@ Every deck has a **Collection** view at `/decks/:id/collection` that checks it a
 - **Auto-Sync** — card data updated daily at 3 AM automatically
 - **Safe Reimport** — `FORCE_REIMPORT` clears card data but preserves all user decks via UUIDs
 
----
+</details>
 
-## Quick Start with Docker
+<br>
 
-```bash
-mkdir -p deck-lotus-data
+## 🔧 Configuration
 
-cat > docker-compose.yml << 'EOF'
-services:
-  deck-lotus:
-    image: ghcr.io/madeofpendletonwool/deck-lotus:latest
-    ports:
-      - "3000:3000"
-    environment:
-      - NODE_ENV=production
-      - JWT_SECRET=replace-with-a-long-random-secret
-      - ADMIN_USERNAME=admin
-      - ADMIN_EMAIL=admin@example.com
-      - ADMIN_PASSWORD=changeme123
-      # Optional but recommended — enables price monitoring & cart optimizer
-      - MANAPOOL_API_TOKEN=
-      # Optional — enables push notifications for price alerts
-      - NTFY_TOPIC=
-    volumes:
-      - ./deck-lotus-data:/app/data
-    restart: unless-stopped
-EOF
-
-docker compose up -d
-```
-
-App runs at `http://localhost:3000`. Generate a secure JWT secret with:
-
-```bash
-node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
-```
-
----
-
-## Build from Source
-
-```bash
-git clone https://github.com/madeofpendletonwool/deck-lotus.git
-cd deck-lotus
-
-cp .env.example .env
-# Edit .env — set JWT_SECRET at minimum
-
-docker compose up -d --build
-```
-
----
-
-## Environment Variables
+### Environment variables
 
 | Variable | Default | Required | Description |
 |---|---|---|---|
@@ -202,9 +335,7 @@ With the token set you get:
 
 You'll receive a push notification whenever a watched card price drops to or below your target.
 
----
-
-## Admin User Setup
+### Admin user setup
 
 On every startup, Deck Lotus checks whether an admin user exists:
 
@@ -229,9 +360,12 @@ Auto-generated credentials look like this:
 
 **Change the password immediately after first login.**
 
----
+<br>
 
-## Usage Guide
+## 📖 Usage guide
+
+<details>
+<summary><strong>Step-by-step guides</strong> for building, buying, validating, cubes, price watches, shopping, importing and API keys</summary>
 
 ### Building a Deck
 
@@ -317,9 +451,14 @@ Use in requests:
 curl -H "X-API-Key: your-api-key" http://localhost:3000/api/cards/search?q=lightning
 ```
 
----
+</details>
 
-## API Reference
+<br>
+
+## 🔌 API
+
+<details>
+<summary><strong>REST API reference</strong></summary>
 
 All endpoints require authentication via `Authorization: Bearer <token>` or `X-API-Key: <key>` unless noted.
 
@@ -446,9 +585,20 @@ All admin endpoints require admin privileges.
 | `POST` | `/api/admin/restore` | Restore from backup |
 | `GET` | `/api/admin/backups` | List saved backup files |
 
----
+</details>
 
-## Project Structure
+<br>
+
+## 🧱 Under the hood
+
+**Backend**: Node.js, Express, SQLite (better-sqlite3), JWT, bcrypt, node-cron
+
+**Frontend**: Vanilla JavaScript (ES6+), Vite, Chart.js, Phosphor Icons
+
+**Data**: [MTGJSON](https://mtgjson.com/) for card data (synced automatically), [Mana Pool](https://manapool.com) for live prices, the optimizer and the validator
+
+<details>
+<summary><strong>Project structure</strong></summary>
 
 ```
 deck-lotus/
@@ -503,19 +653,9 @@ deck-lotus/
 └── package.json
 ```
 
----
+</details>
 
-## Tech Stack
-
-**Backend** — Node.js, Express, SQLite (better-sqlite3), JWT, bcrypt, node-cron
-
-**Frontend** — Vanilla JavaScript (ES6+), Vite, Chart.js (price history charts), Phosphor Icons
-
-**Data** — MTGJSON (card data, synced weekly), Mana Pool API (live prices, optimizer, validator)
-
----
-
-## Backup & Restore
+### Backup & restore
 
 Admins can export and restore all user data from Settings → Backup & Restore.
 
@@ -523,9 +663,7 @@ Backups include: users, decks, deck cards, API keys, and share tokens. Card data
 
 Restores can **merge** (keeps existing data, adds backup data) or **overwrite** (replaces everything). Deck integrity is maintained via stable UUIDs.
 
----
-
-## Docker Build
+### Docker build
 
 The Dockerfile uses a three-stage build to keep the final image small (~150 MB):
 
@@ -541,35 +679,38 @@ docker compose up -d --build
 FORCE_REIMPORT=true docker compose up -d
 ```
 
----
+<br>
 
-## Contributing
+## 🤝 Contributing
+
+Issues and pull requests are welcome.
 
 1. Fork the repository
 2. Create a feature branch
 3. Make your changes
-4. Submit a pull request
+4. Open a pull request
 
----
-
-## Credits
+## 🙏 Credits
 
 - Card data: [MTGJSON](https://mtgjson.com/)
-- Prices & marketplace: [Mana Pool](https://manapool.com)
+- Prices and marketplace: [Mana Pool](https://manapool.com)
 - Push notifications: [ntfy](https://ntfy.sh)
+- Mana symbols: [Mana](https://mana.andrewgioia.com/) by Andrew Gioia
 - Icons: [Phosphor Icons](https://phosphoricons.com)
 - Charts: [Chart.js](https://www.chartjs.org)
 
----
+Deck Lotus is unofficial Fan Content permitted under the Wizards of the Coast Fan Content Policy. It is not approved or endorsed by Wizards. Portions of the materials used are property of Wizards of the Coast. ©Wizards of the Coast LLC.
 
-## License
+## 📄 License
 
-MIT — see LICENSE file for details.
+MIT
 
----
+<br>
 
 <div align="center">
-  <strong>Deck Lotus</strong> — Build decks with style.
-  <br><br>
-  Made with love for the Magic: The Gathering community.
+  <img src="assets/decklotus-icon.png" alt="" width="64">
+  <br>
+  <strong>Deck Lotus</strong>: build decks with style.
+  <br>
+  <sub>Made with love for the Magic: The Gathering community.</sub>
 </div>

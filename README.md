@@ -11,6 +11,7 @@
     <a href="https://github.com/madeofpendletonwool/deck-lotus/pkgs/container/deck-lotus"><img alt="ghcr.io" src="https://img.shields.io/badge/ghcr.io-deck--lotus-e8a838?style=flat-square&logo=github"></a>
     <img alt="Self-hosted" src="https://img.shields.io/badge/self--hosted-yes-2ea44f?style=flat-square">
     <img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue?style=flat-square">
+    <a href="https://www.buymeacoffee.com/collinscoffee"><img alt="Buy me a coffee" src="https://img.shields.io/badge/buy%20me%20a%20coffee-support-ffdd00?style=flat-square&logo=buymeacoffee&logoColor=black"></a>
   </p>
 
   <p>
@@ -689,6 +690,12 @@ Issues and pull requests are welcome.
 2. Create a feature branch
 3. Make your changes
 4. Open a pull request
+
+## ☕ Support
+
+If Deck Lotus saves you money on cards, consider buying me a coffee.
+
+<a href="https://www.buymeacoffee.com/collinscoffee"><img src="https://img.buymeacoffee.com/button-api/?text=Buy%20me%20a%20coffee&emoji=%E2%98%95&slug=collinscoffee&button_colour=e8a838&font_colour=000000&font_family=Inter&outline_colour=000000&coffee_colour=ffffff" alt="Buy me a coffee" height="48"></a>
 
 ## 🙏 Credits
 

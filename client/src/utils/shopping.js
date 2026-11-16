@@ -6,6 +6,7 @@
  * is instant.
  */
 import { colorsOf, isLand, typeBucket } from './cube.js';
+import { planBinders } from '../../../shared/binders.js';
 
 const basic = (card) => /\bBasic\b/.test(card.type_line || '');
 
@@ -82,7 +83,14 @@ const PRICE_GROUPS = [
   ['0', 'Under $1', (p) => p >= 0],
 ];
 
+export const SET_ORDERS = [
+  ['count', 'Most cards'],
+  ['newest', 'Newest'],
+  ['name', 'A–Z'],
+];
+
 export const GROUPINGS = [
+  ['binder', 'Binders'],
   ['set', 'Set'],
   ['color', 'Color'],
   ['type', 'Type'],
@@ -114,7 +122,7 @@ const byPriceDesc = (a, b) => (b.price ?? -1) - (a.price ?? -1) || byName(a, b);
  * the order given (the collection view sorts them itself). Copies and cost read `need`/`cost`
  * on shopping items and `qty`/`value` on collection items.
  */
-export function groupItems(items, groupBy = 'set', { keepOrder = false } = {}) {
+export function groupItems(items, groupBy = 'set', { keepOrder = false, setOrder = 'newest' } = {}) {
   const groups = new Map();
   const add = (key, label, item, order) => {
     if (!groups.has(key)) groups.set(key, { key, label, order, items: [] });
@@ -157,10 +165,14 @@ export function groupItems(items, groupBy = 'set', { keepOrder = false } = {}) {
   }
 
   const sortItems = groupBy === 'set' ? byNumber : groupBy === 'price' ? byPriceDesc : byName;
+  const newest = (a, b) => b.order.date.localeCompare(a.order.date) || a.order.name.localeCompare(b.order.name);
+  const setSort = {
+    newest,
+    name: (a, b) => a.order.name.localeCompare(b.order.name),
+    count: (a, b) => b.items.length - a.items.length || newest(a, b),
+  }[setOrder] || newest;
   return [...groups.values()]
-    .sort(groupBy === 'set'
-      ? (a, b) => b.order.date.localeCompare(a.order.date) || a.order.name.localeCompare(b.order.name)
-      : (a, b) => a.order - b.order)
+    .sort(groupBy === 'set' ? setSort : (a, b) => a.order - b.order)
     .map((g) => {
       if (!keepOrder) g.items.sort(sortItems);
       return {
@@ -172,6 +184,90 @@ export function groupItems(items, groupBy = 'set', { keepOrder = false } = {}) {
         cost: g.items.reduce((n, i) => n + (i.cost ?? i.value ?? 0), 0),
       };
     });
+}
+
+/**
+ * The price a card can be had for: the cheaper of the printing your decks list and the card's
+ * cheapest printing. A price cap uses this, so a $40 Secret Lair of a $1 card still counts as $1.
+ */
+export function bestPrice(item) {
+  const prices = [item.price, item.cheapest].filter((p) => p != null);
+  return prices.length ? Math.min(...prices) : null;
+}
+
+/** Items at or under a price cap; cards with no price stay, since they may well be cheap. */
+export function underCap(items, maxPrice) {
+  if (maxPrice == null || maxPrice === '' || !Number.isFinite(Number(maxPrice))) return items;
+  const cap = Number(maxPrice);
+  return items.filter((i) => {
+    const p = bestPrice(i);
+    return p == null || p <= cap;
+  });
+}
+
+/**
+ * Group items by the store binders to pull, ignoring the printing your decks list: the fewest
+ * binders that between them hold every card (see planBinders). Each item comes back dressed as
+ * the printing in its binder (set, number, image, price), with `listedSet` set when that differs
+ * from the printing your decks list, so "add to collection" adds the copy you actually found.
+ * Groups also carry `holds`, how many cards on the list that binder has in all.
+ *
+ * @param {object} sets set code -> { name, release_date, type } from the server
+ */
+export function binderGroups(items, sets, { commander = true } = {}) {
+  const usable = (code) => sets[code] && (commander || sets[code].type !== 'commander');
+  const binderOf = new Map(items.map((i) => [i.key, new Map((i.binders || []).filter(([code]) => usable(code)).map((b) => [b[0], b]))]));
+  const { binders, unplaced } = planBinders(items, {
+    setsOf: (i) => [...binderOf.get(i.key).keys()],
+    preferred: (i) => i.set_code,
+    tieBreak: (code) => sets[code]?.release_date || '',
+  });
+
+  const dress = (item, code) => {
+    const [, printingId, number, price, image] = binderOf.get(item.key).get(code);
+    if (code === item.set_code) return { ...item, binderSet: code };
+    const binderPrice = price ?? item.price;
+    return {
+      ...item,
+      binderSet: code,
+      listedSet: item.set_code,
+      set_code: code,
+      set_name: sets[code].name,
+      release_date: sets[code].release_date,
+      collector_number: number || '',
+      image_url: image || item.image_url,
+      price: binderPrice,
+      cost: binderPrice != null ? binderPrice * item.need : 0,
+      printing: { ...item.printing, printing_id: printingId, set_code: code },
+    };
+  };
+
+  const groups = binders.map((b) => {
+    const list = b.items.map((i) => dress(i, b.code)).sort(byNumber);
+    return {
+      key: `binder:${b.code}`,
+      label: sets[b.code].name,
+      code: b.code,
+      holds: b.holds,
+      items: list,
+      cards: list.length,
+      copies: list.reduce((n, i) => n + i.need, 0),
+      cost: list.reduce((n, i) => n + i.cost, 0),
+    };
+  });
+  if (unplaced.length) {
+    const list = [...unplaced].sort(byName);
+    groups.push({
+      key: 'binder:none',
+      label: 'Not in any binder set',
+      code: null,
+      items: list,
+      cards: list.length,
+      copies: list.reduce((n, i) => n + i.need, 0),
+      cost: list.reduce((n, i) => n + i.cost, 0),
+    });
+  }
+  return groups;
 }
 
 /** Plain text for the clipboard: a checklist grouped as on screen, or "2 Name" lines for mass entry. */

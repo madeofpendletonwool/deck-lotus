@@ -1,5 +1,6 @@
 import db from '../db/connection.js';
 import { PRINTING_PRICE_SQL, DEFAULT_PRINTING_ORDER_SQL } from './pricingService.js';
+import { isBinderSet } from '../../shared/binders.js';
 
 const BOARD_SQL = `COALESCE(dc.board_type, CASE WHEN dc.is_sideboard = 1 THEN 'sideboard' ELSE 'mainboard' END)`;
 const MAX_PARAMS = 900;
@@ -128,8 +129,52 @@ export function getShoppingList(userId, deckIds = null) {
   }
   cards.sort((a, b) => a.name.localeCompare(b.name));
 
+  const sets = attachBinderPrintings(cards);
+  for (const card of cards) {
+    for (const p of card.printings) addSet(sets, p.set_code, p.set_name, p.release_date);
+  }
+
   return {
     decks: deckList.map((d) => ({ id: d.id, name: d.name, format: d.format })),
     cards,
+    sets,
   };
+}
+
+function addSet(sets, code, name, releaseDate, type = null) {
+  if (!code || sets[code]) return;
+  sets[code] = { name: name || code.toUpperCase(), release_date: releaseDate || '', type };
+}
+
+/**
+ * Give each card `binders`: one printing per binder set it appears in ([set_code, printing_id,
+ * collector_number, price, image_url]), so the page can tell you which store binders hold it
+ * whatever printing your decks list. The printing picked per set is the plain one a binder would
+ * hold: not a promo, not full art, lowest collector number. Returns the sets they name.
+ */
+function attachBinderPrintings(cards) {
+  const sets = {};
+  const byId = new Map(cards.map((c) => [c.card_id, c]));
+  for (const card of cards) card.binders = [];
+  const rows = allInChunks([...byId.keys()], (ph, ids) => [
+    `SELECT p.card_id, p.id as printing_id, p.set_code, p.collector_number, p.image_url,
+            s.name as set_name, s.release_date, s.type as set_type, s.is_online_only,
+            ${PRINTING_PRICE_SQL} as price
+     FROM printings p
+     JOIN sets s ON s.code = p.set_code
+     WHERE p.card_id IN (${ph})
+     ORDER BY p.card_id, p.set_code, p.is_promo, p.is_full_art,
+              CAST(p.collector_number AS INTEGER), p.collector_number, p.id`,
+    ids,
+  ]);
+  let last = null;
+  for (const r of rows) {
+    const key = `${r.card_id}|${r.set_code}`;
+    if (key === last) continue;
+    last = key;
+    if (!isBinderSet({ code: r.set_code, type: r.set_type, is_online_only: r.is_online_only })) continue;
+    byId.get(r.card_id).binders.push([r.set_code, r.printing_id, r.collector_number, r.price, r.image_url]);
+    addSet(sets, r.set_code, r.set_name, r.release_date, r.set_type);
+  }
+  return sets;
 }

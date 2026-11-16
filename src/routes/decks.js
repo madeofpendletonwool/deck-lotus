@@ -567,8 +567,9 @@ router.get('/:id/optimize-printings', authenticate, (req, res, next) => {
     const deckId = parseInt(req.params.id);
     const topN = parseInt(req.query.topN) || 5;
     const excludeCommander = req.query.excludeCommander === 'true';
+    const onlyUnowned = req.query.onlyUnowned === 'true';
 
-    const result = analyzeDeckPrintings(deckId, req.user.id, topN, excludeCommander);
+    const result = analyzeDeckPrintings(deckId, req.user.id, topN, excludeCommander, onlyUnowned);
     res.json(result);
   } catch (error) {
     next(error);
@@ -583,7 +584,7 @@ router.get('/:id/optimize-printings/sets', authenticate, (req, res, next) => {
   try {
     const deckId = parseInt(req.params.id);
 
-    const sets = getAvailableSets(deckId, req.user.id);
+    const sets = getAvailableSets(deckId, req.user.id, req.query.onlyUnowned === 'true');
     res.json({ sets });
   } catch (error) {
     next(error);
@@ -597,13 +598,13 @@ router.get('/:id/optimize-printings/sets', authenticate, (req, res, next) => {
 router.post('/:id/optimize-printings/analyze-set', authenticate, (req, res, next) => {
   try {
     const deckId = parseInt(req.params.id);
-    const { setCode } = req.body;
+    const { setCode, onlyUnowned = false } = req.body;
 
     if (!setCode) {
       return res.status(400).json({ error: 'setCode is required' });
     }
 
-    const result = analyzeSpecificSet(deckId, req.user.id, setCode);
+    const result = analyzeSpecificSet(deckId, req.user.id, setCode, !!onlyUnowned);
 
     if (!result) {
       return res.status(404).json({ error: 'No cards found for this set' });

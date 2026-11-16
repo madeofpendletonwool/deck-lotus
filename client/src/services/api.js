@@ -370,18 +370,18 @@ class ApiClient {
   }
 
   // Printing optimization methods
-  async analyzeDeckPrintings(deckId, topN = 5, excludeCommander = false) {
-    return this.request(`/decks/${deckId}/optimize-printings?topN=${topN}&excludeCommander=${excludeCommander}`);
+  async analyzeDeckPrintings(deckId, topN = 5, excludeCommander = false, onlyUnowned = false) {
+    return this.request(`/decks/${deckId}/optimize-printings?topN=${topN}&excludeCommander=${excludeCommander}&onlyUnowned=${onlyUnowned}`);
   }
 
-  async getOptimizationSets(deckId) {
-    return this.request(`/decks/${deckId}/optimize-printings/sets`);
+  async getOptimizationSets(deckId, onlyUnowned = false) {
+    return this.request(`/decks/${deckId}/optimize-printings/sets?onlyUnowned=${onlyUnowned}`);
   }
 
-  async analyzeSpecificSet(deckId, setCode) {
+  async analyzeSpecificSet(deckId, setCode, onlyUnowned = false) {
     return this.request(`/decks/${deckId}/optimize-printings/analyze-set`, {
       method: 'POST',
-      body: JSON.stringify({ setCode }),
+      body: JSON.stringify({ setCode, onlyUnowned }),
     });
   }
 

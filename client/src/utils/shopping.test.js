@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { needFor, buildList, deckMissingCounts, groupItems, listText } from './shopping.js';
+import { needFor, buildList, deckMissingCounts, groupItems, listText, underCap, binderGroups } from './shopping.js';
 import { compileQuery } from './cardQuery.js';
 
 const card = (name, overrides = {}) => ({
@@ -98,4 +98,57 @@ test('listText writes a checklist or mass entry lines', () => {
   const groups = groupItems(buildList([card('Lightning Bolt')], all), 'set');
   assert.equal(listText(groups), 'Magic 2011\n[ ] 4 Lightning Bolt (M11 #146)  $1.50');
   assert.equal(listText(groups, { massEntry: true }), '4 Lightning Bolt');
+});
+
+test('sets can be ordered by how many cards you need from them', () => {
+  const on = (name, set_code, date) => card(name, {
+    card_id: name.charCodeAt(0),
+    printings: [{ printing_id: name.charCodeAt(0), set_code, set_name: set_code, release_date: date, price: 1, quantity: 4 }],
+  });
+  const items = buildList([on('A', 'dom', '2018'), on('B', 'dom', '2018'), on('C', 'blb', '2024')], all);
+  assert.deepEqual(groupItems(items, 'set').map((g) => g.key), ['blb', 'dom'], 'newest first by default');
+  assert.deepEqual(groupItems(items, 'set', { setOrder: 'count' }).map((g) => g.key), ['dom', 'blb']);
+});
+
+test('a price cap goes by the cheapest way to get the card', () => {
+  const items = buildList([
+    card('Cheap in another printing', { card_id: 1, cheapest: 2, printings: [{ printing_id: 1, set_code: 'sld', price: 40, quantity: 4 }] }),
+    card('Pricey', { card_id: 2, cheapest: 30, printings: [{ printing_id: 2, set_code: 'm11', price: 30, quantity: 4 }] }),
+    card('Unpriced', { card_id: 3, cheapest: null, printings: [{ printing_id: 3, set_code: 'm11', price: null, quantity: 4 }] }),
+  ], all);
+  assert.deepEqual(underCap(items, 5).map((i) => i.name), ['Cheap in another printing', 'Unpriced']);
+  assert.equal(underCap(items, null).length, 3);
+  assert.equal(underCap(items, '').length, 3);
+});
+
+test('binder groups pull the fewest binders and dress cards as the copy in that binder', () => {
+  const sets = {
+    dom: { name: 'Dominaria', release_date: '2018-04-27', type: 'expansion' },
+    sld: { name: 'Secret Lair Drop', release_date: '2019', type: 'box' },
+    c19: { name: 'Commander 2019', release_date: '2019', type: 'commander' },
+  };
+  const items = buildList([
+    card('Listed in Secret Lair', { card_id: 1, printings: [{ printing_id: 10, set_code: 'sld', price: 20, quantity: 4 }], binders: [['dom', 11, '5', 0.25, 'dom.jpg']] }),
+    card('Listed in Dominaria', { card_id: 2, printings: [{ printing_id: 20, set_code: 'dom', collector_number: '9', price: 1, quantity: 4 }], binders: [['dom', 20, '9', 1, null], ['c19', 21, '3', 2, null]] }),
+    card('Commander only', { card_id: 3, printings: [{ printing_id: 30, set_code: 'c19', price: 1, quantity: 4 }], binders: [['c19', 30, '1', 1, null]] }),
+    card('Promo only', { card_id: 4, printings: [{ printing_id: 40, set_code: 'sld', price: 1, quantity: 4 }], binders: [] }),
+  ], all);
+
+  const groups = binderGroups(items, sets);
+  assert.deepEqual(groups.map((g) => [g.code, g.items.map((i) => i.name)]), [
+    ['dom', ['Listed in Secret Lair', 'Listed in Dominaria']],
+    ['c19', ['Commander only']],
+    [null, ['Promo only']],
+  ]);
+  assert.equal(groups[1].holds, 2, 'Commander 2019 also has a card placed in Dominaria');
+  const moved = groups[0].items[0];
+  assert.equal(moved.listedSet, 'sld');
+  assert.equal(moved.printing.printing_id, 11);
+  assert.equal(moved.price, 0.25);
+  assert.equal(moved.cost, 1);
+  assert.equal(groups[0].items[1].listedSet, undefined);
+
+  const noCommander = binderGroups(items, sets, { commander: false });
+  assert.deepEqual(noCommander.map((g) => g.code), ['dom', null]);
+  assert.equal(noCommander[1].items.length, 2);
 });

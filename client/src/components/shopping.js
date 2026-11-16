@@ -7,7 +7,7 @@
 import api from '../services/api.js';
 import { formatMana, showToast, popover, openDrawer, copyText, confirmDialog } from '../utils/ui.js';
 import { compileQuery } from '../utils/cardQuery.js';
-import { buildList, groupItems, deckMissingCounts, listText, GROUPINGS } from '../utils/shopping.js';
+import { buildList, groupItems, deckMissingCounts, listText, underCap, binderGroups, GROUPINGS, SET_ORDERS } from '../utils/shopping.js';
 import { showCardDetail } from './cardDetail.js';
 
 const PREFS_KEY = 'shopping:prefs';
@@ -16,6 +16,9 @@ const CHECKED_KEY = 'shopping:checked';
 const DEFAULT_PREFS = {
   deckIds: null, // null: every deck except cubes
   groupBy: 'set',
+  setOrder: 'count', // set groups: most cards first, so the binder worth the most is on top
+  maxPrice: null, // leave out cards that cost more than this everywhere (you'll proxy them)
+  binderCommander: true, // binder plan may send you to Commander precon binders
   view: 'list',
   includeMaybe: false,
   includeBasics: false,
@@ -29,7 +32,7 @@ let prefs = { ...DEFAULT_PREFS, ...readStore(PREFS_KEY, {}) };
 let checked = new Set(readStore(CHECKED_KEY, []));
 let collapsed = new Set();
 let query = '';
-let current = { items: [], groups: [] };
+let current = { items: [], filtered: [], shown: [], groups: [] };
 
 const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const money = (n) => `$${n.toFixed(2)}`;
@@ -98,11 +101,31 @@ export function setupShopping() {
     render();
   });
   document.getElementById('shop-options').addEventListener('click', (e) => {
+    const order = e.target.closest('[data-set-order]');
+    if (order) {
+      prefs.setOrder = order.dataset.setOrder;
+      savePrefs();
+      render();
+      return;
+    }
     const btn = e.target.closest('[data-pref]');
     if (!btn) return;
     prefs[btn.dataset.pref] = !prefs[btn.dataset.pref];
     savePrefs();
     render();
+  });
+
+  const cap = document.getElementById('shop-max-price');
+  if (prefs.maxPrice != null) cap.value = prefs.maxPrice;
+  let capTimer = null;
+  cap.addEventListener('input', () => {
+    clearTimeout(capTimer);
+    capTimer = setTimeout(() => {
+      const value = cap.value.trim() === '' ? null : Number(cap.value);
+      prefs.maxPrice = Number.isFinite(value) && value >= 0 ? value : null;
+      savePrefs();
+      render();
+    }, 200);
   });
   document.getElementById('shop-summary').addEventListener('click', onSummaryClick);
   document.getElementById('shop-list').addEventListener('click', onListClick);
@@ -165,17 +188,40 @@ function render() {
   if (!data) return;
   const selected = selectedDecks();
   const items = buildList(data.cards, selected, prefs);
-  let filtered = items;
+  const capped = underCap(items, prefs.maxPrice);
+  let filtered = capped;
   if (query.trim()) {
     const match = compileQuery(query);
-    filtered = items.filter(match);
+    filtered = capped.filter(match);
   }
-  const visible = prefs.hideChecked ? filtered.filter((i) => !checked.has(i.key)) : filtered;
-  current = { items, filtered, groups: groupItems(visible, prefs.groupBy), selected };
+  // Group the whole list, then hide found cards, so checking one off never reshuffles the
+  // binder plan under your thumb.
+  const all = prefs.groupBy === 'binder'
+    ? binderGroups(filtered, data.sets || {}, { commander: prefs.binderCommander })
+    : groupItems(filtered, prefs.groupBy, { setOrder: prefs.setOrder });
+  const shown = all.flatMap((g) => g.items);
+  const groups = prefs.hideChecked ? withoutChecked(all) : all;
+  current = { items, capped, filtered, shown, groups, selected };
 
   renderControls(selected);
   renderSummary();
   renderList();
+}
+
+function withoutChecked(groups) {
+  return groups
+    .map((g) => {
+      const items = g.items.filter((i) => !checked.has(i.key));
+      if (items.length === g.items.length) return g;
+      return {
+        ...g,
+        items,
+        cards: items.length,
+        copies: items.reduce((n, i) => n + i.need, 0),
+        cost: items.reduce((n, i) => n + i.cost, 0),
+      };
+    })
+    .filter((g) => g.items.length);
 }
 
 function renderControls(selected) {
@@ -192,16 +238,22 @@ function renderControls(selected) {
   document.querySelectorAll('#shop-view [data-view]').forEach((b) => b.classList.toggle('active', b.dataset.view === prefs.view));
 
   const toggle = (pref, text, title) => `<button type="button" class="shop-toggle" data-pref="${pref}" aria-pressed="${!!prefs[pref]}" title="${title}"><i class="ph ${prefs[pref] ? 'ph-check-square' : 'ph-square'}"></i>${text}</button>`;
-  document.getElementById('shop-options').innerHTML = [
+  document.getElementById('shop-toggles').innerHTML = [
+    prefs.groupBy === 'binder' ? toggle('binderCommander', 'Commander sets', 'Let the plan send you to Commander precon binders; many stores don\'t keep them') : '',
     toggle('includeMaybe', 'Maybeboards', 'Count cards that are only on maybeboards'),
     toggle('includeBasics', 'Basic lands', 'List basic lands too'),
     toggle('hideChecked', 'Hide found', 'Take cards off the list once you check them'),
   ].join('');
+  document.getElementById('shop-order').innerHTML = prefs.groupBy === 'set'
+    ? `<span class="shop-order-label">Sets by</span><div class="seg" role="group" aria-label="Order sets by">${SET_ORDERS.map(([id, name]) =>
+      `<button type="button" class="seg-btn ${prefs.setOrder === id ? 'active' : ''}" data-set-order="${id}">${name}</button>`).join('')}</div>`
+    : '';
+  document.querySelector('.shop-cap').classList.toggle('is-on', prefs.maxPrice != null);
 }
 
 function renderSummary() {
   const el = document.getElementById('shop-summary');
-  const { items, filtered } = current;
+  const { items, capped, shown: filtered } = current;
   if (!items.length) {
     el.innerHTML = '';
     return;
@@ -209,14 +261,16 @@ function renderSummary() {
   const copies = filtered.reduce((n, i) => n + i.need, 0);
   const cost = filtered.reduce((n, i) => n + i.cost, 0);
   const found = filtered.filter((i) => checked.has(i.key));
+  const overCap = items.length - capped.length;
   const foundCopies = found.reduce((n, i) => n + i.need, 0);
   const pct = filtered.length ? Math.round((found.length / filtered.length) * 100) : 0;
   el.innerHTML = `
     <div class="shop-sum-stats">
-      ${filtered.length !== items.length ? `<span class="shop-sum-filter">${filtered.length.toLocaleString()} of ${plural(items.length, 'card')} match</span>` : ''}
+      ${filtered.length !== capped.length ? `<span class="shop-sum-filter">${filtered.length.toLocaleString()} of ${plural(capped.length, 'card')} match</span>` : ''}
       <span><strong>${filtered.length.toLocaleString()}</strong> ${filtered.length === 1 ? 'card' : 'cards'}</span>
       <span><strong>${copies.toLocaleString()}</strong> ${copies === 1 ? 'copy' : 'copies'}</span>
       <span>about <strong>${money(cost)}</strong></span>
+      ${overCap ? `<span class="shop-sum-capped" title="These cost more than ${money(prefs.maxPrice)} in every printing">${plural(overCap, 'card')} over ${money(prefs.maxPrice)} left off</span>` : ''}
     </div>
     <div class="shop-progress">
       <span class="shop-meter" aria-hidden="true"><span style="width:${pct}%"></span></span>
@@ -244,6 +298,10 @@ function renderList() {
     el.innerHTML = `<div class="grid-message"><i class="ph ph-check-circle"></i><h3>Nothing to buy</h3><p>You own every card ${selected.size === 1 ? 'this deck needs' : 'these decks need'}${prefs.includeMaybe ? '' : ' (maybeboards aside)'}.</p></div>`;
     return;
   }
+  if (!current.capped.length) {
+    el.innerHTML = `<div class="grid-message"><i class="ph ph-currency-dollar"></i><h3>Nothing under ${money(prefs.maxPrice)}</h3><p>Every card left to buy costs more than that. Raise or clear the max price to see them.</p></div>`;
+    return;
+  }
   if (!groups.length) {
     el.innerHTML = current.filtered.length
       ? '<div class="grid-message"><i class="ph ph-check-circle"></i><h3>All found</h3><p>Every card on the list is checked off.</p></div>'
@@ -261,12 +319,35 @@ function renderList() {
         ${showHeads ? `<button type="button" class="shop-group-head" data-action="collapse" aria-expanded="${!isCollapsed}">
           <i class="ph ph-caret-down shop-caret"></i>
           <span class="shop-group-name">${esc(g.label)}</span>
-          <span class="shop-group-meta">${plural(g.cards, 'card')}${g.cost ? ` · ${money(g.cost)}` : ''}</span>
+          <span class="shop-group-meta">${plural(g.cards, 'card')}${g.cost ? ` · ${money(g.cost)}` : ''}${reachNote(g)}</span>
           <span class="shop-group-done ${done === g.cards ? 'is-done' : ''}">${done}/${g.cards}</span>
         </button>` : ''}
-        <div class="shop-group-body">${prefs.view === 'images' ? g.items.map((i) => tileHtml(i)).join('') : g.items.map((i) => rowHtml(i, deckNames)).join('')}</div>
+        <div class="shop-group-body">${prefs.view === 'images' ? g.items.map((i) => tileHtml(i)).join('') : g.items.map((i) => rowHtml(i, deckNames, g.code)).join('')}</div>
       </section>`;
   }).join('');
+}
+
+// A binder often holds more of the list than the cards sent there; say so, since those are
+// backups if another binder is out of a card.
+function reachNote(g) {
+  if (!g.code || !g.holds) return '';
+  const total = current.shown.length;
+  const pct = total ? Math.round((g.holds / total) * 100) : 0;
+  return g.holds > g.cards
+    ? ` · <span class="shop-group-reach" title="This binder has ${plural(g.holds, 'card')} on your list; the others are planned from other binders">has ${g.holds} (${pct}%)</span>`
+    : ` · <span class="shop-group-reach">${pct}% of the list</span>`;
+}
+
+// Other binders a card can be found in, for when the first one is out of stock.
+function otherBinders(item, here) {
+  if (!here) return '';
+  const sets = data.sets || {};
+  const others = (item.binders || [])
+    .map(([code]) => code)
+    .filter((code) => code !== here && sets[code] && (prefs.binderCommander || sets[code].type !== 'commander'));
+  if (!others.length) return '';
+  const names = others.map((c) => `${sets[c].name} (${c.toUpperCase()})`).join(', ');
+  return `<span class="shop-also" title="Also in: ${esc(names)}">+${others.length} ${others.length === 1 ? 'binder' : 'binders'}</span>`;
 }
 
 function deckLine(item, deckNames) {
@@ -274,7 +355,7 @@ function deckLine(item, deckNames) {
   return refs.join(', ');
 }
 
-function rowHtml(item, deckNames) {
+function rowHtml(item, deckNames, binder = null) {
   const isChecked = checked.has(item.key);
   const decks = deckLine(item, deckNames);
   const ownedNote = item.owned ? `have ${item.owned} of ${item.demand}` : '';
@@ -292,6 +373,8 @@ function rowHtml(item, deckNames) {
         <div class="shop-row-sub">
           ${set ? `<span class="shop-set">${esc(set)}</span>` : ''}
           ${item.rarity ? `<span class="shop-rarity" data-rarity="${esc(item.rarity)}">${esc(item.rarity.charAt(0).toUpperCase())}</span>` : ''}
+          ${item.listedSet ? `<span class="shop-listed" title="Your deck lists the ${esc(item.listedSet.toUpperCase())} printing; this binder has the card too">deck has ${esc(item.listedSet.toUpperCase())}</span>` : ''}
+          ${otherBinders(item, binder)}
           ${ownedNote ? `<span class="shop-owned">${ownedNote}</span>` : ''}
           <span class="shop-decks" title="${esc(decks)}">${esc(decks)}</span>
         </div>
@@ -370,7 +453,8 @@ function onListClick(e) {
 async function onSummaryClick(e) {
   const target = e.target.closest('[data-action]');
   if (!target) return;
-  const found = current.filtered.filter((i) => checked.has(i.key));
+  // In binder mode these carry the printing from the binder you found them in
+  const found = current.shown.filter((i) => checked.has(i.key));
   if (target.dataset.action === 'clear-found') {
     found.forEach((i) => checked.delete(i.key));
     saveChecked();
@@ -382,7 +466,7 @@ async function onSummaryClick(e) {
     const copies = found.reduce((n, i) => n + i.need, 0);
     const ok = await confirmDialog({
       title: 'Add found cards to your collection?',
-      message: `${plural(found.length, 'card')}, ${plural(copies, 'copy', 'copies')} in all, each in the printing your decks list. You can change printings later from the card.`,
+      message: `${plural(found.length, 'card')}, ${plural(copies, 'copy', 'copies')} in all, each in the printing ${prefs.groupBy === 'binder' ? 'from the binder it\'s listed under' : 'your decks list'}. You can change printings later from the card.`,
       confirmText: 'Add to collection',
       icon: 'ph-archive',
     });

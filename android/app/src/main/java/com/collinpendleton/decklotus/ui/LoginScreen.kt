@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.widthIn
@@ -18,6 +19,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -46,13 +48,15 @@ fun LoginScreen(
     state: LoginState,
     initialServer: String,
     initialUsername: String,
-    onSignIn: (server: String, username: String, password: String) -> Unit,
+    initialAllowSelfSigned: Boolean,
+    onSignIn: (server: String, username: String, password: String, allowSelfSigned: Boolean) -> Unit,
 ) {
     var server by rememberSaveable { mutableStateOf(initialServer) }
     var username by rememberSaveable { mutableStateOf(initialUsername) }
+    var allowSelfSigned by rememberSaveable { mutableStateOf(initialAllowSelfSigned) }
     var password by remember { mutableStateOf("") }
     val passwordFocus = remember { FocusRequester() }
-    fun submit() { if (!state.busy) onSignIn(server, username, password) }
+    fun submit() { if (!state.busy) onSignIn(server, username, password, allowSelfSigned) }
 
     Column(
         Modifier.fillMaxSize().background(Lotus.bg).systemBarsPadding().imePadding()
@@ -90,6 +94,14 @@ fun LoginScreen(
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Go),
                 keyboardActions = KeyboardActions(onGo = { submit() }),
             )
+            // Self-hosted servers often use a self-signed certificate the phone doesn't trust.
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Checkbox(checked = allowSelfSigned, onCheckedChange = { allowSelfSigned = it })
+                Text("Trust this server's certificate (self-signed)", color = Lotus.text2, fontSize = 13.sp)
+            }
+            if (allowSelfSigned && !server.trim().startsWith("http://")) {
+                Text("Any certificate is accepted for the login and API requests, so the server's authenticity isn't verified. Only on servers you control.", color = Lotus.gold, fontSize = 13.sp)
+            }
             state.error?.let { Text(it, color = Lotus.danger, fontSize = 14.sp) }
             Button(onClick = ::submit, enabled = !state.busy, modifier = Modifier.fillMaxWidth().height(48.dp)) {
                 if (state.busy) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)

@@ -44,7 +44,7 @@ fun AppRoot(app: AppViewModel = viewModel()) {
     val login by app.login.collectAsStateWithLifecycle()
     val signedIn = account
     if (signedIn == null) {
-        LoginScreen(login, app.lastServer, app.lastUsername, app::signIn)
+        LoginScreen(login, app.lastServer, app.lastUsername, app.lastAllowSelfSigned, app::signIn)
     } else {
         MainShell(signedIn, onSignOut = app::signOut)
     }

@@ -16,7 +16,12 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import okhttp3.Route
 import java.io.IOException
+import java.security.SecureRandom
+import java.security.cert.X509Certificate
 import java.util.concurrent.TimeUnit
+import javax.net.ssl.HostnameVerifier
+import javax.net.ssl.SSLContext
+import javax.net.ssl.X509TrustManager
 
 // ---- Wire models (the server speaks snake_case) ----
 
@@ -251,7 +256,7 @@ class Api(private val auth: AuthStore) {
     private val _signedOut = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val signedOut: SharedFlow<Unit> = _signedOut
 
-    private val client: OkHttpClient = OkHttpClient.Builder()
+    private val baseClient: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(60, TimeUnit.SECONDS)
         .addInterceptor { chain ->
@@ -264,6 +269,29 @@ class Api(private val auth: AuthStore) {
         }
         .authenticator(TokenRefresher())
         .build()
+
+    /**
+     * For servers with a self-signed certificate (opt-in on the login screen):
+     * accepts any certificate and any host name, the only way such a server
+     * can be reached without installing the certificate on the phone.
+     */
+    private val trustAnyClient: OkHttpClient by lazy {
+        val trustAll = object : X509TrustManager {
+            override fun checkClientTrusted(chain: Array<X509Certificate>, authType: String) = Unit
+            override fun checkServerTrusted(chain: Array<X509Certificate>, authType: String) = Unit
+            override fun getAcceptedIssuers(): Array<X509Certificate> = emptyArray()
+        }
+        val sslContext = SSLContext.getInstance("TLS").apply { init(null, arrayOf(trustAll), SecureRandom()) }
+        baseClient.newBuilder()
+            .sslSocketFactory(sslContext.socketFactory, trustAll)
+            // Self-signed certificates rarely carry a name matching the address you type.
+            .hostnameVerifier(HostnameVerifier { _, _ -> true })
+            .build()
+    }
+
+    /** The client matching the current certificate setting. */
+    private val client: OkHttpClient
+        get() = if (auth.allowSelfSigned) trustAnyClient else baseClient
 
     private object NoAuth
 
@@ -323,15 +351,17 @@ class Api(private val auth: AuthStore) {
         Request.Builder().url(url(server(), path)).post(json.encodeToString(body).toRequestBody(jsonType)).build()
 
     /** Signs in and stores the account. [serverUrl] is normalised (https:// added if missing). */
-    suspend fun login(serverUrl: String, username: String, password: String): Account {
+    suspend fun login(serverUrl: String, username: String, password: String, allowSelfSigned: Boolean = false): Account {
         val base = normalizeServer(serverUrl) ?: throw ApiException(0, "That doesn't look like a server address")
+        // Set before the first request so a self-signed server can be reached at all.
+        auth.allowSelfSigned = allowSelfSigned
         val res: LoginResponse = call(
             Request.Builder().url(url(base, "/api/auth/login"))
                 .tag(NoAuth::class.java, NoAuth)
                 .post(json.encodeToString(LoginRequest(username.trim(), password)).toRequestBody(jsonType))
                 .build(),
         )
-        return Account(base, res.user.username, res.accessToken, res.refreshToken).also(auth::save)
+        return Account(base, res.user.username, res.accessToken, res.refreshToken, allowSelfSigned).also(auth::save)
     }
 
     fun logout() = auth.clear()

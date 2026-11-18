@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.io.IOException
+import javax.net.ssl.SSLHandshakeException
 
 data class LoginState(val busy: Boolean = false, val error: String? = null)
 
@@ -25,6 +26,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     val lastServer get() = deps.auth.lastServer
     val lastUsername get() = deps.auth.lastUsername
+    val lastAllowSelfSigned get() = deps.auth.lastAllowSelfSigned
 
     init {
         // A refresh token that stopped working (expired, server secret changed).
@@ -36,7 +38,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun signIn(server: String, username: String, password: String) {
+    fun signIn(server: String, username: String, password: String, allowSelfSigned: Boolean = false) {
         if (username.isBlank() || password.isEmpty()) {
             _login.value = LoginState(error = "Enter your username and password.")
             return
@@ -44,7 +46,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         _login.value = LoginState(busy = true)
         viewModelScope.launch {
             try {
-                _account.value = deps.api.login(server, username, password)
+                _account.value = deps.api.login(server, username, password, allowSelfSigned)
                 _login.value = LoginState()
             } catch (e: ApiException) {
                 _login.value = LoginState(
@@ -55,6 +57,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                         else -> e.message ?: "Sign-in failed (${e.code})."
                     },
                 )
+            } catch (e: SSLHandshakeException) {
+                _login.value = LoginState(error = "The server's certificate isn't trusted (self-signed?). Turn on \"Trust this server's certificate\" and try again.")
             } catch (e: IOException) {
                 // Include the reason (no route, refused, TLS, timeout): it's what tells you which.
                 _login.value = LoginState(error = "Can't reach that server. Check the address and your connection. (${e.message ?: e.javaClass.simpleName})")

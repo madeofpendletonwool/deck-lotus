@@ -12,7 +12,8 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
+  # ghcr image paths must be all lowercase; GitHub repo and owner names are not.
+  IMAGE_NAME: ${{ toLower(github.repository) }}
 
 jobs:
   # Build each architecture on its own native runner. No QEMU emulation, so

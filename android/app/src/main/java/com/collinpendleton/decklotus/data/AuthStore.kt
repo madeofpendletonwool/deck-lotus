@@ -15,6 +15,8 @@ data class Account(
     val username: String,
     val accessToken: String,
     val refreshToken: String,
+    /** Self-hosted servers often use a self-signed certificate; then TLS checks are relaxed. */
+    val allowSelfSigned: Boolean = false,
 )
 
 /**
@@ -32,14 +34,21 @@ class AuthStore(context: Context) {
     /** Kept after sign-out so the login form is pre-filled. */
     val lastServer: String get() = prefs.getString(KEY_SERVER, null) ?: DEFAULT_SERVER
     val lastUsername: String get() = prefs.getString(KEY_USER, null).orEmpty()
+    val lastAllowSelfSigned: Boolean get() = prefs.getBoolean(KEY_ALLOW_SELF_SIGNED, false)
+
+    /** Whether the current/next connection should trust any certificate (self-signed servers). */
+    @Volatile var allowSelfSigned: Boolean = lastAllowSelfSigned
+        private set
 
     fun save(a: Account) {
         prefs.edit()
             .putString(KEY_SERVER, a.serverUrl)
             .putString(KEY_USER, a.username)
+            .putBoolean(KEY_ALLOW_SELF_SIGNED, a.allowSelfSigned)
             .putString(KEY_ACCESS, encrypt(a.accessToken))
             .putString(KEY_REFRESH, encrypt(a.refreshToken))
             .apply()
+        allowSelfSigned = a.allowSelfSigned
         cached = a
     }
 
@@ -58,7 +67,8 @@ class AuthStore(context: Context) {
         val user = prefs.getString(KEY_USER, null)
         val access = prefs.getString(KEY_ACCESS, null)?.let(::decrypt)
         val refresh = prefs.getString(KEY_REFRESH, null)?.let(::decrypt)
-        if (server != null && user != null && access != null && refresh != null) Account(server, user, access, refresh) else null
+        if (server != null && user != null && access != null && refresh != null)
+            Account(server, user, access, refresh, prefs.getBoolean(KEY_ALLOW_SELF_SIGNED, false))
     } catch (_: Exception) {
         // Key lost (e.g. restored onto a new phone): sign in again.
         null
@@ -98,5 +108,6 @@ class AuthStore(context: Context) {
         private const val KEY_USER = "username"
         private const val KEY_ACCESS = "access"
         private const val KEY_REFRESH = "refresh"
+        private const val KEY_ALLOW_SELF_SIGNED = "allowSelfSigned"
     }
 }

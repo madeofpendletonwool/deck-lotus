@@ -15,6 +15,8 @@ data class Account(
     val username: String,
     val accessToken: String,
     val refreshToken: String,
+    /** Self-hosted servers often use a self-signed certificate; then TLS checks are relaxed. */
+    val allowSelfSigned: Boolean = false,
 )
 
 /**
@@ -32,6 +34,21 @@ class AuthStore(context: Context) {
     /** Kept after sign-out so the login form is pre-filled. */
     val lastServer: String get() = prefs.getString(KEY_SERVER, null) ?: DEFAULT_SERVER
     val lastUsername: String get() = prefs.getString(KEY_USER, null).orEmpty()
+    val lastAllowSelfSigned: Boolean get() = prefs.getBoolean(KEY_ALLOW_SELF_SIGNED, false)
+
+    /**
+     * Whether the connection trusts any certificate, which is how a server with
+     * a self-signed certificate becomes reachable. Applies to requests started
+     * after it changes, and is kept so a restart remembers the choice.
+     */
+    @Volatile private var trustAny: Boolean = lastAllowSelfSigned
+
+    var allowSelfSigned: Boolean
+        get() = trustAny
+        set(value) {
+            trustAny = value
+            prefs.edit().putBoolean(KEY_ALLOW_SELF_SIGNED, value).apply()
+        }
 
     fun save(a: Account) {
         prefs.edit()
@@ -40,6 +57,9 @@ class AuthStore(context: Context) {
             .putString(KEY_ACCESS, encrypt(a.accessToken))
             .putString(KEY_REFRESH, encrypt(a.refreshToken))
             .apply()
+        // The setter stores the flag itself, so the choice stays saved even if
+        // the sign-in that follows it fails.
+        allowSelfSigned = a.allowSelfSigned
         cached = a
     }
 
@@ -58,7 +78,9 @@ class AuthStore(context: Context) {
         val user = prefs.getString(KEY_USER, null)
         val access = prefs.getString(KEY_ACCESS, null)?.let(::decrypt)
         val refresh = prefs.getString(KEY_REFRESH, null)?.let(::decrypt)
-        if (server != null && user != null && access != null && refresh != null) Account(server, user, access, refresh) else null
+        if (server != null && user != null && access != null && refresh != null)
+            Account(server, user, access, refresh, prefs.getBoolean(KEY_ALLOW_SELF_SIGNED, false))
+        else null
     } catch (_: Exception) {
         // Key lost (e.g. restored onto a new phone): sign in again.
         null
@@ -98,5 +120,6 @@ class AuthStore(context: Context) {
         private const val KEY_USER = "username"
         private const val KEY_ACCESS = "access"
         private const val KEY_REFRESH = "refresh"
+        private const val KEY_ALLOW_SELF_SIGNED = "allowSelfSigned"
     }
 }
